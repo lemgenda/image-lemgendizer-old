@@ -1046,7 +1046,7 @@ function App() {
           </div>
 
           <div className="footer-text">
-            <p>Image LemGendizer v1.0.0 - All processing is done client-side</p>
+            <p>Image LemGendizer v1.0.0 - All processing is done client-side.</p>
             <p className="footer-note">
               <i className="fas fa-shield-alt"></i> Your images never leave your browser
             </p>
