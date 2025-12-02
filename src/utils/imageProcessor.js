@@ -19,13 +19,13 @@ export const processLemGendaryResize = async (images, dimension) => {
 
                 let newWidth, newHeight
 
-                // Determine orientation
+                // Determine orientation and maintain aspect ratio
                 if (img.width >= img.height) {
-                    // Landscape or square
+                    // Landscape or square - width is the limiting factor
                     newWidth = dimension
                     newHeight = Math.round((img.height / img.width) * dimension)
                 } else {
-                    // Portrait
+                    // Portrait - height is the limiting factor
                     newHeight = dimension
                     newWidth = Math.round((img.width / img.height) * dimension)
                 }
@@ -220,7 +220,7 @@ export const processLemGendaryRename = async (images, baseName) => {
     })
 }
 
-// SVG-specific processing functions
+// SVG-specific processing functions - FIXED to maintain aspect ratio
 export const processSVGResize = async (svgFile, width, height) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader()
@@ -228,35 +228,54 @@ export const processSVGResize = async (svgFile, width, height) => {
             try {
                 const svgText = e.target.result
 
-                // Parse SVG to update dimensions
-                let updatedSVG = svgText
+                // Parse the SVG XML
+                const parser = new DOMParser()
+                const svgDoc = parser.parseFromString(svgText, 'image/svg+xml')
+                const svgElement = svgDoc.documentElement
 
-                // Try to update width and height attributes
-                updatedSVG = updatedSVG.replace(
-                    /width="([^"]*)"/,
-                    `width="${width}"`
-                )
-                updatedSVG = updatedSVG.replace(
-                    /height="([^"]*)"/,
-                    `height="${height}"`
-                )
+                // Get original dimensions
+                const originalWidth = parseFloat(svgElement.getAttribute('width')) ||
+                    svgElement.viewBox?.baseVal?.width || 100
+                const originalHeight = parseFloat(svgElement.getAttribute('height')) ||
+                    svgElement.viewBox?.baseVal?.height || 100
 
-                // Also update viewBox if it exists
-                if (updatedSVG.includes('viewBox')) {
-                    updatedSVG = updatedSVG.replace(
-                        /viewBox="([^"]*)"/,
-                        `viewBox="0 0 ${width} ${height}"`
-                    )
+                // Calculate aspect ratio
+                const aspectRatio = originalWidth / originalHeight
+
+                // Determine which dimension to use based on aspect ratio
+                let finalWidth = width
+                let finalHeight = height
+
+                // For resize: use the provided dimension as limiting factor
+                // Calculate the other dimension based on aspect ratio
+                if (width <= height) {
+                    // Width is the limiting factor (landscape or equal)
+                    finalWidth = width
+                    finalHeight = Math.round(width / aspectRatio)
                 } else {
-                    // Add viewBox if it doesn't exist
-                    updatedSVG = updatedSVG.replace(
-                        /<svg([^>]*)>/,
-                        `<svg$1 viewBox="0 0 ${width} ${height}">`
-                    )
+                    // Height is the limiting factor (portrait)
+                    finalHeight = height
+                    finalWidth = Math.round(height * aspectRatio)
                 }
 
+                // Update dimensions
+                svgElement.setAttribute('width', finalWidth.toString())
+                svgElement.setAttribute('height', finalHeight.toString())
+
+                // Ensure viewBox exists and is properly set
+                if (!svgElement.hasAttribute('viewBox')) {
+                    svgElement.setAttribute('viewBox', `0 0 ${originalWidth} ${originalHeight}`)
+                }
+
+                // Add preserveAspectRatio to maintain aspect ratio
+                svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet')
+
+                // Serialize back to string
+                const serializer = new XMLSerializer()
+                const updatedSVG = serializer.serializeToString(svgElement)
+
                 const blob = new Blob([updatedSVG], { type: 'image/svg+xml' })
-                const fileName = svgFile.name.replace(/\.svg$/i, `-${width}x${height}.svg`)
+                const fileName = svgFile.name.replace(/\.svg$/i, `-${finalWidth}x${finalHeight}.svg`)
                 resolve(new File([blob], fileName, { type: 'image/svg+xml' }))
             } catch (error) {
                 reject(error)
@@ -286,7 +305,27 @@ export const convertSVGToRaster = async (svgFile, width, height, format = 'png')
                     ctx.fillRect(0, 0, canvas.width, canvas.height)
                 }
 
-                ctx.drawImage(img, 0, 0, width, height)
+                // Calculate scaling to maintain aspect ratio
+                const imgAspectRatio = img.width / img.height
+                const targetAspectRatio = width / height
+
+                let drawWidth, drawHeight, drawX, drawY
+
+                if (imgAspectRatio > targetAspectRatio) {
+                    // Image is wider than target - fit to width
+                    drawWidth = width
+                    drawHeight = width / imgAspectRatio
+                    drawX = 0
+                    drawY = (height - drawHeight) / 2
+                } else {
+                    // Image is taller than target - fit to height
+                    drawHeight = height
+                    drawWidth = height * imgAspectRatio
+                    drawX = (width - drawWidth) / 2
+                    drawY = 0
+                }
+
+                ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight)
 
                 // Determine MIME type
                 let mimeType, extension
