@@ -37,15 +37,3 @@ npm run deploy
 
 ## License
 ### MIT
-
-### Summary:
-
-Your configuration looks good! Just:
-1. ✅ Run `npm install` to get JSZip
-2. ✅ Update `exportUtils.js` with the import
-3. ✅ Run `npm run deploy`
-4. ✅ Enable GitHub Pages in repository settings
-
-Your app should be live at: `https://kuzn3tsov.github.io/image-lemgendizer/`
-
-The Vite configuration with `base: '/image-lemgendizer/'` is correct for GitHub Pages deployment.
