@@ -629,14 +629,8 @@ function App() {
                 </div>
               </div>
 
-              <div className="mode-info" style={{
-                backgroundColor: '#1e293b',
-                padding: '15px',
-                borderRadius: '6px',
-                marginBottom: '20px',
-                border: '1px solid #334155'
-              }}>
-                <p style={{ color: '#cbd5e1', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div className="mode-info">
+                <p>
                   <i className={`fas fa-${processingOptions.processingMode === 'templates' ? 'info-circle' : 'images'}`}></i>
                   {processingOptions.processingMode === 'templates'
                     ? 'Templates Mode: Select ONE image to apply templates'
@@ -799,21 +793,12 @@ function App() {
                 <>
                   {/* Templates Selection */}
                   <div className="templates-section">
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '20px',
-                      padding: '15px',
-                      backgroundColor: '#0f172a',
-                      borderRadius: '6px',
-                      border: '1px solid #334155'
-                    }}>
+                    <div className="template-selection-header">
                       <div>
-                        <h3 style={{ color: '#e2e8f0', marginBottom: '5px' }}>
+                        <h3>
                           <i className="fas fa-th-large"></i> Template Selection
                         </h3>
-                        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
+                        <p className="template-selection-subtitle">
                           {processingOptions.selectedTemplates.length} templates selected
                         </p>
                       </div>
@@ -843,45 +828,55 @@ function App() {
 
                         return (
                           <div key={category.id} className="template-category">
-                            <div style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              marginBottom: '15px'
-                            }}>
-                              <h3>
-                                <i className={category.icon}></i> {category.name}
+                            <div className="template-category-header">
+                              <h3 className="template-category-title">
+                                <i className={`${category.icon} category-icon`}></i> {category.name}
+                                <span className="template-count" style={{ marginLeft: '10px', fontSize: '0.8rem' }}>
+                                  {categoryTemplates.length}
+                                </span>
                               </h3>
-                              <div>
+                              <div className="template-category-controls">
                                 <button
                                   className="btn btn-secondary btn-small"
                                   onClick={() => handleSelectAllInCategory(category.id)}
                                   disabled={!processingOptions.templateSelectedImage}
-                                  style={{ padding: '5px 10px', fontSize: '0.8rem', marginRight: '5px' }}
                                 >
-                                  <i className="fas fa-check"></i> All
+                                  <i className="fas fa-check"></i> Select All
                                 </button>
                                 <button
                                   className="btn btn-secondary btn-small"
                                   onClick={() => handleDeselectAllInCategory(category.id)}
                                   disabled={!processingOptions.templateSelectedImage}
-                                  style={{ padding: '5px 10px', fontSize: '0.8rem' }}
                                 >
-                                  <i className="fas fa-times"></i> None
+                                  <i className="fas fa-times"></i> Deselect All
                                 </button>
                               </div>
                             </div>
                             <div className="template-options">
                               {categoryTemplates.map(template => (
-                                <label key={template.id} className="checkbox-label">
+                                <label key={template.id} className="checkbox-label" htmlFor={`template-${template.id}`}>
                                   <input
+                                    id={`template-${template.id}`}
                                     type="checkbox"
                                     checked={processingOptions.selectedTemplates.includes(template.id)}
                                     onChange={() => handleTemplateToggle(template.id)}
                                     disabled={!processingOptions.templateSelectedImage}
                                   />
-                                  <span>
-                                    {template.name} ({template.width}×{template.height})
+                                  <span className="template-info">
+                                    <i className={`${template.icon} template-icon`}></i>
+                                    <span className="template-details">
+                                      <span className="template-name">{template.name}</span>
+                                      <span className="template-meta">
+                                        <span className="template-dimensions">
+                                          <i className="fas fa-expand-alt"></i>
+                                          {template.width}×{template.height === 'auto' ? 'auto' : template.height}px
+                                        </span>
+                                        <span className="template-platform">
+                                          <i className="fas fa-globe"></i>
+                                          {template.platform}
+                                        </span>
+                                      </span>
+                                    </span>
                                   </span>
                                 </label>
                               ))}
@@ -891,51 +886,77 @@ function App() {
                       })}
                     </div>
 
-                    <div style={{
-                      backgroundColor: '#0f172a',
-                      padding: '20px',
-                      borderRadius: '6px',
-                      marginTop: '20px',
-                      border: '1px solid #334155'
-                    }}>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '15px'
-                      }}>
-                        <div>
-                          <h4 style={{ color: '#e2e8f0', marginBottom: '5px' }}>
-                            <i className="fas fa-image"></i> Image for Templates
-                          </h4>
-                          <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
-                            {processingOptions.templateSelectedImage
-                              ? `Selected: ${images.find(img => img.id === processingOptions.templateSelectedImage)?.name}`
-                              : 'No image selected for templates'
-                            }
-                          </p>
+                    {/* Template Action Section */}
+                    <div className="template-action-section">
+                      <div className="template-action-header">
+                        <div className="template-image-info">
+                          <div className="template-image-icon">
+                            <i className="fas fa-image"></i>
+                          </div>
+                          <div className="template-image-details">
+                            <h4>Image for Templates</h4>
+                            <p>
+                              {processingOptions.templateSelectedImage
+                                ? images.find(img => img.id === processingOptions.templateSelectedImage)?.name
+                                : 'No image selected'
+                              }
+                            </p>
+                          </div>
                         </div>
-                        <div style={{ color: '#cbd5e1', fontSize: '0.9rem' }}>
-                          <i className="fas fa-info-circle"></i> {processingOptions.selectedTemplates.length} templates selected
+                        <div className="template-stats">
+                          <div className="template-status">
+                            <i className="fas fa-layer-group"></i>
+                            <span>{processingOptions.selectedTemplates.length} templates selected</span>
+                          </div>
+                          <div className="template-file-count">
+                            <i className="fas fa-file-export"></i>
+                            <span>
+                              {processingOptions.selectedTemplates.length > 0
+                                ? `${processingOptions.selectedTemplates.length * 2} files to generate`
+                                : 'Select templates to generate files'
+                              }
+                            </span>
+                          </div>
                         </div>
                       </div>
 
                       <div style={{ textAlign: 'center' }}>
                         <button
-                          className="btn btn-primary btn-large"
+                          className="btn btn-primary btn-large template-download-btn"
                           disabled={!processingOptions.templateSelectedImage || processingOptions.selectedTemplates.length === 0 || isLoading}
                           onClick={processTemplates}
                         >
                           {isLoading ? (
                             <>
-                              <i className="fas fa-spinner fa-spin"></i> Processing...
+                              <i className="fas fa-spinner fa-spin"></i> Processing Templates...
                             </>
                           ) : (
                             <>
-                              <i className="fas fa-download"></i> Download Template Images
+                              <i className="fas fa-file-archive"></i> Download Template Images
+                              {processingOptions.selectedTemplates.length > 0 && (
+                                <span className="file-count-badge">
+                                  {processingOptions.selectedTemplates.length * 2} files
+                                </span>
+                              )}
                             </>
                           )}
                         </button>
+
+                        {processingOptions.selectedTemplates.length > 0 && (
+                          <div className="template-warning" style={{ marginTop: '15px', justifyContent: 'center' }}>
+                            <i className="fas fa-info-circle"></i>
+                            <span>
+                              Each template generates WebP + {images.find(img => img.id === processingOptions.templateSelectedImage)?.file.type === 'image/svg+xml' ? 'PNG/JPG' : 'PNG/JPG (based on transparency)'}
+                            </span>
+                          </div>
+                        )}
+
+                        {!processingOptions.templateSelectedImage && (
+                          <div className="template-warning" style={{ marginTop: '15px', justifyContent: 'center' }}>
+                            <i className="fas fa-exclamation-triangle"></i>
+                            <span>Please select an image from the gallery above to apply templates</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -949,12 +970,7 @@ function App() {
                 <h3>
                   <i className="fas fa-images"></i> Uploaded Images ({images.length})
                   {processingOptions.processingMode === 'templates' && (
-                    <span style={{
-                      fontSize: '0.9rem',
-                      color: '#94a3b8',
-                      marginLeft: '10px',
-                      fontWeight: 'normal'
-                    }}>
+                    <span className="template-mode-hint">
                       (Templates mode: Click ONE image to select)
                     </span>
                   )}
@@ -998,25 +1014,14 @@ function App() {
                         <i className={`fas fa-${isSelected ? 'check-circle' : 'circle'}`}></i>
                       </div>
                       {processingOptions.processingMode === 'templates' && isSelected && (
-                        <div style={{
-                          position: 'absolute',
-                          top: '10px',
-                          left: '10px',
-                          backgroundColor: '#3b82f6',
-                          color: 'white',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontSize: '0.8rem',
-                          fontWeight: 'bold',
-                          zIndex: '2'
-                        }}>
-                          TEMPLATE
+                        <div className="template-badge">
+                          <i className="fas fa-th-large"></i> TEMPLATE IMAGE
                         </div>
                       )}
                       <img src={image.url} alt={image.name} />
                       <div className="image-info">
                         <span className="image-name">{image.name}</span>
-                        <span className="image-size">{(image.size / 1024).toFixed(2)} KB</span>
+                        <span className="image-size">{(image.size / 1024).toFixed(2)} KB • {image.type.split('/')[1].toUpperCase()}</span>
                       </div>
                     </div>
                   )
@@ -1046,7 +1051,7 @@ function App() {
           </div>
 
           <div className="footer-text">
-            <p>Image LemGendizer v1.0.0 - All processing is done client-side.</p>
+            <p>Image LemGendizer v1.0.0 - All processing is done client-side</p>
             <p className="footer-note">
               <i className="fas fa-shield-alt"></i> Your images never leave your browser
             </p>

@@ -13,7 +13,7 @@ A modern web application for batch image processing and optimization. Process im
 Visit: https://kuzn3tsov.github.io/image-lemgendizer/
 
 ## Local Development
-```bash
+```
 # Clone the repository
 git clone https://github.com/kuzn3tsov/image-lemgendizer.git
 
@@ -28,17 +28,17 @@ npm run build
 
 # Deploy to GitHub Pages
 npm run deploy
-
+```
 ## Technologies
-React 18
-Vite
-JSZip
-Font Awesome Icons
+- **React 18**
+- **Vite**
+- **JSZip**
+- **Font Awesome Icons**
 
 ## License
-## MIT
+### MIT
 
-## Summary:
+### Summary:
 
 Your configuration looks good! Just:
 1. ✅ Run `npm install` to get JSZip
