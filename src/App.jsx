@@ -649,9 +649,7 @@ function App() {
             className="header-icon"
           />
           <div className="header-title">
-            <h1>
-              <i className="fas fa-image"></i> Image LemGendizer
-            </h1>
+            <h1>Image LemGendizer</h1>
             <p className="app-subtitle">Batch Image Processing & Optimization Tool</p>
           </div>
         </div>
