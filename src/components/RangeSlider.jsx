@@ -1,20 +1,22 @@
 import PropTypes from 'prop-types'
+import { useTranslation } from 'react-i18next';
 
-export default function RangeSlider({
-    min = 0,
-    max = 100,
-    step = 1,
-    value,
-    onChange,
-    label,
-    unit = '%',
-    showTicks = true
+function RangeSlider({
+  min = 0,
+  max = 100,
+  step = 1,
+  value,
+  onChange,
+  label,
+  unit = '%',
+  showTicks = true
 }) {
-    const percentage = ((value - min) / (max - min)) * 100
+  const { t } = useTranslation();
+  const percentage = ((value - min) / (max - min)) * 100
 
-    return (
-        <div className="range-component">
-            <style>{`
+  return (
+    <div className="range-component">
+      <style>{`
         .range-component {
           width: 100%;
         }
@@ -103,44 +105,46 @@ export default function RangeSlider({
         }
       `}</style>
 
-            {label && (
-                <div className="range-header">
-                    <label className="form-label">{label}</label>
-                    <span className="range-value">
-                        {value}{unit}
-                    </span>
-                </div>
-            )}
-
-            <input
-                type="range"
-                className="range-input"
-                min={min}
-                max={max}
-                step={step}
-                value={value}
-                style={{ '--range-progress': `${percentage}%` }}
-                onChange={(e) => onChange(Number(e.target.value))}
-            />
-
-            {showTicks && (
-                <div className="range-ticks">
-                    {[min, 25, 50, 75, max].map(tick => (
-                        <span key={tick}>{tick}</span>
-                    ))}
-                </div>
-            )}
+      {label && (
+        <div className="range-header">
+          <label className="form-label">{label}</label>
+          <span className="range-value">
+            {value}{unit}
+          </span>
         </div>
-    )
+      )}
+
+      <input
+        type="range"
+        className="range-input"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        style={{ '--range-progress': `${percentage}%` }}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+
+      {showTicks && (
+        <div className="range-ticks">
+          {[min, 25, 50, 75, max].map(tick => (
+            <span key={tick}>{tick}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 RangeSlider.propTypes = {
-    min: PropTypes.number,
-    max: PropTypes.number,
-    step: PropTypes.number,
-    value: PropTypes.number.isRequired,
-    onChange: PropTypes.func.isRequired,
-    label: PropTypes.string,
-    unit: PropTypes.string,
-    showTicks: PropTypes.bool
+  min: PropTypes.number,
+  max: PropTypes.number,
+  step: PropTypes.number,
+  value: PropTypes.number.isRequired,
+  onChange: PropTypes.func.isRequired,
+  label: PropTypes.string,
+  unit: PropTypes.string,
+  showTicks: PropTypes.bool
 }
+
+export default RangeSlider

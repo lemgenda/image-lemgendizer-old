@@ -1,7 +1,10 @@
 import { useCallback } from 'react'
+import { useTranslation } from 'react-i18next';
 import '../styles/App.css'
 
 function ImageUploader({ onUpload, fileInputRef }) {
+    const { t } = useTranslation();
+
     const handleDrop = useCallback((e) => {
         e.preventDefault()
         const files = Array.from(e.dataTransfer.files).filter(file =>
@@ -33,10 +36,10 @@ function ImageUploader({ onUpload, fileInputRef }) {
             >
                 <div className="drop-zone-content">
                     <i className="fas fa-cloud-upload-alt fa-3x"></i>
-                    <h3>Drop images here or click to upload</h3>
-                    <p>Supports JPG, PNG, WebP, GIF, SVG</p>
+                    <h3>{t('upload.dropZone.title')}</h3>
+                    <p>{t('upload.dropZone.supported')}</p>
                     <p className="text-muted">
-                        <i className="fas fa-shield-alt icon-sm icon-left"></i> All processing happens in your browser
+                        <i className="fas fa-shield-alt icon-sm icon-left"></i> {t('upload.dropZone.processing')}
                     </p>
                 </div>
             </div>
@@ -55,7 +58,7 @@ function ImageUploader({ onUpload, fileInputRef }) {
                     className="btn btn-primary"
                     onClick={() => fileInputRef.current?.click()}
                 >
-                    <i className="fas fa-folder-open"></i> Select Images
+                    <i className="fas fa-folder-open"></i> {t('upload.selectImages')}
                 </button>
             </div>
         </div>

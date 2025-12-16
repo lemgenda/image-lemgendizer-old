@@ -1,6 +1,9 @@
 import '../styles/App.css'
+import { useTranslation } from 'react-i18next';
 
 function Modal({ isOpen, onClose, title, children, actions }) {
+    const { t } = useTranslation();
+
     if (!isOpen) return null
 
     return (
@@ -8,7 +11,7 @@ function Modal({ isOpen, onClose, title, children, actions }) {
             <div className="modal-content">
                 <div className="modal-header">
                     <h2>{title}</h2>
-                    <button className="modal-close" onClick={onClose}>
+                    <button className="modal-close" onClick={onClose} aria-label={t('button.close')}>
                         <i className="fas fa-times"></i>
                     </button>
                 </div>

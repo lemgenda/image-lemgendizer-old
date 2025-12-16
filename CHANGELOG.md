@@ -2,7 +2,69 @@
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
-## [2.0.0] - 2024-01-15
+## [2.1.0] - 2025-12-16
+
+### Major Changes
+- **Internationalization Support**: Added full i18n support with react-i18next
+- **Multi-language UI**: English and Croatian language support
+- **Language Detection**: Automatic detection of browser language
+- **Language Persistence**: User's language choice saved in localStorage
+
+### Features
+- **Language Switcher**: Easy toggle between English and Croatian
+- **Pluralization Support**: Proper handling of singular/plural forms in both languages
+- **Complete Translation**: All UI elements translated
+- **Template Name Translation**: Social media template names localized
+- **Dynamic Plural Rules**: Language-specific pluralization rules
+
+### New Files Added
+- `src/i18n.js`: i18next configuration with translation resources
+- `src/utils/i18nHelpers.js`: Helper functions for pluralization rules
+- Updated `package.json` with new dependencies
+
+### Dependencies Added
+- `i18next`: Core i18n library
+- `react-i18next`: React bindings for i18next
+- `i18next-browser-languagedetector`: Automatic language detection
+
+### Component Updates
+- **App.jsx**: Added language switcher, integrated useTranslation hook
+- **ImageUploader.jsx**: Replaced hardcoded strings with translations
+- **Modal.jsx**: Added translation support
+- **Main entry file**: Import i18n configuration
+
+### CSS Updates
+- Added language switcher styling
+- Improved responsive design for language buttons
+
+### Bug Fixes
+- Fixed pluralization in success messages
+- Improved accessibility with proper ARIA labels for language switcher
+- Fixed template name display in non-English languages
+
+### Translation Coverage
+- ✅ App titles and headers
+- ✅ Upload section and buttons
+- ✅ Processing mode selection
+- ✅ Compression settings
+- ✅ Output settings
+- ✅ Resize and crop controls
+- ✅ Template selection interface
+- ✅ Image gallery
+- ✅ Modal dialogs
+- ✅ Success/error messages
+- ✅ Loading states
+- ✅ Footer information
+- ✅ Template categories and names
+- ✅ Pluralized messages
+
+### Technical Improvements
+- Centralized translation management
+- Easy-to-extend translation system
+- Component-level translation support
+- Clean separation of UI and content
+
+## [2.0.0] - 2025-12-15
 
 ### Major Changes
 - **Complete CSS Rewrite**: Standardized styling system with CSS variables
@@ -48,7 +110,7 @@ All notable changes to the Image LemGendizer project will be documented in this 
 - Enhanced SVG processing capabilities
 - Improved WebP conversion quality
 
-## [1.1.0] - 2023-12-01
+## [1.1.0] - 2025-12-01
 
 ### Added
 - Initial release with basic image processing features

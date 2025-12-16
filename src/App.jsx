@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import ImageUploader from './components/ImageUploader'
+import LanguageSwitcher from './components/LanguageSwitcher'
 import Modal from './components/Modal'
 import { createExportZip } from './utils/exportUtils'
 import {
@@ -25,6 +27,7 @@ import lemGendaLogo from '../src/assets/lemgenda-logo.svg'
  * @returns {JSX.Element} Rendered application
  */
 function App() {
+  const { t, i18n } = useTranslation()
   const [images, setImages] = useState([])
   const [selectedImages, setSelectedImages] = useState([])
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '' })
@@ -51,11 +54,34 @@ function App() {
     processingMode: 'custom',
     templateSelectedImage: null,
     smartCrop: false,
-    cropMode: 'smart', // DEFAULT CHANGED TO 'smart'
+    cropMode: 'smart',
     cropPosition: 'center'
   })
 
   const fileInputRef = useRef(null)
+
+  /**
+   * Get plural suffix for current language
+   * @function
+   * @param {number} count - Count for pluralization
+   * @returns {string} Plural suffix
+   */
+  const getPluralSuffix = (count) => {
+    const language = i18n.language
+    if (language === 'hr') {
+      // Croatian plural rules
+      const lastDigit = count % 10
+      const lastTwoDigits = count % 100
+
+      if (lastDigit === 1 && lastTwoDigits !== 11) return 'a'
+      if (lastDigit >= 2 && lastDigit <= 4 &&
+        (lastTwoDigits < 10 || lastTwoDigits >= 20)) return 'e'
+      return 'a'
+    }
+
+    // English plural rules
+    return count === 1 ? '' : 's'
+  }
 
   /**
    * Load AI model on component mount
@@ -67,7 +93,6 @@ function App() {
       if (processingOptions.cropMode === 'smart' && !aiModelLoaded) {
         try {
           setAiLoading(true)
-          // Dynamically import the AI processing module
           const { loadAIModel } = await import('./utils/imageProcessor')
           await loadAIModel()
           setAiModelLoaded(true)
@@ -75,13 +100,13 @@ function App() {
         } catch (error) {
           console.error('Failed to load AI model:', error)
           setAiLoading(false)
-          showModal('AI Model', 'AI model could not be loaded. Using standard crop instead.')
+          showModal(t('message.error'), t('message.aiFailed'))
           setProcessingOptions(prev => ({ ...prev, cropMode: 'standard' }))
         }
       }
     }
     loadAIModel()
-  }, [processingOptions.cropMode])
+  }, [processingOptions.cropMode, t])
 
   /**
    * Handle image upload from file input or drag-and-drop
@@ -113,7 +138,14 @@ function App() {
       }))
     }
 
-    showModal('Success', `Successfully uploaded ${files.length} image${files.length > 1 ? 's' : ''}`)
+    const suffix = getPluralSuffix(files.length)
+    const message = t('message.successUpload', {
+      count: files.length,
+      s: i18n.language === 'en' ? (files.length === 1 ? '' : 's') : '',
+      a: i18n.language === 'hr' ? suffix : '',
+      e: i18n.language === 'hr' ? suffix : ''
+    })
+    showModal(t('message.success'), message)
   }
 
   /**
@@ -175,7 +207,7 @@ function App() {
       }))
     }
 
-    showModal('Removed', 'Selected images have been removed')
+    showModal(t('message.removed'), t('message.removedImages'))
   }
 
   /**
@@ -376,12 +408,12 @@ function App() {
   const processCustomImages = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing()
     if (selectedImagesForProcessing.length === 0) {
-      showModal('Error', 'Please select images to process')
+      showModal(t('message.error'), t('message.errorSelectImages'))
       return
     }
 
     setIsLoading(true)
-    showModal('Processing', `Processing ${selectedImagesForProcessing.length} images...`)
+    showModal(t('message.processingImages'), t('message.processingImages', { count: selectedImagesForProcessing.length }))
 
     try {
       const processedImages = []
@@ -408,7 +440,7 @@ function App() {
           if (processingOptions.cropMode === 'smart') {
             // Use AI smart crop
             if (aiLoading) {
-              showModal('AI Loading', 'Please wait while AI model loads...')
+              showModal(t('message.aiLoading'), t('message.aiLoading'))
               await new Promise(resolve => setTimeout(resolve, 1000))
             }
 
@@ -507,7 +539,7 @@ function App() {
 
     } catch (error) {
       console.error('Custom processing error:', error)
-      showModal('Error', 'Error processing images')
+      showModal(t('message.error'), t('message.errorProcessing'))
     } finally {
       setIsLoading(false)
     }
@@ -522,17 +554,17 @@ function App() {
   const processTemplates = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing()
     if (selectedImagesForProcessing.length === 0) {
-      showModal('Error', 'Please select an image for templates')
+      showModal(t('message.error'), t('message.errorSelectImage'))
       return
     }
 
     if (processingOptions.selectedTemplates.length === 0) {
-      showModal('Error', 'Please select at least one template')
+      showModal(t('message.error'), t('message.errorSelectTemplate'))
       return
     }
 
     setIsLoading(true)
-    showModal('Processing', `Applying ${processingOptions.selectedTemplates.length} templates...`)
+    showModal(t('message.processingImages'), t('message.processingImages', { count: processingOptions.selectedTemplates.length }))
 
     try {
       const selectedTemplates = SOCIAL_MEDIA_TEMPLATES.filter(template =>
@@ -667,7 +699,7 @@ function App() {
 
     } catch (error) {
       console.error('Template processing error:', error)
-      showModal('Error', 'Error applying templates')
+      showModal(t('message.error'), t('message.errorApplying'))
     } finally {
       setIsLoading(false)
     }
@@ -690,74 +722,19 @@ function App() {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
 
-    showModal('Success', 'ZIP file downloaded successfully! Check your downloads folder.')
+    showModal(t('message.success'), t('message.successDownload'))
   }
 
   /**
-   * Format template names for display
+   * Format template names for display using translations
    * @function
    * @param {string} name - Original template name
    * @returns {string} Formatted display name
    * @description Converts internal template names to user-friendly display names
    */
   const formatTemplateName = (name) => {
-    const nameMap = {
-      // Logo
-      'LogoRectangular': 'Rectangular',
-      'LogoSquare': 'Square',
-
-      // Web
-      'WebHero': 'Hero',
-      'WebBlog': 'Blog Featured',
-      'WebContent': 'Content',
-      'WebThumb': 'Thumbnail',
-
-      // Instagram
-      'InstagramProfile': 'Profile',
-      'InstagramSquare': 'Square',
-      'InstagramPortrait': 'Portrait',
-      'InstagramLandscape': 'Landscape',
-      'InstagramStoriesReels': 'Stories & Reels',
-
-      // Facebook
-      'FacebookProfile': 'Profile',
-      'FacebookCoverBanner': 'Cover',
-      'FacebookSharedImage': 'Shared',
-      'FacebookSquarePost': 'Square',
-      'FacebookStories': 'Stories',
-
-      // Twitter/X
-      'XProfile': 'Profile',
-      'XHeaderBanner': 'Header',
-      'XLandscapePost': 'Landscape',
-      'XSquarePost': 'Square',
-      'XPortraitPost': 'Portrait',
-
-      // LinkedIn
-      'LinkedInProfile': 'Profile',
-      'LinkedInPersonalCover': 'Cover',
-      'LinkedInLandscapePost': 'Landscape',
-      'LinkedInSquarePost': 'Square',
-      'LinkedInPortraitPost': 'Portrait',
-
-      // YouTube
-      'YouTubeChannelIcon': 'Channel Icon',
-      'YouTubeBanner': 'Banner',
-      'YouTubeThumbnail': 'Thumbnail',
-
-      // Pinterest
-      'PinterestProfile': 'Profile',
-      'PinterestStandardPin': 'Standard',
-      'PinterestSquarePin': 'Square',
-      'PinterestStoryPin': 'Story',
-
-      // TikTok
-      'TikTokProfile': 'Profile',
-      'TikTokVideoCover': 'Video Cover'
-    };
-
-    return nameMap[name] || name;
-  };
+    return t(`template.${name}`) || name
+  }
 
   /**
    * Increment number value
@@ -790,12 +767,15 @@ function App() {
 
   return (
     <div className="app">
+      {/* Language Switcher */}
+      <LanguageSwitcher />
+
       {/* Loading Overlay */}
       {isLoading && (
         <div className="loading-overlay">
           <div className="loading-spinner">
             <i className="fas fa-spinner fa-spin fa-3x"></i>
-            <p>Preparing your ZIP file...</p>
+            <p>{t('loading.preparing')}</p>
           </div>
         </div>
       )}
@@ -805,8 +785,8 @@ function App() {
         <div className="loading-overlay">
           <div className="loading-spinner">
             <i className="fas fa-brain fa-spin fa-3x"></i>
-            <p>Loading AI model for smart cropping...</p>
-            <p className="text-muted">This only happens once per session</p>
+            <p>{t('loading.aiModel')}</p>
+            <p className="text-muted">{t('loading.oncePerSession')}</p>
           </div>
         </div>
       )}
@@ -819,10 +799,11 @@ function App() {
             className="header-icon"
           />
           <div className="header-title">
-            <h1>Image LemGendizer</h1>
-            <p className="app-subtitle">Batch Image Processing & Optimization Tool</p>
+            <h1>{t('app.title')}</h1>
+            <p className="app-subtitle">{t('app.subtitle')}</p>
           </div>
         </div>
+        <LanguageSwitcher />
       </header>
 
       <main className="main-content">
@@ -839,20 +820,20 @@ function App() {
             <div className="card">
               <div className="card-header">
                 <h2 className="card-title">
-                  <i className="fas fa-sliders-h"></i> Processing Mode
+                  <i className="fas fa-sliders-h"></i> {t('mode.title')}
                 </h2>
                 <div className="card-actions">
                   <button
                     className={`btn ${processingOptions.processingMode === 'custom' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
                     onClick={() => toggleProcessingMode('custom')}
                   >
-                    <i className="fas fa-sliders-h"></i> Custom Processing
+                    <i className="fas fa-sliders-h"></i> {t('mode.custom')}
                   </button>
                   <button
                     className={`btn ${processingOptions.processingMode === 'templates' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
                     onClick={() => toggleProcessingMode('templates')}
                   >
-                    <i className="fas fa-th-large"></i> Templates
+                    <i className="fas fa-th-large"></i> {t('mode.templates')}
                   </button>
                 </div>
               </div>
@@ -860,8 +841,8 @@ function App() {
               <div className="alert alert-info">
                 <i className="fas fa-info-circle"></i>
                 {processingOptions.processingMode === 'templates'
-                  ? 'Templates Mode: Select ONE image to apply templates'
-                  : 'Custom Mode: Select MULTIPLE images for batch processing'
+                  ? t('mode.templatesInfo')
+                  : t('mode.customInfo')
                 }
               </div>
 
@@ -870,13 +851,13 @@ function App() {
                   <div className="grid grid-cols-auto gap-lg mb-lg">
                     <div className="card">
                       <h3 className="card-title">
-                        <i className="fas fa-compress"></i> Compression
+                        <i className="fas fa-compress"></i> {t('compression.title')}
                       </h3>
                       <div className="form-group">
-                        <label className="form-label">Quality (1-100)</label>
+                        <label className="form-label">{t('compression.quality')}</label>
                         <div className="range-wrapper">
                           <RangeSlider
-                            label="Quality (1–100)"
+                            label={t('compression.quality')}
                             min={1}
                             max={100}
                             value={processingOptions.compression.quality}
@@ -887,14 +868,14 @@ function App() {
                         </div>
                       </div>
                       <div className="form-group">
-                        <label className="form-label">Target File Size (KB, optional)</label>
+                        <label className="form-label">{t('compression.targetSize')}</label>
                         <div className="number-input-wrapper">
                           <input
                             type="number"
                             className="input-field"
                             value={processingOptions.compression.fileSize}
                             onChange={(e) => handleOptionChange('compression', 'fileSize', e.target.value)}
-                            placeholder="Leave empty for auto"
+                            placeholder={t('compression.auto')}
                             min="1"
                           />
                           <div className="number-input-spinner">
@@ -919,19 +900,19 @@ function App() {
 
                     <div className="card">
                       <h3 className="card-title">
-                        <i className="fas fa-file-export"></i> Output Settings
+                        <i className="fas fa-file-export"></i> {t('output.title')}
                       </h3>
                       <div className="form-group">
-                        <label className="form-label">Output Format</label>
+                        <label className="form-label">{t('output.format')}</label>
                         <select
                           className="select-field"
                           value={processingOptions.output.format}
                           onChange={(e) => handleOptionChange('output', 'format', e.target.value)}
                         >
-                          <option value="webp">WebP (Recommended)</option>
-                          <option value="jpg">JPEG</option>
-                          <option value="png">PNG</option>
-                          <option value="original">Keep Original</option>
+                          <option value="webp">{t('output.format.webp')}</option>
+                          <option value="jpg">{t('output.format.jpg')}</option>
+                          <option value="png">{t('output.format.png')}</option>
+                          <option value="original">{t('output.format.original')}</option>
                         </select>
                       </div>
                       <div className="form-group">
@@ -943,18 +924,18 @@ function App() {
                             onChange={(e) => handleOptionChange('output', 'rename', e.target.checked)}
                           />
                           <span className="checkbox-custom"></span>
-                          <span>Batch Rename</span>
+                          <span>{t('output.rename')}</span>
                         </label>
                       </div>
                       {processingOptions.output.rename && (
                         <div className="form-group">
-                          <label className="form-label">New File Name</label>
+                          <label className="form-label">{t('output.newFileName')}</label>
                           <input
                             type="text"
                             className="input-field"
                             value={processingOptions.output.newFileName}
                             onChange={(e) => handleOptionChange('output', 'newFileName', e.target.value)}
-                            placeholder="e.g., product-image"
+                            placeholder={t('output.newFileName.placeholder')}
                           />
                         </div>
                       )}
@@ -964,11 +945,11 @@ function App() {
                       <h3 className="card-title">
                         {processingOptions.showResize ? (
                           <>
-                            <i className="fas fa-expand-alt"></i> Resize
+                            <i className="fas fa-expand-alt"></i> {t('resize.title')}
                           </>
                         ) : (
                           <>
-                            <i className="fas fa-crop-alt"></i> Crop
+                            <i className="fas fa-crop-alt"></i> {t('crop.title')}
                           </>
                         )}
                       </h3>
@@ -979,11 +960,11 @@ function App() {
                         >
                           {processingOptions.showResize ? (
                             <>
-                              <i className="fas fa-crop"></i> Switch to Crop Mode
+                              <i className="fas fa-crop"></i> {t('resize.switchToCrop')}
                             </>
                           ) : (
                             <>
-                              <i className="fas fa-expand-alt"></i> Switch to Resize Mode
+                              <i className="fas fa-expand-alt"></i> {t('resize.switchToResize')}
                             </>
                           )}
                         </button>
@@ -991,7 +972,7 @@ function App() {
 
                       {processingOptions.showResize ? (
                         <div className="form-group">
-                          <label className="form-label">Resize Dimension (px)</label>
+                          <label className="form-label">{t('resize.dimension')}</label>
                           <div className="number-input-wrapper">
                             <input
                               type="number"
@@ -1019,7 +1000,7 @@ function App() {
                             </div>
                           </div>
                           <p className="form-helper">
-                            For portrait: sets height. For landscape: sets width. Aspect ratio maintained.
+                            {t('resize.helper')}
                           </p>
                         </div>
                       ) : (
@@ -1034,12 +1015,12 @@ function App() {
                               >
                                 {processingOptions.cropMode === 'smart' ? (
                                   <>
-                                    <i className="fas fa-brain"></i> Switch to Standard Crop
+                                    <i className="fas fa-brain"></i> {t('crop.switchToStandard')}
                                     {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
                                   </>
                                 ) : (
                                   <>
-                                    <i className="fas fa-crop-alt"></i> Switch to Smart Crop
+                                    <i className="fas fa-crop-alt"></i> {t('crop.switchToSmart')}
                                   </>
                                 )}
                               </button>
@@ -1048,15 +1029,15 @@ function App() {
                             {processingOptions.cropMode === 'smart' && (
                               <div className="alert alert-info mt-sm">
                                 <i className="fas fa-info-circle"></i>
-                                AI-powered: Detects main subject and crops intelligently
-                                {!aiModelLoaded && !aiLoading && <span className="font-semibold"> (AI model needs to load)</span>}
+                                {t('crop.aiPowered')}
+                                {!aiModelLoaded && !aiLoading && <span className="font-semibold">{t('crop.aiNeedsLoad')}</span>}
                               </div>
                             )}
                           </div>
 
                           <div className="grid grid-cols-2 gap-md">
                             <div className="form-group">
-                              <label className="form-label">Crop Width (px)</label>
+                              <label className="form-label">{t('crop.width')}</label>
                               <div className="number-input-wrapper">
                                 <input
                                   type="number"
@@ -1088,7 +1069,7 @@ function App() {
                               </div>
                             </div>
                             <div className="form-group">
-                              <label className="form-label">Crop Height (px)</label>
+                              <label className="form-label">{t('crop.height')}</label>
                               <div className="number-input-wrapper">
                                 <input
                                   type="number"
@@ -1124,24 +1105,24 @@ function App() {
                           {/* Position selector for standard crop */}
                           {processingOptions.cropMode === 'standard' && (
                             <div className="form-group">
-                              <label className="form-label">Crop Position</label>
+                              <label className="form-label">{t('crop.position')}</label>
                               <select
                                 value={processingOptions.cropPosition}
                                 onChange={(e) => handleSingleOptionChange('cropPosition', e.target.value)}
                                 className="select-field"
                               >
-                                <option value="center">Center</option>
-                                <option value="top-left">Top Left</option>
-                                <option value="top">Top</option>
-                                <option value="top-right">Top Right</option>
-                                <option value="left">Left</option>
-                                <option value="right">Right</option>
-                                <option value="bottom-left">Bottom Left</option>
-                                <option value="bottom">Bottom</option>
-                                <option value="bottom-right">Bottom Right</option>
+                                <option value="center">{t('crop.position.center')}</option>
+                                <option value="top-left">{t('crop.position.topLeft')}</option>
+                                <option value="top">{t('crop.position.top')}</option>
+                                <option value="top-right">{t('crop.position.topRight')}</option>
+                                <option value="left">{t('crop.position.left')}</option>
+                                <option value="right">{t('crop.position.right')}</option>
+                                <option value="bottom-left">{t('crop.position.bottomLeft')}</option>
+                                <option value="bottom">{t('crop.position.bottom')}</option>
+                                <option value="bottom-right">{t('crop.position.bottomRight')}</option>
                               </select>
                               <p className="form-helper">
-                                Image will be resized to fit dimensions, then cropped from selected position
+                                {t('crop.helper')}
                               </p>
                             </div>
                           )}
@@ -1149,7 +1130,7 @@ function App() {
                           {processingOptions.cropMode === 'smart' && (
                             <div className="alert alert-info">
                               <i className="fas fa-lightbulb"></i>
-                              <span>Smart crop works best with images containing clear subjects (people, objects, etc.)</span>
+                              <span>{t('crop.smartBest')}</span>
                             </div>
                           )}
                         </div>
@@ -1165,15 +1146,15 @@ function App() {
                     >
                       {isLoading ? (
                         <>
-                          <i className="fas fa-spinner fa-spin"></i> Processing...
+                          <i className="fas fa-spinner fa-spin"></i> {t('button.processing')}
                         </>
                       ) : processingOptions.cropMode === 'smart' && aiLoading ? (
                         <>
-                          <i className="fas fa-spinner fa-spin"></i> Loading AI Model...
+                          <i className="fas fa-spinner fa-spin"></i> {t('button.loadingAI')}
                         </>
                       ) : (
                         <>
-                          <i className="fas fa-download"></i> Download Custom Processed Images ({selectedImagesForProcessing.length})
+                          <i className="fas fa-download"></i> {t('button.process')} ({selectedImagesForProcessing.length})
                         </>
                       )}
                     </button>
@@ -1186,11 +1167,11 @@ function App() {
                     <div className="card-header">
                       <div>
                         <h3 className="card-title">
-                          <i className="fas fa-th-large"></i> Template Selection
+                          <i className="fas fa-th-large"></i> {t('templates.title')}
                         </h3>
                         <p className="text-muted mt-xs">
                           <i className="fas fa-info-circle"></i>
-                          Templates use center crop (not smart crop) for consistent sizing
+                          {t('templates.note')}
                         </p>
                       </div>
                       <div className="card-actions">
@@ -1199,14 +1180,14 @@ function App() {
                           onClick={handleSelectAllTemplates}
                           disabled={!processingOptions.templateSelectedImage}
                         >
-                          <i className="fas fa-check-square"></i> Select All Templates
+                          <i className="fas fa-check-square"></i> {t('templates.selectAll')}
                         </button>
                         <button
                           className="btn btn-secondary btn-sm"
                           onClick={() => setProcessingOptions(prev => ({ ...prev, selectedTemplates: [] }))}
                           disabled={processingOptions.selectedTemplates.length === 0}
                         >
-                          <i className="fas fa-times-circle"></i> Clear All
+                          <i className="fas fa-times-circle"></i> {t('templates.clearAll')}
                         </button>
                       </div>
                     </div>
@@ -1221,7 +1202,7 @@ function App() {
                           <div key={category.id} className="card">
                             <div className="card-header">
                               <h4 className="card-title">
-                                <i className={`${category.icon} mr-sm`}></i> {category.name}
+                                <i className={`${category.icon} mr-sm`}></i> {t(`category.${category.id}`)}
                               </h4>
                               <div className="card-actions">
                                 <button
@@ -1229,14 +1210,14 @@ function App() {
                                   onClick={() => handleSelectAllInCategory(category.id)}
                                   disabled={!processingOptions.templateSelectedImage}
                                 >
-                                  <i className="fas fa-check"></i> All
+                                  <i className="fas fa-check"></i> {t('templates.selectCategory')}
                                 </button>
                                 <button
                                   className="btn btn-secondary btn-sm"
                                   onClick={() => handleDeselectAllInCategory(category.id)}
                                   disabled={!processingOptions.templateSelectedImage}
                                 >
-                                  <i className="fas fa-times"></i> None
+                                  <i className="fas fa-times"></i> {t('templates.deselectCategory')}
                                 </button>
                               </div>
                             </div>
@@ -1275,11 +1256,11 @@ function App() {
                             <i className="fas fa-image text-white text-xl"></i>
                           </div>
                           <div>
-                            <h4 className="card-title mb-xs">Image for Templates</h4>
+                            <h4 className="card-title mb-xs">{t('templates.imageForTemplates')}</h4>
                             <p className="text-muted">
                               {processingOptions.templateSelectedImage
                                 ? images.find(img => img.id === processingOptions.templateSelectedImage)?.name
-                                : 'No image selected'
+                                : t('templates.noImageSelected')
                               }
                             </p>
                           </div>
@@ -1287,13 +1268,13 @@ function App() {
                         <div className="text-right">
                           <div className="text-muted mb-xs">
                             <i className="fas fa-layer-group mr-xs"></i>
-                            {processingOptions.selectedTemplates.length} templates selected
+                            {processingOptions.selectedTemplates.length} {t('templates.selected')}
                           </div>
                           <div className="text-muted">
                             <i className="fas fa-file-export mr-xs"></i>
                             {processingOptions.selectedTemplates.length > 0
-                              ? `${processingOptions.selectedTemplates.length * 2} files to generate`
-                              : 'Select templates to generate files'
+                              ? `${processingOptions.selectedTemplates.length * 2} ${t('templates.filesToGenerate')}`
+                              : t('templates.selectTemplates')
                             }
                           </div>
                         </div>
@@ -1307,11 +1288,11 @@ function App() {
                         >
                           {isLoading ? (
                             <>
-                              <i className="fas fa-spinner fa-spin"></i> Processing Templates...
+                              <i className="fas fa-spinner fa-spin"></i> {t('button.processing')}
                             </>
                           ) : (
                             <>
-                              <i className="fas fa-file-archive"></i> Download Template Images
+                              <i className="fas fa-file-archive"></i> {t('templates.download')}
                               {processingOptions.selectedTemplates.length > 0 && (
                                 <span className="absolute -top-2 -right-2 bg-danger text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
                                   {processingOptions.selectedTemplates.length * 2}
@@ -1325,7 +1306,7 @@ function App() {
                           <div className="alert alert-info mt-md">
                             <i className="fas fa-info-circle"></i>
                             <span>
-                              Each template generates WebP + {images.find(img => img.id === processingOptions.templateSelectedImage)?.file.type === 'image/svg+xml' ? 'PNG/JPG' : 'PNG/JPG (based on transparency)'}
+                              {t('templates.eachGenerates')}
                             </span>
                           </div>
                         )}
@@ -1333,7 +1314,7 @@ function App() {
                         {!processingOptions.templateSelectedImage && (
                           <div className="alert alert-warning mt-md">
                             <i className="fas fa-exclamation-triangle"></i>
-                            <span>Please select an image from the gallery above to apply templates</span>
+                            <span>{t('templates.selectImage')}</span>
                           </div>
                         )}
                       </div>
@@ -1347,10 +1328,10 @@ function App() {
             <div className="card">
               <div className="card-header">
                 <h3 className="card-title">
-                  <i className="fas fa-images"></i> Uploaded Images ({images.length})
+                  <i className="fas fa-images"></i> {t('gallery.title')} ({images.length})
                   {processingOptions.processingMode === 'templates' && (
                     <span className="text-muted font-normal ml-md">
-                      (Templates mode: Click ONE image to select)
+                      {t('gallery.templatesMode')}
                     </span>
                   )}
                 </h3>
@@ -1360,7 +1341,7 @@ function App() {
                       className="btn btn-secondary btn-sm"
                       onClick={handleSelectAll}
                     >
-                      <i className="fas fa-check-square"></i> {selectedImages.length === images.length ? 'Deselect All' : 'Select All'}
+                      <i className="fas fa-check-square"></i> {selectedImages.length === images.length ? t('gallery.deselectAll') : t('gallery.selectAll')}
                     </button>
                   )}
                   <button
@@ -1372,7 +1353,7 @@ function App() {
                         : selectedImages.length === 0
                     }
                   >
-                    <i className="fas fa-trash"></i> Remove Selected
+                    <i className="fas fa-trash"></i> {t('gallery.removeSelected')}
                   </button>
                 </div>
               </div>
@@ -1394,7 +1375,7 @@ function App() {
                       </div>
                       {processingOptions.processingMode === 'templates' && isSelected && (
                         <div className="absolute top-2 left-2 bg-primary text-white text-xs font-semibold px-2 py-1 rounded">
-                          <i className="fas fa-th-large mr-1"></i> TEMPLATE IMAGE
+                          <i className="fas fa-th-large mr-1"></i> {t('gallery.templateImage')}
                         </div>
                       )}
                       <img src={image.url} alt={image.name} />
@@ -1414,7 +1395,7 @@ function App() {
       <footer className="app-footer">
         <div className="footer-left">
           <div className="footer-logo-container">
-            <p className="text-muted mb-xs">Created by</p>
+            <p className="text-muted mb-xs">{t('footer.createdBy')}</p>
             <a
               href="https://lemgenda.hr"
               target="_blank"
@@ -1432,10 +1413,12 @@ function App() {
 
         <div className="footer-right">
           <div className="footer-text">
-            <p className="text-muted">Image LemGendizer v2.0.0 - All processing is done client-side</p>
+            <p className="text-muted">{t('app.version')} - {t('app.processClientSide')}</p>
             <p className="text-muted text-sm mt-xs">
-              <i className="fas fa-shield-alt"></i> Your images never leave your browser
-              <span className="text-info ml-sm"> • <i className="fas fa-brain"></i> AI Smart Crop enabled</span>
+              <i className="fas fa-shield-alt"></i> {t('app.imagesNeverLeave')}
+            </p>
+            <p className="text-muted text-sm mt-xs">
+              <i className="fas fa-brain"></i> {t('footer.aiEnabled')}
             </p>
           </div>
         </div>
@@ -1447,7 +1430,7 @@ function App() {
         title={modal.title}
         actions={
           <button className="btn btn-primary" onClick={closeModal}>
-            OK
+            {t('button.ok')}
           </button>
         }
       >

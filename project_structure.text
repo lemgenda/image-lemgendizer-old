@@ -2,8 +2,10 @@
   - workflows
     - deploy.yml
 - .gitignore
+- CHANGELOG.md
 - eslint.config.js
 - index.html
+- LICENSE
 - package-lock.json
 - package.json
 - project_structure.text
@@ -16,6 +18,7 @@
   - components
     - ImageUploader.jsx
     - Modal.jsx
+    - RangeSlider.jsx
   - main.jsx
   - styles
     - App.css

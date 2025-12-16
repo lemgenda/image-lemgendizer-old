@@ -1,0 +1,372 @@
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import LanguageDetector from 'i18next-browser-languagedetector';
+
+// Translation resources
+const resources = {
+    en: {
+        translation: {
+            // App Titles
+            'app.title': 'Image LemGendizer',
+            'app.subtitle': 'Batch Image Processing & Optimization Tool',
+            'app.version': 'Image LemGendizer v2.1.0',
+            'app.processClientSide': 'All processing is done client-side',
+            'app.imagesNeverLeave': 'Your images never leave your browser',
+
+            // Upload Section
+            'upload.dropZone.title': 'Drop images here or click to upload',
+            'upload.dropZone.supported': 'Supports JPG, PNG, WebP, GIF, SVG',
+            'upload.dropZone.processing': 'All processing happens in your browser',
+            'upload.selectImages': 'Select Images',
+
+            // Processing Mode
+            'mode.title': 'Processing Mode',
+            'mode.custom': 'Custom Processing',
+            'mode.templates': 'Templates',
+            'mode.customInfo': 'Custom Mode: Select MULTIPLE images for batch processing',
+            'mode.templatesInfo': 'Templates Mode: Select ONE image to apply templates',
+
+            // Compression Settings
+            'compression.title': 'Compression',
+            'compression.quality': 'Quality (1-100)',
+            'compression.targetSize': 'Target File Size (KB, optional)',
+            'compression.auto': 'Leave empty for auto',
+
+            // Output Settings
+            'output.title': 'Output Settings',
+            'output.format': 'Output Format',
+            'output.format.webp': 'WebP (Recommended)',
+            'output.format.jpg': 'JPEG',
+            'output.format.png': 'PNG',
+            'output.format.original': 'Keep Original',
+            'output.rename': 'Batch Rename',
+            'output.newFileName': 'New File Name',
+            'output.newFileName.placeholder': 'e.g., product-image',
+
+            // Resize
+            'resize.title': 'Resize',
+            'resize.switchToCrop': 'Switch to Crop Mode',
+            'resize.switchToResize': 'Switch to Resize Mode',
+            'resize.dimension': 'Resize Dimension (px)',
+            'resize.helper': 'For portrait: sets height. For landscape: sets width. Aspect ratio maintained.',
+
+            // Crop
+            'crop.title': 'Crop',
+            'crop.switchToStandard': 'Switch to Standard Crop',
+            'crop.switchToSmart': 'Switch to Smart Crop',
+            'crop.aiPowered': 'AI-powered: Detects main subject and crops intelligently',
+            'crop.aiNeedsLoad': ' (AI model needs to load)',
+            'crop.width': 'Crop Width (px)',
+            'crop.height': 'Crop Height (px)',
+            'crop.position': 'Crop Position',
+            'crop.position.center': 'Center',
+            'crop.position.topLeft': 'Top Left',
+            'crop.position.top': 'Top',
+            'crop.position.topRight': 'Top Right',
+            'crop.position.left': 'Left',
+            'crop.position.right': 'Right',
+            'crop.position.bottomLeft': 'Bottom Left',
+            'crop.position.bottom': 'Bottom',
+            'crop.position.bottomRight': 'Bottom Right',
+            'crop.helper': 'Image will be resized to fit dimensions, then cropped from selected position',
+            'crop.smartBest': 'Smart crop works best with images containing clear subjects (people, objects, etc.)',
+
+            // Templates
+            'templates.title': 'Template Selection',
+            'templates.note': 'Templates use center crop (not smart crop) for consistent sizing',
+            'templates.selectAll': 'Select All Templates',
+            'templates.clearAll': 'Clear All',
+            'templates.selectCategory': 'All',
+            'templates.deselectCategory': 'None',
+            'templates.imageForTemplates': 'Image for Templates',
+            'templates.noImageSelected': 'No image selected',
+            'templates.selected': 'templates selected',
+            'templates.filesToGenerate': 'files to generate',
+            'templates.selectTemplates': 'Select templates to generate files',
+            'templates.download': 'Download Template Images',
+            'templates.eachGenerates': 'Each template generates WebP + PNG/JPG (based on transparency)',
+            'templates.selectImage': 'Please select an image from the gallery above to apply templates',
+
+            // Image Gallery
+            'gallery.title': 'Uploaded Images',
+            'gallery.templatesMode': '(Templates mode: Click ONE image to select)',
+            'gallery.selectAll': 'Select All',
+            'gallery.deselectAll': 'Deselect All',
+            'gallery.removeSelected': 'Remove Selected',
+            'gallery.templateImage': 'TEMPLATE IMAGE',
+
+            // Buttons & Actions
+            'button.process': 'Download Custom Processed Images',
+            'button.processing': 'Processing...',
+            'button.loadingAI': 'Loading AI Model...',
+            'button.ok': 'OK',
+            'button.close': 'Close',
+            'button.english': 'English',
+            'button.croatian': 'Hrvatski',
+
+            // Messages
+            'message.success': 'Success',
+            'message.error': 'Error',
+            'message.removed': 'Removed',
+            'message.successUpload': 'Successfully uploaded {{count}} image{{s}}',
+            'message.removedImages': 'Selected images have been removed',
+            'message.processingImages': 'Processing {{count}} images...',
+            'message.aiLoading': 'Please wait while AI model loads...',
+            'message.errorSelectImages': 'Please select images to process',
+            'message.errorSelectImage': 'Please select an image for templates',
+            'message.errorSelectTemplate': 'Please select at least one template',
+            'message.errorProcessing': 'Error processing images',
+            'message.errorApplying': 'Error applying templates',
+            'message.successDownload': 'ZIP file downloaded successfully! Check your downloads folder.',
+            'message.aiFailed': 'AI model could not be loaded. Using standard crop instead.',
+
+            // Loading States
+            'loading.preparing': 'Preparing your ZIP file...',
+            'loading.aiModel': 'Loading AI model for smart cropping...',
+            'loading.oncePerSession': 'This only happens once per session',
+
+            // Footer
+            'footer.createdBy': 'Created by',
+            'footer.aiEnabled': 'AI Smart Crop enabled',
+
+            // Template Categories
+            'category.web': 'Web',
+            'category.logo': 'Logo',
+            'category.instagram': 'Instagram',
+            'category.facebook': 'Facebook',
+            'category.twitter': 'Twitter/X',
+            'category.linkedin': 'LinkedIn',
+            'category.youtube': 'YouTube',
+            'category.pinterest': 'Pinterest',
+            'category.tiktok': 'TikTok',
+
+            // Template Names
+            'template.WebHero': 'Hero',
+            'template.WebBlog': 'Blog Featured',
+            'template.WebContent': 'Content',
+            'template.WebThumb': 'Thumbnail',
+            'template.LogoRectangular': 'Rectangular',
+            'template.LogoSquare': 'Square',
+            'template.InstagramProfile': 'Profile',
+            'template.InstagramSquare': 'Square',
+            'template.InstagramPortrait': 'Portrait',
+            'template.InstagramLandscape': 'Landscape',
+            'template.InstagramStoriesReels': 'Stories & Reels',
+            'template.FacebookProfile': 'Profile',
+            'template.FacebookCoverBanner': 'Cover',
+            'template.FacebookSharedImage': 'Shared',
+            'template.FacebookSquarePost': 'Square',
+            'template.FacebookStories': 'Stories',
+            'template.XProfile': 'Profile',
+            'template.XHeaderBanner': 'Header',
+            'template.XLandscapePost': 'Landscape',
+            'template.XSquarePost': 'Square',
+            'template.XPortraitPost': 'Portrait',
+            'template.LinkedInProfile': 'Profile',
+            'template.LinkedInPersonalCover': 'Cover',
+            'template.LinkedInLandscapePost': 'Landscape',
+            'template.LinkedInSquarePost': 'Square',
+            'template.LinkedInPortraitPost': 'Portrait',
+            'template.YouTubeChannelIcon': 'Channel Icon',
+            'template.YouTubeBanner': 'Banner',
+            'template.YouTubeThumbnail': 'Thumbnail',
+            'template.PinterestProfile': 'Profile',
+            'template.PinterestStandardPin': 'Standard',
+            'template.PinterestSquarePin': 'Square',
+            'template.PinterestStoryPin': 'Story',
+            'template.TikTokProfile': 'Profile',
+            'template.TikTokVideoCover': 'Video Cover'
+        }
+    },
+    hr: {
+        translation: {
+            // App Titles
+            'app.title': 'Image LemGendizer',
+            'app.subtitle': 'Alat za obradu i optimizaciju slika',
+            'app.version': 'Image LemGendizer v2.1.0',
+            'app.processClientSide': 'Sva obrada se vrši na klijentu',
+            'app.imagesNeverLeave': 'Vaše slike nikada ne napuštaju preglednik',
+
+            // Upload Section
+            'upload.dropZone.title': 'Povucite slike ovdje ili kliknite za učitavanje',
+            'upload.dropZone.supported': 'Podržava JPG, PNG, WebP, GIF, SVG',
+            'upload.dropZone.processing': 'Sva obrada se odvija u vašem pregledniku',
+            'upload.selectImages': 'Odaberi slike',
+
+            // Processing Mode
+            'mode.title': 'Način obrade',
+            'mode.custom': 'Prilagođena obrada',
+            'mode.templates': 'Predlošci',
+            'mode.customInfo': 'Prilagođeni način: Odaberite VIŠE slika za grupnu obradu',
+            'mode.templatesInfo': 'Način predložaka: Odaberite JEDNU sliku za primjenu predložaka',
+
+            // Compression Settings
+            'compression.title': 'Kompresija',
+            'compression.quality': 'Kvaliteta (1-100)',
+            'compression.targetSize': 'Ciljana veličina datoteke (KB, opcionalno)',
+            'compression.auto': 'Ostavite prazno za automatsko',
+
+            // Output Settings
+            'output.title': 'Postavke izlaza',
+            'output.format': 'Izlazni format',
+            'output.format.webp': 'WebP (Preporučeno)',
+            'output.format.jpg': 'JPEG',
+            'output.format.png': 'PNG',
+            'output.format.original': 'Zadrži original',
+            'output.rename': 'Grupno preimenovanje',
+            'output.newFileName': 'Novi naziv datoteke',
+            'output.newFileName.placeholder': 'npr., slika-proizvoda',
+
+            // Resize
+            'resize.title': 'Promjena veličine',
+            'resize.switchToCrop': 'Prebaci na način obrezivanja',
+            'resize.switchToResize': 'Prebaci na način promjene veličine',
+            'resize.dimension': 'Dimenzija promjene veličine (px)',
+            'resize.helper': 'Za portret: postavlja visinu. Za pejzaž: postavlja širinu. Omjer slike se održava.',
+
+            // Crop
+            'crop.title': 'Obrezivanje',
+            'crop.switchToStandard': 'Prebaci na standardno obrezivanje',
+            'crop.switchToSmart': 'Prebaci na pametno obrezivanje',
+            'crop.aiPowered': 'AI-powered: Detektira glavni subjekt i pametno obrezuje',
+            'crop.aiNeedsLoad': ' (AI model se treba učitati)',
+            'crop.width': 'Širina obrezivanja (px)',
+            'crop.height': 'Visina obrezivanja (px)',
+            'crop.position': 'Pozicija obrezivanja',
+            'crop.position.center': 'Sredina',
+            'crop.position.topLeft': 'Gore lijevo',
+            'crop.position.top': 'Gore',
+            'crop.position.topRight': 'Gore desno',
+            'crop.position.left': 'Lijevo',
+            'crop.position.right': 'Desno',
+            'crop.position.bottomLeft': 'Dolje lijevo',
+            'crop.position.bottom': 'Dolje',
+            'crop.position.bottomRight': 'Dolje desno',
+            'crop.helper': 'Slika će se promijeniti veličinu da stane u dimenzije, zatim obrezati od odabrane pozicije',
+            'crop.smartBest': 'Pametno obrezivanje najbolje funkcionira sa slikama koje imaju jasne subjekte (ljudi, objekti, itd.)',
+
+            // Templates
+            'templates.title': 'Odabir predložaka',
+            'templates.note': 'Predlošci koriste središnje obrezivanje (ne pametno) za konzistentne dimenzije',
+            'templates.selectAll': 'Odaberi sve predloške',
+            'templates.clearAll': 'Očisti sve',
+            'templates.selectCategory': 'Sve',
+            'templates.deselectCategory': 'Ništa',
+            'templates.imageForTemplates': 'Slika za predloške',
+            'templates.noImageSelected': 'Nije odabrana slika',
+            'templates.selected': 'predložaka odabrano',
+            'templates.filesToGenerate': 'datoteka za generiranje',
+            'templates.selectTemplates': 'Odaberite predloške za generiranje datoteka',
+            'templates.download': 'Preuzmi slike predložaka',
+            'templates.eachGenerates': 'Svaki predložak generira WebP + PNG/JPG (ovisno o transparentnosti)',
+            'templates.selectImage': 'Molimo odaberite sliku iz galerije iznad za primjenu predložaka',
+
+            // Image Gallery
+            'gallery.title': 'Učitane slike',
+            'gallery.templatesMode': '(Način predložaka: Kliknite JEDNU sliku za odabir)',
+            'gallery.selectAll': 'Odaberi sve',
+            'gallery.deselectAll': 'Poništi odabir',
+            'gallery.removeSelected': 'Ukloni odabrane',
+            'gallery.templateImage': 'SLIKA ZA PREDLOŠKE',
+
+            // Buttons & Actions
+            'button.process': 'Preuzmi prilagođeno obrađene slike',
+            'button.processing': 'Obrada...',
+            'button.loadingAI': 'Učitavam AI model...',
+            'button.ok': 'U redu',
+            'button.close': 'Zatvori',
+            'button.english': 'English',
+            'button.croatian': 'Hrvatski',
+
+            // Messages
+            'message.success': 'Uspjeh',
+            'message.error': 'Greška',
+            'message.removed': 'Uklonjeno',
+            'message.successUpload': 'Uspješno učitano {{count}} slik{{a}}',
+            'message.removedImages': 'Odabrane slike su uklonjene',
+            'message.processingImages': 'Obradjujem {{count}} slik{{e}}...',
+            'message.aiLoading': 'Molimo pričekajte dok se AI model učitava...',
+            'message.errorSelectImages': 'Molimo odaberite slike za obradu',
+            'message.errorSelectImage': 'Molimo odaberite sliku za predloške',
+            'message.errorSelectTemplate': 'Molimo odaberite barem jedan predložak',
+            'message.errorProcessing': 'Greška pri obradi slika',
+            'message.errorApplying': 'Greška pri primjeni predložaka',
+            'message.successDownload': 'ZIP datoteka uspješno preuzeta! Provjerite vašu mapu s preuzimanjima.',
+            'message.aiFailed': 'AI model se nije mogao učitati. Koristim standardno obrezivanje umjesto toga.',
+
+            // Loading States
+            'loading.preparing': 'Pripremam vašu ZIP datoteku...',
+            'loading.aiModel': 'Učitavam AI model za pametno obrezivanje...',
+            'loading.oncePerSession': 'Ovo se događa samo jednom po sesiji',
+
+            // Footer
+            'footer.createdBy': 'Kreirao',
+            'footer.aiEnabled': 'Pametno obrezivanje AI-om omogućeno',
+
+            // Template Categories
+            'category.web': 'Web',
+            'category.logo': 'Logo',
+            'category.instagram': 'Instagram',
+            'category.facebook': 'Facebook',
+            'category.twitter': 'Twitter/X',
+            'category.linkedin': 'LinkedIn',
+            'category.youtube': 'YouTube',
+            'category.pinterest': 'Pinterest',
+            'category.tiktok': 'TikTok',
+
+            // Template Names
+            'template.WebHero': 'Hero slika',
+            'template.WebBlog': 'Istaknuti blog',
+            'template.WebContent': 'Sadržajna slika',
+            'template.WebThumb': 'Sličica (thumbnail)',
+            'template.LogoRectangular': 'Pravokutni logo',
+            'template.LogoSquare': 'Kvadratni logo',
+            'template.InstagramProfile': 'Profilna slika',
+            'template.InstagramSquare': 'Kvadratni post',
+            'template.InstagramPortrait': 'Portretni post',
+            'template.InstagramLandscape': 'Pejzažni post',
+            'template.InstagramStoriesReels': 'Stories i Reels',
+            'template.FacebookProfile': 'Profilna slika',
+            'template.FacebookCoverBanner': 'Naslovna fotografija',
+            'template.FacebookSharedImage': 'Podijeljena slika',
+            'template.FacebookSquarePost': 'Kvadratni post',
+            'template.FacebookStories': 'Facebook Stories',
+            'template.XProfile': 'Profilna slika',
+            'template.XHeaderBanner': 'Naslovna slika',
+            'template.XLandscapePost': 'Pejzažni post',
+            'template.XSquarePost': 'Kvadratni post',
+            'template.XPortraitPost': 'Portretni post',
+            'template.LinkedInProfile': 'Profilna slika',
+            'template.LinkedInPersonalCover': 'Naslovna slika',
+            'template.LinkedInLandscapePost': 'Pejzažni post',
+            'template.LinkedInSquarePost': 'Kvadratni post',
+            'template.LinkedInPortraitPost': 'Portretni post',
+            'template.YouTubeChannelIcon': 'Ikona kanala',
+            'template.YouTubeBanner': 'YouTube banner',
+            'template.YouTubeThumbnail': 'Sličica videa',
+            'template.PinterestProfile': 'Profilna slika',
+            'template.PinterestStandardPin': 'Standardni pin',
+            'template.PinterestSquarePin': 'Kvadratni pin',
+            'template.PinterestStoryPin': 'Story pin',
+            'template.TikTokProfile': 'Profilna slika',
+            'template.TikTokVideoCover': 'Naslovnica videa'
+        }
+    }
+};
+
+i18n
+    .use(LanguageDetector)
+    .use(initReactI18next)
+    .init({
+        resources,
+        fallbackLng: 'en',
+        interpolation: {
+            escapeValue: false,
+        },
+        detection: {
+            order: ['localStorage', 'navigator'],
+            caches: ['localStorage'],
+        },
+    });
+
+export default i18n;
