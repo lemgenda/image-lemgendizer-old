@@ -1,12 +1,12 @@
 {
   "name": "image-lemgendizer",
   "private": false,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
-  "homepage": "https://kuzn3tsov.github.io/image-lemgendizer-old",
+  "homepage": "https://lemgenda.github.io/image-lemgendizer-old",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kuzn3tsov/image-lemgendizer-old"
+    "url": "https://github.com/lemgenda/image-lemgendizer-old"
   },
   "keywords": [
     "image",
@@ -32,6 +32,8 @@
     "@fortawesome/fontawesome-free": "^6.4.0",
     "@fortawesome/free-solid-svg-icons": "^6.4.0",
     "@fortawesome/react-fontawesome": "^0.2.0",
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow/tfjs": "^4.22.0",
     "file-saver": "^2.0.5",
     "jszip": "^3.10.1",
     "react": "^18.2.0",

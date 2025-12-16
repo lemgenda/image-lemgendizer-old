@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import ImageUploader from './components/ImageUploader'
 import Modal from './components/Modal'
 import { createExportZip } from './utils/exportUtils'
@@ -7,20 +7,30 @@ import {
   processLemGendaryCrop,
   processLemGendaryRename,
   optimizeForWeb,
-  checkImageTransparency
+  checkImageTransparency,
+  processSmartCrop
 } from './utils/imageProcessor'
 import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES, getTemplatesByCategory } from './utils/templateConfigs'
+import RangeSlider from './components/RangeSlider'
 import './styles/App.css'
 
 // Import logos (assuming they're in src/assets/)
 import lemGendaIcon from '../src/assets/lemgenda-icon.svg'
 import lemGendaLogo from '../src/assets/lemgenda-logo.svg'
 
+/**
+ * Main App Component - Image LemGendizer
+ * @component
+ * @description Main application component for batch image processing and optimization
+ * @returns {JSX.Element} Rendered application
+ */
 function App() {
   const [images, setImages] = useState([])
   const [selectedImages, setSelectedImages] = useState([])
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '' })
   const [isLoading, setIsLoading] = useState(false)
+  const [aiModelLoaded, setAiModelLoaded] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
   const [processingOptions, setProcessingOptions] = useState({
     compression: {
       quality: 80,
@@ -39,11 +49,46 @@ function App() {
     showTemplates: false,
     selectedTemplates: [],
     processingMode: 'custom',
-    templateSelectedImage: null
+    templateSelectedImage: null,
+    smartCrop: false,
+    cropMode: 'smart', // DEFAULT CHANGED TO 'smart'
+    cropPosition: 'center'
   })
 
   const fileInputRef = useRef(null)
 
+  /**
+   * Load AI model on component mount
+   * @effect
+   * @description Loads TensorFlow.js AI model for smart cropping functionality
+   */
+  useEffect(() => {
+    const loadAIModel = async () => {
+      if (processingOptions.cropMode === 'smart' && !aiModelLoaded) {
+        try {
+          setAiLoading(true)
+          // Dynamically import the AI processing module
+          const { loadAIModel } = await import('./utils/imageProcessor')
+          await loadAIModel()
+          setAiModelLoaded(true)
+          setAiLoading(false)
+        } catch (error) {
+          console.error('Failed to load AI model:', error)
+          setAiLoading(false)
+          showModal('AI Model', 'AI model could not be loaded. Using standard crop instead.')
+          setProcessingOptions(prev => ({ ...prev, cropMode: 'standard' }))
+        }
+      }
+    }
+    loadAIModel()
+  }, [processingOptions.cropMode])
+
+  /**
+   * Handle image upload from file input or drag-and-drop
+   * @function
+   * @param {File[]} files - Array of uploaded image files
+   * @description Processes uploaded files and adds them to the image list
+   */
   const handleImageUpload = (files) => {
     const newImages = Array.from(files).map(file => ({
       id: Date.now() + Math.random(),
@@ -56,6 +101,11 @@ function App() {
     }))
     setImages([...images, ...newImages])
 
+    // Auto-select all new images (for custom mode)
+    if (processingOptions.processingMode === 'custom') {
+      setSelectedImages([...selectedImages, ...newImages.map(img => img.id)])
+    }
+
     if (processingOptions.processingMode === 'templates' && !processingOptions.templateSelectedImage && newImages.length > 0) {
       setProcessingOptions(prev => ({
         ...prev,
@@ -66,6 +116,12 @@ function App() {
     showModal('Success', `Successfully uploaded ${files.length} image${files.length > 1 ? 's' : ''}`)
   }
 
+  /**
+   * Handle image selection in gallery
+   * @function
+   * @param {string} imageId - Unique identifier of the image
+   * @description Toggles image selection based on current processing mode
+   */
   const handleImageSelect = (imageId) => {
     if (processingOptions.processingMode === 'templates') {
       setProcessingOptions(prev => ({
@@ -82,6 +138,11 @@ function App() {
     }
   }
 
+  /**
+   * Select or deselect all images
+   * @function
+   * @description Toggles selection state of all uploaded images
+   */
   const handleSelectAll = () => {
     if (processingOptions.processingMode === 'templates') {
       return
@@ -94,6 +155,11 @@ function App() {
     }
   }
 
+  /**
+   * Remove selected images from the gallery
+   * @function
+   * @description Removes selected images based on current processing mode
+   */
   const handleRemoveSelected = () => {
     const imagesToRemove = processingOptions.processingMode === 'templates'
       ? [processingOptions.templateSelectedImage].filter(Boolean)
@@ -112,14 +178,31 @@ function App() {
     showModal('Removed', 'Selected images have been removed')
   }
 
+  /**
+   * Display modal dialog
+   * @function
+   * @param {string} title - Modal title
+   * @param {string} message - Modal message content
+   * @description Shows a modal dialog with specified title and message
+   */
   const showModal = (title, message) => {
     setModal({ isOpen: true, title, message })
   }
 
+  /**
+   * Close modal dialog
+   * @function
+   * @description Closes the currently open modal
+   */
   const closeModal = () => {
     setModal({ isOpen: false, title: '', message: '' })
   }
 
+  /**
+   * Toggle between resize and crop modes
+   * @function
+   * @description Switches UI between resize and crop configuration sections
+   */
   const toggleResizeCrop = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -128,6 +211,24 @@ function App() {
     }))
   }
 
+  /**
+   * Toggle crop mode between standard and smart
+   * @function
+   * @description Switches between standard cropping and AI-powered smart cropping
+   */
+  const toggleCropMode = () => {
+    setProcessingOptions(prev => ({
+      ...prev,
+      cropMode: prev.cropMode === 'smart' ? 'standard' : 'smart'
+    }))
+  }
+
+  /**
+   * Switch between custom processing and templates mode
+   * @function
+   * @param {string} mode - 'custom' or 'templates'
+   * @description Changes the main processing mode of the application
+   */
   const toggleProcessingMode = (mode) => {
     const newMode = mode === 'templates' ? 'templates' : 'custom'
 
@@ -155,6 +256,12 @@ function App() {
     }
   }
 
+  /**
+   * Toggle selection of a specific template
+   * @function
+   * @param {string} templateId - Unique identifier of the template
+   * @description Adds or removes a template from the selected templates list
+   */
   const handleTemplateToggle = (templateId) => {
     setProcessingOptions(prev => {
       const newSelected = prev.selectedTemplates.includes(templateId)
@@ -165,6 +272,11 @@ function App() {
     })
   }
 
+  /**
+   * Select all available templates
+   * @function
+   * @description Selects every template in the template library
+   */
   const handleSelectAllTemplates = () => {
     const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id)
     setProcessingOptions(prev => ({
@@ -173,6 +285,12 @@ function App() {
     }))
   }
 
+  /**
+   * Select all templates in a specific category
+   * @function
+   * @param {string} category - Template category identifier
+   * @description Selects all templates belonging to the specified category
+   */
   const handleSelectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
@@ -184,6 +302,12 @@ function App() {
     }))
   }
 
+  /**
+   * Deselect all templates in a specific category
+   * @function
+   * @param {string} category - Template category identifier
+   * @description Deselects all templates belonging to the specified category
+   */
   const handleDeselectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
@@ -195,6 +319,14 @@ function App() {
     }))
   }
 
+  /**
+   * Update processing options
+   * @function
+   * @param {string} category - Option category ('compression', 'output', etc.)
+   * @param {string} key - Option key within the category
+   * @param {any} value - New option value
+   * @description Updates a specific processing option value
+   */
   const handleOptionChange = (category, key, value) => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -205,6 +337,13 @@ function App() {
     }))
   }
 
+  /**
+   * Update single processing option
+   * @function
+   * @param {string} key - Option key to update
+   * @param {any} value - New option value
+   * @description Updates a top-level processing option
+   */
   const handleSingleOptionChange = (key, value) => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -212,6 +351,12 @@ function App() {
     }))
   }
 
+  /**
+   * Get currently selected images for processing
+   * @function
+   * @returns {Array} Array of selected image objects
+   * @description Returns images selected based on current processing mode
+   */
   const getSelectedImagesForProcessing = () => {
     if (processingOptions.processingMode === 'templates') {
       return processingOptions.templateSelectedImage
@@ -222,39 +367,12 @@ function App() {
     }
   }
 
-  // Helper function to check image transparency
-  const checkImageTransparency = async (file) => {
-    return new Promise((resolve) => {
-      if (file.type !== 'image/png') {
-        resolve(false)
-        return
-      }
-
-      const img = new Image()
-      img.onload = () => {
-        const canvas = document.createElement('canvas')
-        canvas.width = img.width
-        canvas.height = img.height
-        const ctx = canvas.getContext('2d')
-        ctx.drawImage(img, 0, 0)
-
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-        const data = imageData.data
-
-        // Check alpha channel
-        for (let i = 3; i < data.length; i += 4) {
-          if (data[i] < 255) {
-            resolve(true)
-            return
-          }
-        }
-        resolve(false)
-      }
-      img.onerror = () => resolve(false)
-      img.src = URL.createObjectURL(file)
-    })
-  }
-
+  /**
+   * Process images using custom settings
+   * @async
+   * @function
+   * @description Applies custom processing options to selected images
+   */
   const processCustomImages = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing()
     if (selectedImagesForProcessing.length === 0) {
@@ -285,17 +403,48 @@ function App() {
 
         // Apply crop if dimensions are set
         if (processingOptions.showCrop && processingOptions.cropWidth && processingOptions.cropHeight) {
-          const cropResults = await processLemGendaryCrop(
-            [{ ...image, file: processedFile }],
-            parseInt(processingOptions.cropWidth),
-            parseInt(processingOptions.cropHeight)
-          )
-          if (cropResults.length > 0) {
-            processedFile = cropResults[0].cropped
+          let cropResults
+
+          if (processingOptions.cropMode === 'smart') {
+            // Use AI smart crop
+            if (aiLoading) {
+              showModal('AI Loading', 'Please wait while AI model loads...')
+              await new Promise(resolve => setTimeout(resolve, 1000))
+            }
+
+            if (aiModelLoaded) {
+              processedFile = await processSmartCrop(
+                processedFile,
+                parseInt(processingOptions.cropWidth),
+                parseInt(processingOptions.cropHeight)
+              )
+            } else {
+              // Fallback to standard crop if AI not loaded
+              cropResults = await processLemGendaryCrop(
+                [{ ...image, file: processedFile }],
+                parseInt(processingOptions.cropWidth),
+                parseInt(processingOptions.cropHeight),
+                processingOptions.cropPosition
+              )
+              if (cropResults.length > 0) {
+                processedFile = cropResults[0].cropped
+              }
+            }
+          } else {
+            // Use standard crop with position
+            cropResults = await processLemGendaryCrop(
+              [{ ...image, file: processedFile }],
+              parseInt(processingOptions.cropWidth),
+              parseInt(processingOptions.cropHeight),
+              processingOptions.cropPosition
+            )
+            if (cropResults.length > 0) {
+              processedFile = cropResults[0].cropped
+            }
           }
         }
 
-        // Apply rename if enabled - FIXED: Use sequence number
+        // Apply rename if enabled
         let finalName = image.name
         if (processingOptions.output.rename && processingOptions.output.newFileName) {
           const renameResults = await processLemGendaryRename(
@@ -304,7 +453,6 @@ function App() {
           )
           if (renameResults.length > 0) {
             processedFile = renameResults[0].renamed
-            // Ensure sequence number is correct
             const extension = image.name.split('.').pop()
             finalName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}.${extension}`
           }
@@ -315,22 +463,19 @@ function App() {
           const hasTransparency = await checkImageTransparency(processedFile)
           const targetFormat = processingOptions.output.format
 
-          // Determine final format based on transparency and user selection
           let finalFormat
           if (targetFormat === 'jpg' && hasTransparency) {
-            finalFormat = 'png' // PNG with transparency can't be converted to JPG
+            finalFormat = 'png'
           } else {
             finalFormat = targetFormat
           }
 
-          // Convert to the final format
           processedFile = await optimizeForWeb(
             processedFile,
             processingOptions.compression.quality / 100,
             finalFormat
           )
 
-          // Update filename with correct extension
           finalName = finalName.replace(/\.[^/.]+$/, '') + '.' + finalFormat
         }
 
@@ -368,6 +513,12 @@ function App() {
     }
   }
 
+  /**
+   * Process images using social media templates
+   * @async
+   * @function
+   * @description Applies selected social media templates to an image
+   */
   const processTemplates = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing()
     if (selectedImagesForProcessing.length === 0) {
@@ -391,20 +542,15 @@ function App() {
       const processedImages = []
       const image = selectedImagesForProcessing[0]
 
-      // Check if image is SVG
       const isSVG = image.file.type === 'image/svg+xml'
-
-      // Check if image has transparency (for raster images only)
       const hasTransparency = isSVG ? false : await checkImageTransparency(image.file)
 
-      // Process image for each selected template
       for (const template of selectedTemplates) {
         let processedFile = image.file
 
         // Apply template dimensions
         if (template.width && template.height) {
           if (template.height === 'auto') {
-            // Resize to width (ContentImage template)
             const resizeResults = await processLemGendaryResize(
               [image],
               template.width
@@ -413,11 +559,12 @@ function App() {
               processedFile = resizeResults[0].resized
             }
           } else {
-            // Crop to exact dimensions
+            // For templates, always use standard crop (not smart crop)
             const cropResults = await processLemGendaryCrop(
               [image],
               template.width,
-              template.height
+              template.height,
+              'center' // Templates use center crop
             )
             if (cropResults.length > 0) {
               processedFile = cropResults[0].cropped
@@ -425,22 +572,12 @@ function App() {
           }
         }
 
-        // For SVG files, we need to handle WebP and JPEG/PNG conversion differently
         if (isSVG) {
-          // Create WebP version (convert SVG to PNG first, then to WebP)
           const webpFile = await optimizeForWeb(processedFile, 0.8, 'webp')
+          const jpgPngFile = await optimizeForWeb(processedFile, 0.85, 'png')
 
-          // Create JPEG/PNG version
-          const jpgPngFile = await optimizeForWeb(
-            processedFile,
-            0.85,
-            'png' // SVGs convert better to PNG for transparency
-          )
-
-          // Rename with template name
           const baseName = `${template.platform}-${template.name}-${image.name.replace(/\.[^/.]+$/, '')}`
 
-          // Add WebP version
           const webpName = `${baseName}.webp`
           processedImages.push({
             ...image,
@@ -451,7 +588,6 @@ function App() {
             processed: true
           })
 
-          // Add PNG version (for WebImages and LogoImages only)
           if (template.category === 'web' || template.category === 'logo') {
             const pngName = `${baseName}.png`
             processedImages.push({
@@ -463,7 +599,6 @@ function App() {
               processed: true
             })
           } else {
-            // Social media gets JPEG for SVGs too
             const jpgName = `${baseName}.jpg`
             const socialJpgFile = await optimizeForWeb(processedFile, 0.85, 'jpg')
             processedImages.push({
@@ -476,21 +611,11 @@ function App() {
             })
           }
         } else {
-          // Original raster image processing
-          // Create WebP version
           const webpFile = await optimizeForWeb(processedFile, 0.8, 'webp')
+          const jpgPngFile = await optimizeForWeb(processedFile, 0.85, hasTransparency ? 'png' : 'jpg')
 
-          // Create JPEG/PNG version based on template category
-          const jpgPngFile = await optimizeForWeb(
-            processedFile,
-            0.85,
-            hasTransparency ? 'png' : 'jpg'
-          )
-
-          // Rename with template name
           const baseName = `${template.platform}-${template.name}-${image.name.replace(/\.[^/.]+$/, '')}`
 
-          // Add WebP version
           const webpName = `${baseName}.webp`
           processedImages.push({
             ...image,
@@ -501,7 +626,6 @@ function App() {
             processed: true
           })
 
-          // Add JPEG/PNG version (for WebImages and LogoImages only)
           if (template.category === 'web' || template.category === 'logo') {
             const jpgPngName = `${baseName}.${hasTransparency ? 'png' : 'jpg'}`
             processedImages.push({
@@ -513,7 +637,6 @@ function App() {
               processed: true
             })
           } else {
-            // Social media only gets JPEG
             const jpgName = `${baseName}.jpg`
             const socialJpgFile = await optimizeForWeb(processedFile, 0.85, 'jpg')
             processedImages.push({
@@ -528,7 +651,6 @@ function App() {
         }
       }
 
-      // Create ZIP with template images
       const settings = {
         includeOriginal: false,
         includeOptimized: false,
@@ -551,6 +673,13 @@ function App() {
     }
   }
 
+  /**
+   * Download processed images as ZIP file
+   * @function
+   * @param {Blob} zipBlob - ZIP file blob
+   * @param {string} prefix - File name prefix
+   * @description Creates and triggers download of ZIP file containing processed images
+   */
   const downloadZip = (zipBlob, prefix) => {
     const url = URL.createObjectURL(zipBlob)
     const a = document.createElement('a')
@@ -564,12 +693,13 @@ function App() {
     showModal('Success', 'ZIP file downloaded successfully! Check your downloads folder.')
   }
 
-  const selectedImagesForProcessing = getSelectedImagesForProcessing()
-
-  // Get template categories for display
-  const templateCategories = getTemplateCategories()
-
-  // Function to format template names for display
+  /**
+   * Format template names for display
+   * @function
+   * @param {string} name - Original template name
+   * @returns {string} Formatted display name
+   * @description Converts internal template names to user-friendly display names
+   */
   const formatTemplateName = (name) => {
     const nameMap = {
       // Logo
@@ -627,7 +757,36 @@ function App() {
     };
 
     return nameMap[name] || name;
+  };
+
+  /**
+   * Increment number value
+   * @function
+   * @param {string} key - State key to update
+   * @param {number} increment - Amount to increment by
+   * @description Increases a numeric value by the specified increment
+   */
+  const incrementValue = (key, increment = 1) => {
+    const currentValue = parseInt(processingOptions[key] || '0')
+    const newValue = Math.max(1, currentValue + increment)
+    handleSingleOptionChange(key, String(newValue))
   }
+
+  /**
+   * Decrement number value
+   * @function
+   * @param {string} key - State key to update
+   * @param {number} decrement - Amount to decrement by
+   * @description Decreases a numeric value by the specified decrement
+   */
+  const decrementValue = (key, decrement = 1) => {
+    const currentValue = parseInt(processingOptions[key] || '1')
+    const newValue = Math.max(1, currentValue - decrement)
+    handleSingleOptionChange(key, String(newValue))
+  }
+
+  const selectedImagesForProcessing = getSelectedImagesForProcessing()
+  const templateCategories = getTemplateCategories()
 
   return (
     <div className="app">
@@ -637,6 +796,17 @@ function App() {
           <div className="loading-spinner">
             <i className="fas fa-spinner fa-spin fa-3x"></i>
             <p>Preparing your ZIP file...</p>
+          </div>
+        </div>
+      )}
+
+      {/* AI Model Loading Overlay */}
+      {aiLoading && (
+        <div className="loading-overlay">
+          <div className="loading-spinner">
+            <i className="fas fa-brain fa-spin fa-3x"></i>
+            <p>Loading AI model for smart cropping...</p>
+            <p className="text-muted">This only happens once per session</p>
           </div>
         </div>
       )}
@@ -666,20 +836,20 @@ function App() {
         {images.length > 0 && (
           <>
             {/* Mode Selection */}
-            <div className="processing-options">
-              <div className="options-header">
-                <h2>
+            <div className="card">
+              <div className="card-header">
+                <h2 className="card-title">
                   <i className="fas fa-sliders-h"></i> Processing Mode
                 </h2>
-                <div className="controls-row">
+                <div className="card-actions">
                   <button
-                    className={`btn ${processingOptions.processingMode === 'custom' ? 'btn-primary' : 'btn-secondary'}`}
+                    className={`btn ${processingOptions.processingMode === 'custom' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
                     onClick={() => toggleProcessingMode('custom')}
                   >
                     <i className="fas fa-sliders-h"></i> Custom Processing
                   </button>
                   <button
-                    className={`btn ${processingOptions.processingMode === 'templates' ? 'btn-primary' : 'btn-secondary'}`}
+                    className={`btn ${processingOptions.processingMode === 'templates' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
                     onClick={() => toggleProcessingMode('templates')}
                   >
                     <i className="fas fa-th-large"></i> Templates
@@ -687,53 +857,74 @@ function App() {
                 </div>
               </div>
 
-              <div className="mode-info">
-                <p>
-                  <i className={`fas fa-${processingOptions.processingMode === 'templates' ? 'info-circle' : 'images'}`}></i>
-                  {processingOptions.processingMode === 'templates'
-                    ? 'Templates Mode: Select ONE image to apply templates'
-                    : 'Custom Mode: Select MULTIPLE images for batch processing'
-                  }
-                </p>
+              <div className="alert alert-info">
+                <i className="fas fa-info-circle"></i>
+                {processingOptions.processingMode === 'templates'
+                  ? 'Templates Mode: Select ONE image to apply templates'
+                  : 'Custom Mode: Select MULTIPLE images for batch processing'
+                }
               </div>
 
               {processingOptions.processingMode === 'custom' ? (
                 <>
-                  <div className="options-grid">
-                    <div className="option-group">
-                      <h3>
+                  <div className="grid grid-cols-auto gap-lg mb-lg">
+                    <div className="card">
+                      <h3 className="card-title">
                         <i className="fas fa-compress"></i> Compression
                       </h3>
                       <div className="form-group">
-                        <label>Quality (1-100)</label>
-                        <input
-                          type="range"
-                          min="1"
-                          max="100"
-                          value={processingOptions.compression.quality}
-                          onChange={(e) => handleOptionChange('compression', 'quality', parseInt(e.target.value))}
-                        />
-                        <div className="range-value">{processingOptions.compression.quality}%</div>
+                        <label className="form-label">Quality (1-100)</label>
+                        <div className="range-wrapper">
+                          <RangeSlider
+                            label="Quality (1–100)"
+                            min={1}
+                            max={100}
+                            value={processingOptions.compression.quality}
+                            onChange={(val) =>
+                              handleOptionChange('compression', 'quality', val)
+                            }
+                          />
+                        </div>
                       </div>
                       <div className="form-group">
-                        <label>Target File Size (KB, optional)</label>
-                        <input
-                          type="number"
-                          value={processingOptions.compression.fileSize}
-                          onChange={(e) => handleOptionChange('compression', 'fileSize', e.target.value)}
-                          placeholder="Leave empty for auto"
-                          min="1"
-                        />
+                        <label className="form-label">Target File Size (KB, optional)</label>
+                        <div className="number-input-wrapper">
+                          <input
+                            type="number"
+                            className="input-field"
+                            value={processingOptions.compression.fileSize}
+                            onChange={(e) => handleOptionChange('compression', 'fileSize', e.target.value)}
+                            placeholder="Leave empty for auto"
+                            min="1"
+                          />
+                          <div className="number-input-spinner">
+                            <button
+                              type="button"
+                              className="number-input-button"
+                              onClick={() => handleOptionChange('compression', 'fileSize', String(parseInt(processingOptions.compression.fileSize || 0) + 10))}
+                            >
+                              <i className="fas fa-chevron-up"></i>
+                            </button>
+                            <button
+                              type="button"
+                              className="number-input-button"
+                              onClick={() => handleOptionChange('compression', 'fileSize', String(Math.max(1, parseInt(processingOptions.compression.fileSize || 10) - 10)))}
+                            >
+                              <i className="fas fa-chevron-down"></i>
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="option-group">
-                      <h3>
+                    <div className="card">
+                      <h3 className="card-title">
                         <i className="fas fa-file-export"></i> Output Settings
                       </h3>
                       <div className="form-group">
-                        <label>Output Format</label>
+                        <label className="form-label">Output Format</label>
                         <select
+                          className="select-field"
                           value={processingOptions.output.format}
                           onChange={(e) => handleOptionChange('output', 'format', e.target.value)}
                         >
@@ -743,21 +934,24 @@ function App() {
                           <option value="original">Keep Original</option>
                         </select>
                       </div>
-                      <div className="checkbox-group">
-                        <label className="checkbox-label">
+                      <div className="form-group">
+                        <label className="checkbox-wrapper">
                           <input
                             type="checkbox"
+                            className="checkbox-input"
                             checked={processingOptions.output.rename}
                             onChange={(e) => handleOptionChange('output', 'rename', e.target.checked)}
                           />
-                          <i className="fas fa-font"></i> Batch Rename
+                          <span className="checkbox-custom"></span>
+                          <span>Batch Rename</span>
                         </label>
                       </div>
                       {processingOptions.output.rename && (
                         <div className="form-group">
-                          <label>New File Name</label>
+                          <label className="form-label">New File Name</label>
                           <input
                             type="text"
+                            className="input-field"
                             value={processingOptions.output.newFileName}
                             onChange={(e) => handleOptionChange('output', 'newFileName', e.target.value)}
                             placeholder="e.g., product-image"
@@ -766,15 +960,22 @@ function App() {
                       )}
                     </div>
 
-                    <div className="option-group">
-                      <h3>
-                        <i className="fas fa-crop-alt"></i> Resize & Crop
+                    <div className="card">
+                      <h3 className="card-title">
+                        {processingOptions.showResize ? (
+                          <>
+                            <i className="fas fa-expand-alt"></i> Resize
+                          </>
+                        ) : (
+                          <>
+                            <i className="fas fa-crop-alt"></i> Crop
+                          </>
+                        )}
                       </h3>
-                      <div style={{ marginBottom: '15px' }}>
+                      <div className="mb-md">
                         <button
-                          className="btn btn-secondary"
+                          className="btn btn-secondary btn-full-width"
                           onClick={toggleResizeCrop}
-                          style={{ width: '100%', marginBottom: '10px' }}
                         >
                           {processingOptions.showResize ? (
                             <>
@@ -790,54 +991,185 @@ function App() {
 
                       {processingOptions.showResize ? (
                         <div className="form-group">
-                          <label>Resize Dimension (px)</label>
-                          <input
-                            type="number"
-                            value={processingOptions.resizeDimension}
-                            onChange={(e) => handleSingleOptionChange('resizeDimension', e.target.value)}
-                            placeholder="e.g., 1080"
-                            min="1"
-                          />
-                          <small style={{ color: '#94a3b8', marginTop: '5px', display: 'block' }}>
+                          <label className="form-label">Resize Dimension (px)</label>
+                          <div className="number-input-wrapper">
+                            <input
+                              type="number"
+                              className="input-field"
+                              value={processingOptions.resizeDimension}
+                              onChange={(e) => handleSingleOptionChange('resizeDimension', e.target.value)}
+                              placeholder="e.g., 1080"
+                              min="1"
+                            />
+                            <div className="number-input-spinner">
+                              <button
+                                type="button"
+                                className="number-input-button"
+                                onClick={() => incrementValue('resizeDimension', 10)}
+                              >
+                                <i className="fas fa-chevron-up"></i>
+                              </button>
+                              <button
+                                type="button"
+                                className="number-input-button"
+                                onClick={() => decrementValue('resizeDimension', 10)}
+                              >
+                                <i className="fas fa-chevron-down"></i>
+                              </button>
+                            </div>
+                          </div>
+                          <p className="form-helper">
                             For portrait: sets height. For landscape: sets width. Aspect ratio maintained.
-                          </small>
+                          </p>
                         </div>
                       ) : (
-                        <>
+                        <div className="space-y-md">
                           <div className="form-group">
-                            <label>Crop Width (px)</label>
-                            <input
-                              type="number"
-                              value={processingOptions.cropWidth}
-                              onChange={(e) => handleSingleOptionChange('cropWidth', e.target.value)}
-                              placeholder="Width"
-                              min="1"
-                            />
+                            <div className="toggle-btn">
+                              <button
+                                type="button"
+                                className={`btn ${processingOptions.cropMode === 'smart' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={toggleCropMode}
+                                disabled={aiLoading}
+                              >
+                                {processingOptions.cropMode === 'smart' ? (
+                                  <>
+                                    <i className="fas fa-brain"></i> Switch to Standard Crop
+                                    {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
+                                  </>
+                                ) : (
+                                  <>
+                                    <i className="fas fa-crop-alt"></i> Switch to Smart Crop
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {processingOptions.cropMode === 'smart' && (
+                              <div className="alert alert-info mt-sm">
+                                <i className="fas fa-info-circle"></i>
+                                AI-powered: Detects main subject and crops intelligently
+                                {!aiModelLoaded && !aiLoading && <span className="font-semibold"> (AI model needs to load)</span>}
+                              </div>
+                            )}
                           </div>
-                          <div className="form-group">
-                            <label>Crop Height (px)</label>
-                            <input
-                              type="number"
-                              value={processingOptions.cropHeight}
-                              onChange={(e) => handleSingleOptionChange('cropHeight', e.target.value)}
-                              placeholder="Height"
-                              min="1"
-                            />
+
+                          <div className="grid grid-cols-2 gap-md">
+                            <div className="form-group">
+                              <label className="form-label">Crop Width (px)</label>
+                              <div className="number-input-wrapper">
+                                <input
+                                  type="number"
+                                  className="input-field"
+                                  value={processingOptions.cropWidth}
+                                  onChange={(e) => handleSingleOptionChange('cropWidth', e.target.value)}
+                                  placeholder="Width"
+                                  min="1"
+                                  disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                />
+                                <div className="number-input-spinner">
+                                  <button
+                                    type="button"
+                                    className="number-input-button"
+                                    onClick={() => incrementValue('cropWidth')}
+                                    disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                  >
+                                    <i className="fas fa-chevron-up"></i>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="number-input-button"
+                                    onClick={() => decrementValue('cropWidth')}
+                                    disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                  >
+                                    <i className="fas fa-chevron-down"></i>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Crop Height (px)</label>
+                              <div className="number-input-wrapper">
+                                <input
+                                  type="number"
+                                  className="input-field"
+                                  value={processingOptions.cropHeight}
+                                  onChange={(e) => handleSingleOptionChange('cropHeight', e.target.value)}
+                                  placeholder="Height"
+                                  min="1"
+                                  disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                />
+                                <div className="number-input-spinner">
+                                  <button
+                                    type="button"
+                                    className="number-input-button"
+                                    onClick={() => incrementValue('cropHeight')}
+                                    disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                  >
+                                    <i className="fas fa-chevron-up"></i>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="number-input-button"
+                                    onClick={() => decrementValue('cropHeight')}
+                                    disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                  >
+                                    <i className="fas fa-chevron-down"></i>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        </>
+
+                          {/* Position selector for standard crop */}
+                          {processingOptions.cropMode === 'standard' && (
+                            <div className="form-group">
+                              <label className="form-label">Crop Position</label>
+                              <select
+                                value={processingOptions.cropPosition}
+                                onChange={(e) => handleSingleOptionChange('cropPosition', e.target.value)}
+                                className="select-field"
+                              >
+                                <option value="center">Center</option>
+                                <option value="top-left">Top Left</option>
+                                <option value="top">Top</option>
+                                <option value="top-right">Top Right</option>
+                                <option value="left">Left</option>
+                                <option value="right">Right</option>
+                                <option value="bottom-left">Bottom Left</option>
+                                <option value="bottom">Bottom</option>
+                                <option value="bottom-right">Bottom Right</option>
+                              </select>
+                              <p className="form-helper">
+                                Image will be resized to fit dimensions, then cropped from selected position
+                              </p>
+                            </div>
+                          )}
+
+                          {processingOptions.cropMode === 'smart' && (
+                            <div className="alert alert-info">
+                              <i className="fas fa-lightbulb"></i>
+                              <span>Smart crop works best with images containing clear subjects (people, objects, etc.)</span>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
 
-                  <div style={{ textAlign: 'center', marginTop: '20px' }}>
+                  <div className="text-center">
                     <button
-                      className="btn btn-primary btn-large"
-                      disabled={selectedImagesForProcessing.length === 0 || isLoading}
+                      className="btn btn-primary btn-lg"
+                      disabled={selectedImagesForProcessing.length === 0 || isLoading || (processingOptions.cropMode === 'smart' && aiLoading)}
                       onClick={processCustomImages}
                     >
                       {isLoading ? (
                         <>
                           <i className="fas fa-spinner fa-spin"></i> Processing...
+                        </>
+                      ) : processingOptions.cropMode === 'smart' && aiLoading ? (
+                        <>
+                          <i className="fas fa-spinner fa-spin"></i> Loading AI Model...
                         </>
                       ) : (
                         <>
@@ -850,23 +1182,27 @@ function App() {
               ) : (
                 <>
                   {/* Templates Selection */}
-                  <div className="templates-section">
-                    <div className="template-selection-header">
+                  <div className="card">
+                    <div className="card-header">
                       <div>
-                        <h3>
+                        <h3 className="card-title">
                           <i className="fas fa-th-large"></i> Template Selection
                         </h3>
+                        <p className="text-muted mt-xs">
+                          <i className="fas fa-info-circle"></i>
+                          Templates use center crop (not smart crop) for consistent sizing
+                        </p>
                       </div>
-                      <div className="controls-row">
+                      <div className="card-actions">
                         <button
-                          className="btn btn-secondary"
+                          className="btn btn-secondary btn-sm"
                           onClick={handleSelectAllTemplates}
                           disabled={!processingOptions.templateSelectedImage}
                         >
                           <i className="fas fa-check-square"></i> Select All Templates
                         </button>
                         <button
-                          className="btn btn-secondary"
+                          className="btn btn-secondary btn-sm"
                           onClick={() => setProcessingOptions(prev => ({ ...prev, selectedTemplates: [] }))}
                           disabled={processingOptions.selectedTemplates.length === 0}
                         >
@@ -875,28 +1211,28 @@ function App() {
                       </div>
                     </div>
 
-                    <div className="templates-grid">
+                    <div className="templates-grid mb-lg">
                       {templateCategories.map((category) => {
                         const categoryTemplates = SOCIAL_MEDIA_TEMPLATES.filter(template =>
                           template.category === category.id
                         )
 
                         return (
-                          <div key={category.id} className="template-category">
-                            <div className="template-category-header">
-                              <h3 className="template-category-title">
-                                <i className={`${category.icon} category-icon`}></i> {category.name}
-                              </h3>
-                              <div className="template-category-controls">
+                          <div key={category.id} className="card">
+                            <div className="card-header">
+                              <h4 className="card-title">
+                                <i className={`${category.icon} mr-sm`}></i> {category.name}
+                              </h4>
+                              <div className="card-actions">
                                 <button
-                                  className="btn btn-secondary btn-small"
+                                  className="btn btn-secondary btn-sm"
                                   onClick={() => handleSelectAllInCategory(category.id)}
                                   disabled={!processingOptions.templateSelectedImage}
                                 >
                                   <i className="fas fa-check"></i> All
                                 </button>
                                 <button
-                                  className="btn btn-secondary btn-small"
+                                  className="btn btn-secondary btn-sm"
                                   onClick={() => handleDeselectAllInCategory(category.id)}
                                   disabled={!processingOptions.templateSelectedImage}
                                 >
@@ -904,39 +1240,24 @@ function App() {
                                 </button>
                               </div>
                             </div>
-                            <div className="template-options">
+                            <div className="space-y-sm">
                               {categoryTemplates.map(template => (
-                                <label key={template.id} className="checkbox-label" htmlFor={`template-${template.id}`}>
+                                <label key={template.id} className="checkbox-wrapper">
                                   <input
-                                    id={`template-${template.id}`}
                                     type="checkbox"
+                                    className="checkbox-input"
                                     checked={processingOptions.selectedTemplates.includes(template.id)}
                                     onChange={() => handleTemplateToggle(template.id)}
                                     disabled={!processingOptions.templateSelectedImage}
                                   />
-                                  <span className="template-info">
-                                    <i className={`${template.icon} template-icon`}></i>
-                                    <span className="template-details">
-                                      <span className="template-name">{formatTemplateName(template.name)}</span>
-                                      <span className="template-meta">
-                                        <span className="template-dimensions">
-                                          <i className="fas fa-expand-alt"></i>
-                                          {template.width}×{template.height === 'auto' ? 'auto' : template.height}
-                                        </span>
-                                        <span className="template-platform">
-                                          {category.id === 'instagram' && <i className="fab fa-instagram platform-instagram"></i>}
-                                          {category.id === 'facebook' && <i className="fab fa-facebook platform-facebook"></i>}
-                                          {category.id === 'twitter' && <i className="fab fa-twitter platform-twitter"></i>}
-                                          {category.id === 'linkedin' && <i className="fab fa-linkedin platform-linkedin"></i>}
-                                          {category.id === 'youtube' && <i className="fab fa-youtube platform-youtube"></i>}
-                                          {category.id === 'pinterest' && <i className="fab fa-pinterest platform-pinterest"></i>}
-                                          {category.id === 'tiktok' && <i className="fab fa-tiktok platform-tiktok"></i>}
-                                          {category.id === 'web' && <i className="fas fa-globe platform-web"></i>}
-                                          {category.id === 'logo' && <i className="fas fa-copyright platform-logo"></i>}
-                                          {template.platform}
-                                        </span>
+                                  <span className="checkbox-custom"></span>
+                                  <span className="flex-1">
+                                    <div className="flex justify-between items-center">
+                                      <span className="font-medium">{formatTemplateName(template.name)}</span>
+                                      <span className="text-muted text-sm">
+                                        {template.width}×{template.height === 'auto' ? 'auto' : template.height}
                                       </span>
-                                    </span>
+                                    </div>
                                   </span>
                                 </label>
                               ))}
@@ -947,15 +1268,15 @@ function App() {
                     </div>
 
                     {/* Template Action Section */}
-                    <div className="template-action-section">
-                      <div className="template-action-header">
-                        <div className="template-image-info">
-                          <div className="template-image-icon">
-                            <i className="fas fa-image"></i>
+                    <div className="card">
+                      <div className="card-header">
+                        <div className="flex items-center gap-md">
+                          <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
+                            <i className="fas fa-image text-white text-xl"></i>
                           </div>
-                          <div className="template-image-details">
-                            <h4>Image for Templates</h4>
-                            <p>
+                          <div>
+                            <h4 className="card-title mb-xs">Image for Templates</h4>
+                            <p className="text-muted">
                               {processingOptions.templateSelectedImage
                                 ? images.find(img => img.id === processingOptions.templateSelectedImage)?.name
                                 : 'No image selected'
@@ -963,26 +1284,24 @@ function App() {
                             </p>
                           </div>
                         </div>
-                        <div className="template-stats">
-                          <div className="template-status">
-                            <i className="fas fa-layer-group"></i>
-                            <span>{processingOptions.selectedTemplates.length} templates selected</span>
+                        <div className="text-right">
+                          <div className="text-muted mb-xs">
+                            <i className="fas fa-layer-group mr-xs"></i>
+                            {processingOptions.selectedTemplates.length} templates selected
                           </div>
-                          <div className="template-file-count">
-                            <i className="fas fa-file-export"></i>
-                            <span>
-                              {processingOptions.selectedTemplates.length > 0
-                                ? `${processingOptions.selectedTemplates.length * 2} files to generate`
-                                : 'Select templates to generate files'
-                              }
-                            </span>
+                          <div className="text-muted">
+                            <i className="fas fa-file-export mr-xs"></i>
+                            {processingOptions.selectedTemplates.length > 0
+                              ? `${processingOptions.selectedTemplates.length * 2} files to generate`
+                              : 'Select templates to generate files'
+                            }
                           </div>
                         </div>
                       </div>
 
-                      <div style={{ textAlign: 'center' }}>
+                      <div className="text-center">
                         <button
-                          className="btn btn-primary btn-large template-download-btn"
+                          className="btn btn-primary btn-lg relative"
                           disabled={!processingOptions.templateSelectedImage || processingOptions.selectedTemplates.length === 0 || isLoading}
                           onClick={processTemplates}
                         >
@@ -994,8 +1313,8 @@ function App() {
                             <>
                               <i className="fas fa-file-archive"></i> Download Template Images
                               {processingOptions.selectedTemplates.length > 0 && (
-                                <span className="file-count-badge">
-                                  {processingOptions.selectedTemplates.length * 2} files
+                                <span className="absolute -top-2 -right-2 bg-danger text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
+                                  {processingOptions.selectedTemplates.length * 2}
                                 </span>
                               )}
                             </>
@@ -1003,7 +1322,7 @@ function App() {
                         </button>
 
                         {processingOptions.selectedTemplates.length > 0 && (
-                          <div className="template-warning" style={{ marginTop: '15px', justifyContent: 'center' }}>
+                          <div className="alert alert-info mt-md">
                             <i className="fas fa-info-circle"></i>
                             <span>
                               Each template generates WebP + {images.find(img => img.id === processingOptions.templateSelectedImage)?.file.type === 'image/svg+xml' ? 'PNG/JPG' : 'PNG/JPG (based on transparency)'}
@@ -1012,7 +1331,7 @@ function App() {
                         )}
 
                         {!processingOptions.templateSelectedImage && (
-                          <div className="template-warning" style={{ marginTop: '15px', justifyContent: 'center' }}>
+                          <div className="alert alert-warning mt-md">
                             <i className="fas fa-exclamation-triangle"></i>
                             <span>Please select an image from the gallery above to apply templates</span>
                           </div>
@@ -1025,27 +1344,27 @@ function App() {
             </div>
 
             {/* Image Gallery */}
-            <div className="image-list-section">
-              <div className="image-list-header">
-                <h3>
+            <div className="card">
+              <div className="card-header">
+                <h3 className="card-title">
                   <i className="fas fa-images"></i> Uploaded Images ({images.length})
                   {processingOptions.processingMode === 'templates' && (
-                    <span className="template-mode-hint">
+                    <span className="text-muted font-normal ml-md">
                       (Templates mode: Click ONE image to select)
                     </span>
                   )}
                 </h3>
-                <div className="image-list-actions">
+                <div className="card-actions">
                   {processingOptions.processingMode === 'custom' && (
                     <button
-                      className="btn btn-secondary"
+                      className="btn btn-secondary btn-sm"
                       onClick={handleSelectAll}
                     >
                       <i className="fas fa-check-square"></i> {selectedImages.length === images.length ? 'Deselect All' : 'Select All'}
                     </button>
                   )}
                   <button
-                    className="btn btn-danger"
+                    className="btn btn-danger btn-sm"
                     onClick={handleRemoveSelected}
                     disabled={
                       processingOptions.processingMode === 'templates'
@@ -1067,15 +1386,15 @@ function App() {
                   return (
                     <div
                       key={image.id}
-                      className={`image-card ${isSelected ? 'selected' : ''} ${processingOptions.processingMode === 'templates' ? 'template-mode' : ''}`}
+                      className={`image-card ${isSelected ? 'selected' : ''}`}
                       onClick={() => handleImageSelect(image.id)}
                     >
                       <div className="image-checkbox">
                         <i className={`fas fa-${isSelected ? 'check-circle' : 'circle'}`}></i>
                       </div>
                       {processingOptions.processingMode === 'templates' && isSelected && (
-                        <div className="template-badge">
-                          <i className="fas fa-th-large"></i> TEMPLATE IMAGE
+                        <div className="absolute top-2 left-2 bg-primary text-white text-xs font-semibold px-2 py-1 rounded">
+                          <i className="fas fa-th-large mr-1"></i> TEMPLATE IMAGE
                         </div>
                       )}
                       <img src={image.url} alt={image.name} />
@@ -1093,14 +1412,14 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <div>
+        <div className="footer-left">
           <div className="footer-logo-container">
-            <p className="footer-logo-label">Created by</p>
+            <p className="text-muted mb-xs">Created by</p>
             <a
               href="https://lemgenda.hr"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ display: 'inline-block' }}
+              className="inline-block"
             >
               <img
                 src={lemGendaLogo}
@@ -1109,11 +1428,14 @@ function App() {
               />
             </a>
           </div>
+        </div>
 
+        <div className="footer-right">
           <div className="footer-text">
-            <p>Image LemGendizer v1.0.0 - All processing is done client-side</p>
-            <p className="footer-note">
+            <p className="text-muted">Image LemGendizer v2.0.0 - All processing is done client-side</p>
+            <p className="text-muted text-sm mt-xs">
               <i className="fas fa-shield-alt"></i> Your images never leave your browser
+              <span className="text-info ml-sm"> • <i className="fas fa-brain"></i> AI Smart Crop enabled</span>
             </p>
           </div>
         </div>

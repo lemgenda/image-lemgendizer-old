@@ -24,29 +24,19 @@ function ImageUploader({ onUpload, fileInputRef }) {
     }
 
     return (
-        <div className="uploader-container">
+        <div className="upload-section">
             <div
                 className="drop-zone"
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 onClick={() => fileInputRef.current?.click()}
-                style={{
-                    border: '2px dashed #475569',
-                    borderRadius: '8px',
-                    padding: '50px 20px',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    backgroundColor: '#1e293b',
-                    transition: 'all 0.2s ease',
-                    marginBottom: '20px'
-                }}
             >
                 <div className="drop-zone-content">
-                    <i className="fas fa-cloud-upload-alt fa-3x" style={{ color: '#3b82f6', marginBottom: '20px' }}></i>
-                    <h3 style={{ color: '#e2e8f0', marginBottom: '10px' }}>Drop images here or click to upload</h3>
-                    <p style={{ color: '#94a3b8', marginBottom: '5px' }}>Supports JPG, PNG, WebP, GIF, SVG</p>
-                    <p style={{ color: '#64748b', fontSize: '0.9rem' }}>
-                        <i className="fas fa-shield-alt"></i> All processing happens in your browser
+                    <i className="fas fa-cloud-upload-alt fa-3x"></i>
+                    <h3>Drop images here or click to upload</h3>
+                    <p>Supports JPG, PNG, WebP, GIF, SVG</p>
+                    <p className="text-muted">
+                        <i className="fas fa-shield-alt icon-sm icon-left"></i> All processing happens in your browser
                     </p>
                 </div>
             </div>
@@ -57,14 +47,13 @@ function ImageUploader({ onUpload, fileInputRef }) {
                 multiple
                 accept="image/*,.svg,.svgz"
                 onChange={handleFileSelect}
-                style={{ display: 'none' }}
+                className="hidden"
             />
 
-            <div style={{ textAlign: 'center' }}>
+            <div className="text-center mt-md">
                 <button
                     className="btn btn-primary"
                     onClick={() => fileInputRef.current?.click()}
-                    style={{ padding: '12px 30px' }}
                 >
                     <i className="fas fa-folder-open"></i> Select Images
                 </button>

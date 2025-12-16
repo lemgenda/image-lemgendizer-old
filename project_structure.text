@@ -1,0 +1,26 @@
+- .github
+  - workflows
+    - deploy.yml
+- .gitignore
+- eslint.config.js
+- index.html
+- package-lock.json
+- package.json
+- project_structure.text
+- README.md
+- src
+  - App.jsx
+  - assets
+    - lemgenda-icon.svg
+    - lemgenda-logo.svg
+  - components
+    - ImageUploader.jsx
+    - Modal.jsx
+  - main.jsx
+  - styles
+    - App.css
+  - utils
+    - exportUtils.js
+    - imageProcessor.js
+    - templateConfigs.js
+- vite.config.js
