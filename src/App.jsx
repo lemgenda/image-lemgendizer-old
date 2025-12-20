@@ -280,7 +280,7 @@ function App() {
    * Selects all output formats.
    */
   const handleSelectAllFormats = () => {
-    const allFormats = ['webp', 'jpg', 'png', 'original'];
+    const allFormats = ['webp', 'avif', 'jpg', 'png', 'original'];
     setProcessingOptions(prev => ({
       ...prev,
       output: {
@@ -458,7 +458,7 @@ function App() {
     }
 
     setIsLoading(true);
-    showModal(t('message.processingImages'), t('message.processingImages', { count: selectedImagesForProcessing.length }), 'info');
+    showModal(t('message.processingImages', { count: selectedImagesForProcessing.length }), t('message.processingImages', { count: selectedImagesForProcessing.length }), 'info');
 
     try {
       const processingConfig = getProcessingConfiguration(processingOptions);
@@ -466,9 +466,6 @@ function App() {
         selectedImagesForProcessing,
         processingConfig,
         aiModelLoaded,
-        (stage, progress) => {
-          console.log(`Processing ${stage}: ${progress}%`);
-        }
       );
 
       const settings = generateExportSettings('custom');
@@ -515,7 +512,7 @@ function App() {
     }
 
     setIsLoading(true);
-    showModal(t('message.processingImages'), t('message.processingImages', { count: processingOptions.selectedTemplates.length }), 'info');
+    showModal(t('message.processingImages', { count: processingOptions.selectedTemplates.length }), t('message.processingImages', { count: processingOptions.selectedTemplates.length }), 'info');
 
     try {
       const processingConfig = getProcessingConfiguration(processingOptions);
@@ -525,9 +522,6 @@ function App() {
         SOCIAL_MEDIA_TEMPLATES,
         true,
         aiModelLoaded,
-        (stage, progress) => {
-          console.log(`Template processing ${stage}: ${progress}%`);
-        }
       );
 
       const settings = generateExportSettings('templates');
@@ -743,6 +737,18 @@ function App() {
                               <input
                                 type="checkbox"
                                 className="checkbox-input"
+                                checked={processingOptions.output.formats.includes('avif')}
+                                onChange={() => handleFormatToggle('avif')}
+                              />
+                              <span className="checkbox-custom"></span>
+                              <span className="checkbox-label">
+                                {t('output.format.avif')}
+                              </span>
+                            </label>
+                            <label className="checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                className="checkbox-input"
                                 checked={processingOptions.output.formats.includes('jpg')}
                                 onChange={() => handleFormatToggle('jpg')}
                               />
@@ -824,10 +830,7 @@ function App() {
                           </>
                         ) : (
                           <>
-                            <i className="fas fa-crop-alt"></i> {t('crop.title')}
-                            <span className="ml-2 text-sm text-muted">
-                              ({processingOptions.cropMode === 'smart' ? t('crop.switchToSmart') : t('crop.switchToStandard')})
-                            </span>
+                              <i className="fas fa-crop-alt"></i> {processingOptions.cropMode === 'smart' ? t('crop.switchToSmart') : t('crop.switchToStandard')}
                           </>
                         )}
                       </h3>
@@ -1026,7 +1029,7 @@ function App() {
                         <>
                           <i className="fas fa-download"></i> {t('button.process')}
                           <span className="ml-1">
-                            ({selectedImagesForProcessing.length} images × {processingOptions.output.formats.length} formats)
+                            ({t('button.imageCount', { count: selectedImagesForProcessing.length })} × {t('button.formatCount', { count: processingOptions.output.formats.length })})
                           </span>
                         </>
                       )}
@@ -1179,7 +1182,7 @@ function App() {
                           <div className="flex items-center">
                             <i className="fas fa-layer-group mr-1 text-sm"></i>
                             <span>
-                              {processingOptions.selectedTemplates.length} {t('templates.selected')}
+                              {t('button.templateCount', { count: processingOptions.selectedTemplates.length })} {t('templates.selected')}
                             </span>
                           </div>
                           <span className="text-muted">,&nbsp;</span>
@@ -1337,8 +1340,8 @@ function App() {
                   </div>
                   <div className="summary-value">
                     {processingSummary.mode === 'templates'
-                      ? `${processingSummary.templatesApplied} templates`
-                      : processingSummary.imagesProcessed}
+                      ? t('summary.templatesApplied', { count: processingSummary.templatesApplied })
+                      : t('summary.imagesProcessed', { count: processingSummary.imagesProcessed })}
                   </div>
                 </div>
 
@@ -1362,7 +1365,7 @@ function App() {
 
                 <div className="summary-item">
                   <div className="summary-label">{t('summary.totalFiles')}:</div>
-                  <div className="summary-value">{processingSummary.totalFiles}</div>
+                  <div className="summary-value">{t('summary.totalFiles', { count: processingSummary.totalFiles })}</div>
                 </div>
 
                 <div className="summary-item">

@@ -15,7 +15,7 @@ const resources = {
 
             // Upload Section
             'upload.dropZone.title': 'Drop images here or click to upload',
-            'upload.dropZone.supported': 'Supports JPG, PNG, WebP, GIF, SVG',
+            'upload.dropZone.supported': 'Supports JPG, PNG, WebP, GIF, SVG, AVIF',
             'upload.dropZone.processing': 'All processing happens in your browser',
             'upload.selectImages': 'Select Images',
 
@@ -38,6 +38,7 @@ const resources = {
             'output.format.webp': 'WebP',
             'output.format.jpg': 'JPEG',
             'output.format.png': 'PNG',
+            'output.format.avif': 'AVIF',
             'output.format.original': 'Original',
             'output.selectAll': 'Select All Formats',
             'output.clearAll': 'Clear All',
@@ -74,6 +75,17 @@ const resources = {
             'crop.helper': 'Image will be resized to fit dimensions, then cropped from selected position',
             'crop.smartBest': 'Smart crop works best with images containing clear subjects (people, objects, etc.)',
 
+            // Operations (for summary)
+            'operations.resized': 'Resized to {{dimension}}px',
+            'operations.aiCrop': 'AI Smart Crop',
+            'operations.standardCrop': 'Crop',
+            'operations.compressed': 'Compressed ({{quality}}% quality)',
+            'operations.renamed': 'Renamed to {{pattern}}',
+            'operations.autoUpscaling': 'Auto Upscaling',
+            'operations.templatesApplied_one': '{{count}} template applied',
+            'operations.templatesApplied_other': '{{count}} templates applied',
+            'operations.aiSmartCropping': 'AI Smart Cropping',
+
             // Templates
             'templates.title': 'Template Selection',
             'templates.note': 'Templates use center crop (not smart crop) for consistent sizing',
@@ -106,15 +118,23 @@ const resources = {
             'button.close': 'Close',
             'button.english': 'English',
             'button.croatian': 'Hrvatski',
+            'button.imageCount_one': '{{count}} image',
+            'button.imageCount_other': '{{count}} images',
+            'button.formatCount_one': '{{count}} format',
+            'button.formatCount_other': '{{count}} formats',
+            'button.templateCount_one': '{{count}} template',
+            'button.templateCount_other': '{{count}} templates',
 
             // Messages
             'message.success': 'Success',
             'message.error': 'Error',
             'message.warning': 'Warning',
             'message.removed': 'Removed',
-            'message.successUpload': 'Successfully uploaded {{count}} image{{s}}',
+            'message.successUpload_one': 'Successfully uploaded {{count}} image',
+            'message.successUpload_other': 'Successfully uploaded {{count}} images',
             'message.removedImages': 'Selected images have been removed',
-            'message.processingImages': 'Processing {{count}} images...',
+            'message.processingImages_one': 'Processing {{count}} image...',
+            'message.processingImages_other': 'Processing {{count}} images...',
             'message.aiLoading': 'Please wait while AI model loads...',
             'message.errorSelectImages': 'Please select images to process',
             'message.errorSelectImage': 'Please select an image for templates',
@@ -142,18 +162,29 @@ const resources = {
             'summary.title': 'Processing Complete',
             'summary.processingComplete': 'Image Processing Complete',
             'summary.mode': 'Processing Mode',
-            'summary.imagesProcessed': 'Images Processed',
+            'summary.imagesProcessed_one': '{{count}} image processed',
+            'summary.imagesProcessed_other': '{{count}} images processed',
             'summary.formatsExported': 'Formats Exported',
-            'summary.totalFiles': 'Total Files Generated',
+            'summary.totalFiles_one': '{{count}} file generated',
+            'summary.totalFiles_other': '{{count}} files generated',
             'summary.aiUsed': 'AI Processing Used',
             'summary.upscalingUsed': 'AI Upscaling',
             'summary.categoriesApplied': 'Categories Applied',
             'summary.operationsPerformed': 'Operations Performed',
-            'summary.templatesApplied': 'Templates Applied',
+            'summary.templatesApplied_one': '{{count}} template applied',
+            'summary.templatesApplied_other': '{{count}} templates applied',
             'summary.downloadComplete': 'All files have been downloaded in the ZIP archive.',
             'summary.templatesNote': 'All {{count}} templates were processed with optimal cropping and upscaling.',
             'summary.yes': 'Yes',
             'summary.no': 'No',
+
+            // Common words for pluralization
+            'common.image_one': 'image',
+            'common.image_other': 'images',
+            'common.format_one': 'format',
+            'common.format_other': 'formats',
+            'common.template_one': 'template',
+            'common.template_other': 'templates',
 
             // Footer
             'footer.createdBy': 'Created by',
@@ -228,7 +259,7 @@ const resources = {
 
             // Upload Section
             'upload.dropZone.title': 'Povucite slike ovdje ili kliknite za učitavanje',
-            'upload.dropZone.supported': 'Podržava JPG, PNG, WebP, GIF, SVG',
+            'upload.dropZone.supported': 'Podržava JPG, PNG, WebP, GIF, SVG, AVIF',
             'upload.dropZone.processing': 'Sva obrada se odvija u vašem pregledniku',
             'upload.selectImages': 'Odaberi slike',
 
@@ -251,6 +282,7 @@ const resources = {
             'output.format.webp': 'WebP',
             'output.format.jpg': 'JPEG',
             'output.format.png': 'PNG',
+            'output.format.avif': 'AVIF',
             'output.format.original': 'Original',
             'output.selectAll': 'Odaberi sve formate',
             'output.clearAll': 'Očisti sve',
@@ -287,6 +319,18 @@ const resources = {
             'crop.helper': 'Slika će se promijeniti veličinu da stane u dimenzije, zatim obrezati od odabrane pozicije',
             'crop.smartBest': 'Pametno obrezivanje najbolje funkcionira sa slikama koje imaju jasne subjekte (ljudi, objekti, itd.)',
 
+            // Operations (for summary)
+            'operations.resized': 'Promijenjena veličina na {{dimension}}px',
+            'operations.aiCrop': 'Pametno AI obrezivanje',
+            'operations.standardCrop': 'Obrezivanje',
+            'operations.compressed': 'Komprimirano ({{quality}}% kvalitete)',
+            'operations.renamed': 'Preimenovano u {{pattern}}',
+            'operations.autoUpscaling': 'Automatsko povećavanje',
+            'operations.templatesApplied_one': 'Primijenjen {{count}} predložak',
+            'operations.templatesApplied_few': 'Primijenjena {{count}} predloška',
+            'operations.templatesApplied_other': 'Primijenjeno {{count}} predložaka',
+            'operations.aiSmartCropping': 'Pametno AI obrezivanje',
+
             // Templates
             'templates.title': 'Odabir predložaka',
             'templates.note': 'Predlošci koriste središnje obrezivanje (ne pametno) za konzistentne dimenzije',
@@ -319,15 +363,28 @@ const resources = {
             'button.close': 'Zatvori',
             'button.english': 'English',
             'button.croatian': 'Hrvatski',
+            'button.imageCount_one': '{{count}} slika',
+            'button.imageCount_few': '{{count}} slike',
+            'button.imageCount_other': '{{count}} slika',
+            'button.formatCount_one': '{{count}} format',
+            'button.formatCount_few': '{{count}} formata',
+            'button.formatCount_other': '{{count}} formata',
+            'button.templateCount_one': '{{count}} predložak',
+            'button.templateCount_few': '{{count}} predloška',
+            'button.templateCount_other': '{{count}} predložaka',
 
             // Messages
             'message.success': 'Uspjeh',
             'message.error': 'Greška',
             'message.warning': 'Upozorenje',
             'message.removed': 'Uklonjeno',
-            'message.successUpload': 'Uspješno učitano {{count}} slik{{a}}',
+            'message.successUpload_one': 'Uspješno učitano {{count}} slika',
+            'message.successUpload_few': 'Uspješno učitano {{count}} slike',
+            'message.successUpload_other': 'Uspješno učitano {{count}} slika',
             'message.removedImages': 'Odabrane slike su uklonjene',
-            'message.processingImages': 'Obradjujem {{count}} slik{{e}}...',
+            'message.processingImages_one': 'Obrađujem {{count}} sliku...',
+            'message.processingImages_few': 'Obrađujem {{count}} slike...',
+            'message.processingImages_other': 'Obrađujem {{count}} slika...',
             'message.aiLoading': 'Molimo pričekajte dok se AI model učitava...',
             'message.errorSelectImages': 'Molimo odaberite slike za obradu',
             'message.errorSelectImage': 'Molimo odaberite sliku za predloške',
@@ -355,18 +412,35 @@ const resources = {
             'summary.title': 'Obrada Završena',
             'summary.processingComplete': 'Obrada slika završena',
             'summary.mode': 'Način obrade',
-            'summary.imagesProcessed': 'Obrađene slike',
+            'summary.imagesProcessed_one': 'Obrađena {{count}} slika',
+            'summary.imagesProcessed_few': 'Obrađene {{count}} slike',
+            'summary.imagesProcessed_other': 'Obrađeno {{count}} slika',
             'summary.formatsExported': 'Izvozni formati',
-            'summary.totalFiles': 'Ukupno generiranih datoteka',
+            'summary.totalFiles_one': 'Generirana {{count}} datoteka',
+            'summary.totalFiles_few': 'Generirane {{count}} datoteke',
+            'summary.totalFiles_other': 'Generirano {{count}} datoteka',
             'summary.aiUsed': 'AI obrada korištena',
             'summary.upscalingUsed': 'AI povećavanje',
             'summary.categoriesApplied': 'Primijenjene kategorije',
             'summary.operationsPerformed': 'Izvedene operacije',
-            'summary.templatesApplied': 'Primijenjeni predlošci',
+            'summary.templatesApplied_one': 'Primijenjen {{count}} predložak',
+            'summary.templatesApplied_few': 'Primijenjena {{count}} predloška',
+            'summary.templatesApplied_other': 'Primijenjeno {{count}} predložaka',
             'summary.downloadComplete': 'Sve datoteke su preuzete u ZIP arhivi.',
             'summary.templatesNote': 'Svi {{count}} predložaka obrađeni su s optimalnim obrezivanjem i povećavanjem.',
             'summary.yes': 'Da',
             'summary.no': 'Ne',
+
+            // Common words for pluralization
+            'common.image_one': 'slika',
+            'common.image_few': 'slike',
+            'common.image_other': 'slika',
+            'common.format_one': 'format',
+            'common.format_few': 'formata',
+            'common.format_other': 'formata',
+            'common.template_one': 'predložak',
+            'common.template_few': 'predloška',
+            'common.template_other': 'predložaka',
 
             // Footer
             'footer.createdBy': 'Kreirao',
@@ -445,6 +519,8 @@ i18n
             order: ['localStorage', 'navigator'],
             caches: ['localStorage'],
         },
+        // Configure plural rules
+        pluralSeparator: '_',
     });
 
 export default i18n;

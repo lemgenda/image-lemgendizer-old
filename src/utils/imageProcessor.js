@@ -727,15 +727,14 @@ export const processCustomImagesBatch = async (selectedImages, processingOptions
             let resizeResult = null;
             let cropResult = null;
 
-            if (processingOptions.showResize && processingOptions.resizeDimension) {
-                const resizeDimension = parseInt(processingOptions.resizeDimension);
-                if (resizeDimension > MAX_SAFE_DIMENSION) {
-                    processingOptions.resizeDimension = String(MAX_SAFE_DIMENSION);
-                }
+            // Only resize if resize is enabled AND dimension is provided
+            if (processingOptions.resize?.enabled && processingOptions.resize.dimension) {
+                const resizeDimension = parseInt(processingOptions.resize.dimension);
+                const safeDimension = Math.min(resizeDimension, MAX_SAFE_DIMENSION);
 
                 const resizeResults = await processLemGendaryResize(
                     [{ ...image, file: baseProcessedFile }],
-                    parseInt(processingOptions.resizeDimension)
+                    safeDimension
                 );
                 if (resizeResults.length > 0 && resizeResults[0].resized) {
                     resizeResult = resizeResults[0].resized;
@@ -744,29 +743,32 @@ export const processCustomImagesBatch = async (selectedImages, processingOptions
                 safeCleanupGPUMemory();
             }
 
-            if (processingOptions.showCrop && processingOptions.cropWidth && processingOptions.cropHeight) {
-                const cropWidth = parseInt(processingOptions.cropWidth);
-                const cropHeight = parseInt(processingOptions.cropHeight);
+            // Only crop if crop is enabled AND both dimensions are provided
+            if (processingOptions.crop?.enabled && processingOptions.crop.width && processingOptions.crop.height) {
+                const cropWidth = parseInt(processingOptions.crop.width);
+                const cropHeight = parseInt(processingOptions.crop.height);
 
-                if (cropWidth > MAX_SAFE_DIMENSION || cropHeight > MAX_SAFE_DIMENSION) {
-                    throw new Error('Crop dimensions too large');
-                }
+                const safeWidth = Math.min(cropWidth, MAX_SAFE_DIMENSION);
+                const safeHeight = Math.min(cropHeight, MAX_SAFE_DIMENSION);
 
-                if (processingOptions.cropMode === 'smart' && aiModelLoaded && !aiUpscalingDisabled) {
+                if (processingOptions.crop.mode === 'smart' && aiModelLoaded && !aiUpscalingDisabled) {
                     try {
                         const smartCropFile = await processSmartCrop(
                             baseProcessedFile,
-                            cropWidth,
-                            cropHeight
+                            safeWidth,
+                            safeHeight,
+                            { quality: processingOptions.compression?.quality || 0.85, format: 'webp' }
                         );
                         cropResult = smartCropFile;
                         baseProcessedFile = smartCropFile;
                     } catch (aiError) {
+                        console.warn('AI smart crop failed, falling back to standard crop:', aiError);
                         const cropResults = await processLemGendaryCrop(
                             [{ ...image, file: baseProcessedFile }],
-                            cropWidth,
-                            cropHeight,
-                            processingOptions.cropPosition
+                            safeWidth,
+                            safeHeight,
+                            processingOptions.crop.position || 'center',
+                            { quality: processingOptions.compression?.quality || 0.85, format: 'webp' }
                         );
                         if (cropResults.length > 0 && cropResults[0].cropped) {
                             cropResult = cropResults[0].cropped;
@@ -776,9 +778,10 @@ export const processCustomImagesBatch = async (selectedImages, processingOptions
                 } else {
                     const cropResults = await processLemGendaryCrop(
                         [{ ...image, file: baseProcessedFile }],
-                        cropWidth,
-                        cropHeight,
-                        processingOptions.cropPosition
+                        safeWidth,
+                        safeHeight,
+                        processingOptions.crop.position || 'center',
+                        { quality: processingOptions.compression?.quality || 0.85, format: 'webp' }
                     );
                     if (cropResults.length > 0 && cropResults[0].cropped) {
                         cropResult = cropResults[0].cropped;
@@ -791,35 +794,31 @@ export const processCustomImagesBatch = async (selectedImages, processingOptions
             for (const format of formats) {
                 let processedFile = baseProcessedFile;
                 let finalName = image.name;
-
                 const baseName = image.name.replace(/\.[^/.]+$/, '');
-                let extension = '';
 
                 if (processingOptions.output.rename && processingOptions.output.newFileName) {
+                    // Use new filename pattern with numbering
                     const numberedName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}`;
 
                     if (format === 'original') {
-                        extension = image.name.split('.').pop();
-                        finalName = `${numberedName}.${extension}`;
+                        finalName = `${numberedName}.${image.name.split('.').pop()}`;
                         processedFile = new File([await ensureFileObject(image)], finalName, {
                             type: image.type || processedFile.type
                         });
                     } else {
-                        extension = format;
-                        finalName = `${numberedName}.${extension}`;
+                        finalName = `${numberedName}.${format}`;
                     }
                 } else {
-                    const suffix = getOperationSuffix(processingOptions);
-
+                    // Keep original naming - NO operation suffixes
                     if (format === 'original') {
-                        extension = image.name.split('.').pop();
-                        finalName = `${baseName}${suffix}.${extension}`;
+                        // For original format, keep exact original filename
+                        finalName = image.name;
                         processedFile = new File([await ensureFileObject(image)], finalName, {
                             type: image.type || processedFile.type
                         });
                     } else {
-                        extension = format;
-                        finalName = `${baseName}${suffix}.${extension}`;
+                        // For converted formats: baseName.extension
+                        finalName = `${baseName}.${format}`;
                     }
                 }
 
@@ -827,25 +826,40 @@ export const processCustomImagesBatch = async (selectedImages, processingOptions
                     const hasTransparency = await checkImageTransparency(processedFile);
                     let targetFormat = format;
 
+                    // Handle format-specific requirements
                     if (targetFormat === 'jpg' && hasTransparency) {
                         targetFormat = 'png';
                     }
 
+                    // Check AVIF support if needed
+                    if (targetFormat === 'avif') {
+                        const supportsAVIF = await checkAVIFSupport();
+                        if (!supportsAVIF) {
+                            console.warn('AVIF not supported in this browser, falling back to WebP');
+                            targetFormat = 'webp';
+                        }
+                    }
+
                     processedFile = await optimizeForWeb(
                         processedFile,
-                        processingOptions.compression.quality / 100,
+                        processingOptions.compression?.quality || 0.85,
                         targetFormat
                     );
 
+                    // Update filename extension if format changed
                     if (targetFormat !== format) {
-                        extension = targetFormat;
-                        finalName = finalName.replace(`.${format}`, `.${targetFormat}`);
-                    } else {
-                        extension = targetFormat;
-                        finalName = finalName.replace(/\.[^/.]+$/, '') + '.' + targetFormat;
+                        if (processingOptions.output.rename && processingOptions.output.newFileName) {
+                            // For renamed files, replace the extension
+                            const numberedName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}`;
+                            finalName = `${numberedName}.${targetFormat}`;
+                        } else {
+                            // For original filenames, update with correct extension
+                            finalName = `${baseName}.${targetFormat}`;
+                        }
                     }
                 }
 
+                // Ensure file has correct name
                 if (processedFile.name !== finalName) {
                     processedFile = new File([processedFile], finalName, {
                         type: processedFile.type
@@ -860,11 +874,11 @@ export const processCustomImagesBatch = async (selectedImages, processingOptions
                     processed: true,
                     format: format === 'original'
                         ? image.type?.split('/')[1] || 'webp'
-                        : extension,
+                        : format,
                     operations: {
                         resized: !!resizeResult,
                         cropped: !!cropResult,
-                        aiUsed: processingOptions.cropMode === 'smart' && aiModelLoaded && !aiUpscalingDisabled && !!cropResult
+                        aiUsed: processingOptions.crop?.mode === 'smart' && aiModelLoaded && !aiUpscalingDisabled && !!cropResult
                     }
                 });
             }
@@ -872,52 +886,35 @@ export const processCustomImagesBatch = async (selectedImages, processingOptions
         } catch (error) {
             console.error(`Error processing ${image.name}:`, error);
 
-            if (error.message.includes('AI') || error.message.includes('memory') || error.message.includes('texture')) {
-                try {
-                    const cropResults = await processLemGendaryCrop(
-                        [{ ...image, file: await ensureFileObject(image) }],
-                        parseInt(processingOptions.cropWidth || 1000),
-                        parseInt(processingOptions.cropHeight || 1000),
-                        processingOptions.cropPosition || 'center'
-                    );
-
-                    if (cropResults.length > 0) {
-                        for (const format of formats) {
-                            const finalName = `${image.name.replace(/\.[^/.]+$/, '')}-fallback.${format}`;
-                            processedImages.push({
-                                ...image,
-                                file: cropResults[0].cropped,
-                                name: finalName,
-                                url: URL.createObjectURL(cropResults[0].cropped),
-                                processed: true,
-                                format: format,
-                                error: 'AI processing failed, used standard crop'
-                            });
-                        }
-                        continue;
-                    }
-                } catch (fallbackError) {
-                    console.error('Fallback also failed:', fallbackError);
-                }
-            }
-
+            // Create error entries for each format
             for (const format of formats) {
                 const baseName = image.name.replace(/\.[^/.]+$/, '');
-                const suffix = getOperationSuffix(processingOptions);
-                const extension = format === 'original' ? image.name.split('.').pop() : format;
-                const finalName = `${baseName}${suffix}.${extension}`;
+                let finalName;
+
+                if (processingOptions.output.rename && processingOptions.output.newFileName) {
+                    const numberedName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}`;
+                    const extension = format === 'original' ? image.name.split('.').pop() : format;
+                    finalName = `${numberedName}.${extension}`;
+                } else {
+                    if (format === 'original') {
+                        finalName = image.name;
+                    } else {
+                        finalName = `${baseName}.${format}`;
+                    }
+                }
 
                 processedImages.push({
                     ...image,
                     file: null,
                     name: finalName,
                     processed: false,
-                    format: format,
+                    format: format === 'original' ? image.type?.split('/')[1] : format,
                     error: error.message
                 });
             }
         }
 
+        // Add small delay between images for better UI responsiveness
         if (i < selectedImages.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 100));
             safeCleanupGPUMemory();
@@ -1100,6 +1097,9 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
         return convertSVGToRaster(imageFile, 1000, 1000, format);
     }
 
+    // Check if browser supports AVIF encoding
+    const supportsAVIF = await checkAVIFSupport();
+
     const hasTransparency = await checkImageTransparency(imageFile);
     const needsWhiteBackground = (format === 'jpg' || format === 'jpeg') && hasTransparency;
 
@@ -1135,28 +1135,54 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
                     mimeType = 'image/webp';
                     extension = 'webp';
                     break;
+                case 'avif':
+                    if (!supportsAVIF) {
+                        console.warn('AVIF not supported, falling back to WebP');
+                        mimeType = 'image/webp';
+                        extension = 'webp';
+                    } else {
+                        mimeType = 'image/avif';
+                        extension = 'avif';
+                    }
+                    break;
                 default:
                     mimeType = 'image/webp';
                     extension = 'webp';
             }
 
-            canvas.toBlob(
-                (blob) => {
-                    URL.revokeObjectURL(objectUrl);
+            // For AVIF, we need to use a different encoding approach
+            if (format.toLowerCase() === 'avif' && supportsAVIF) {
+                encodeToAVIF(canvas, quality)
+                    .then(blob => {
+                        URL.revokeObjectURL(objectUrl);
+                        const originalName = imageFile.name || 'image';
+                        const baseName = originalName.replace(/\.[^/.]+$/, '');
+                        const newName = `${baseName}.${extension}`;
+                        resolve(new File([blob], newName, { type: mimeType }));
+                    })
+                    .catch(error => {
+                        console.warn('AVIF encoding failed, falling back to WebP:', error);
+                        encodeToWebP(canvas, quality, ctx, objectUrl, imageFile, 'webp', resolve, reject);
+                    });
+            } else {
+                canvas.toBlob(
+                    (blob) => {
+                        URL.revokeObjectURL(objectUrl);
 
-                    if (!blob) {
-                        reject(new Error('Failed to create blob'));
-                        return;
-                    }
+                        if (!blob) {
+                            reject(new Error('Failed to create blob'));
+                            return;
+                        }
 
-                    const originalName = imageFile.name || 'image';
-                    const baseName = originalName.replace(/\.[^/.]+$/, '');
-                    const newName = `${baseName}.${extension}`;
-                    resolve(new File([blob], newName, { type: mimeType }));
-                },
-                mimeType,
-                quality
-            );
+                        const originalName = imageFile.name || 'image';
+                        const baseName = originalName.replace(/\.[^/.]+$/, '');
+                        const newName = `${baseName}.${extension}`;
+                        resolve(new File([blob], newName, { type: mimeType }));
+                    },
+                    mimeType,
+                    format === 'png' ? undefined : quality
+                );
+            }
         };
 
         img.onerror = (err) => {
@@ -1257,45 +1283,315 @@ export const ensureFileObject = async (image) => {
  */
 export const checkImageTransparency = async (file) => {
     return new Promise((resolve) => {
+        // Handle SVG files
         if (file.type === 'image/svg+xml') {
             const reader = new FileReader();
             reader.onload = (e) => {
-                const svgText = e.target.result;
-                const hasTransparency = svgText.includes('fill="none"') ||
-                    svgText.includes('opacity=') ||
-                    svgText.includes('fill-opacity') ||
-                    svgText.includes('rgba(') ||
-                    svgText.includes('fill:#00000000');
-                resolve(hasTransparency);
+                try {
+                    const svgText = e.target.result;
+                    const parser = new DOMParser();
+                    const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+                    const svgElement = svgDoc.documentElement;
+
+                    // Check for common transparency indicators in SVG
+                    let hasTransparency = false;
+
+                    // Check for fill="none" or opacity attributes
+                    const walkSvg = (element) => {
+                        if (element.hasAttribute) {
+                            // Check for transparency attributes
+                            if (element.getAttribute('fill') === 'none' ||
+                                element.getAttribute('fill-opacity') === '0' ||
+                                element.getAttribute('opacity') === '0' ||
+                                element.getAttribute('stroke-opacity') === '0') {
+                                hasTransparency = true;
+                                return;
+                            }
+
+                            // Check for rgba colors
+                            const fill = element.getAttribute('fill');
+                            const stroke = element.getAttribute('stroke');
+
+                            if (fill && (fill.includes('rgba') || fill.includes('transparent'))) {
+                                hasTransparency = true;
+                                return;
+                            }
+
+                            if (stroke && (stroke.includes('rgba') || stroke.includes('transparent'))) {
+                                hasTransparency = true;
+                                return;
+                            }
+                        }
+
+                        // Recursively check children
+                        if (element.children) {
+                            for (let child of element.children) {
+                                if (hasTransparency) break;
+                                walkSvg(child);
+                            }
+                        }
+                    };
+
+                    walkSvg(svgElement);
+                    resolve(hasTransparency);
+                } catch (error) {
+                    console.warn('Error parsing SVG for transparency:', error);
+                    resolve(false);
+                }
             };
             reader.onerror = () => resolve(false);
             reader.readAsText(file);
-        } else if (file.type !== 'image/png') {
+            return;
+        }
+
+        // Non-transparent formats
+        const nonTransparentFormats = [
+            'image/jpeg',
+            'image/jpg',
+            'image/bmp',
+            'image/tiff',
+            'image/x-icon'
+        ];
+
+        if (nonTransparentFormats.includes(file.type.toLowerCase())) {
             resolve(false);
-        } else {
-            const img = new Image();
-            img.onload = () => {
+            return;
+        }
+
+        // Formats that can have transparency
+        const transparentFormats = [
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'image/avif',
+            'image/apng'
+        ];
+
+        if (!transparentFormats.includes(file.type.toLowerCase())) {
+            // Unknown format - assume no transparency
+            resolve(false);
+            return;
+        }
+
+        // For transparent-capable formats, check actual pixels
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+
+        img.onload = () => {
+            try {
                 const canvas = document.createElement('canvas');
                 canvas.width = img.naturalWidth;
                 canvas.height = img.naturalHeight;
-                const ctx = canvas.getContext('2d');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw image
                 ctx.drawImage(img, 0, 0);
 
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const data = imageData.data;
+                // Get image data
+                let imageData;
+                try {
+                    imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                } catch (error) {
+                    // CORS or other error - use sampling approach
+                    console.warn('Cannot get full image data, using sampling:', error);
+                    resolve(checkTransparencyBySampling(ctx, canvas.width, canvas.height));
+                    URL.revokeObjectURL(objectUrl);
+                    return;
+                }
 
-                for (let i = 3; i < data.length; i += 4) {
+                const data = imageData.data;
+                let hasTransparentPixel = false;
+
+                // For performance, check every nth pixel based on image size
+                const totalPixels = canvas.width * canvas.height;
+                let samplingRate = 1;
+
+                if (totalPixels > 1000000) { // 1MP
+                    samplingRate = 10;
+                } else if (totalPixels > 500000) { // 0.5MP
+                    samplingRate = 5;
+                } else if (totalPixels > 100000) { // 0.1MP
+                    samplingRate = 2;
+                }
+
+                // Check alpha channel
+                for (let i = 3; i < data.length; i += 4 * samplingRate) {
                     if (data[i] < 255) {
-                        resolve(true);
-                        return;
+                        hasTransparentPixel = true;
+                        break;
                     }
                 }
+
+                // If no transparency found with sampling, do a more thorough check on edges
+                if (!hasTransparentPixel && samplingRate > 1) {
+                    // Check corners and edges
+                    const checkPixels = [
+                        // Corners
+                        { x: 0, y: 0 },
+                        { x: canvas.width - 1, y: 0 },
+                        { x: 0, y: canvas.height - 1 },
+                        { x: canvas.width - 1, y: canvas.height - 1 },
+                        // Center
+                        { x: Math.floor(canvas.width / 2), y: Math.floor(canvas.height / 2) },
+                        // Edges
+                        { x: Math.floor(canvas.width / 2), y: 0 },
+                        { x: 0, y: Math.floor(canvas.height / 2) },
+                        { x: canvas.width - 1, y: Math.floor(canvas.height / 2) },
+                        { x: Math.floor(canvas.width / 2), y: canvas.height - 1 }
+                    ];
+
+                    for (const pixel of checkPixels) {
+                        const idx = (pixel.y * canvas.width + pixel.x) * 4;
+                        if (data[idx + 3] < 255) {
+                            hasTransparentPixel = true;
+                            break;
+                        }
+                    }
+                }
+
+                URL.revokeObjectURL(objectUrl);
+                resolve(hasTransparentPixel);
+
+            } catch (error) {
+                console.warn('Error checking image transparency:', error);
+                URL.revokeObjectURL(objectUrl);
                 resolve(false);
-            };
-            img.onerror = () => resolve(false);
-            img.src = URL.createObjectURL(file);
-        }
+            }
+        };
+
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(false);
+        };
+
+        img.src = objectUrl;
     });
+};
+
+/**
+ * Helper function to check transparency by sampling when full pixel access is restricted.
+ */
+const checkTransparencyBySampling = (ctx, width, height) => {
+    try {
+        // Create a smaller version for sampling
+        const sampleWidth = Math.min(100, width);
+        const sampleHeight = Math.min(100, height);
+        const sampleCanvas = document.createElement('canvas');
+        sampleCanvas.width = sampleWidth;
+        sampleCanvas.height = sampleHeight;
+        const sampleCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+
+        // Draw scaled version
+        sampleCtx.drawImage(ctx.canvas, 0, 0, width, height, 0, 0, sampleWidth, sampleHeight);
+
+        // Check sample
+        const sampleData = sampleCtx.getImageData(0, 0, sampleWidth, sampleHeight).data;
+
+        for (let i = 3; i < sampleData.length; i += 4) {
+            if (sampleData[i] < 255) {
+                return true;
+            }
+        }
+
+        return false;
+    } catch (error) {
+        console.warn('Sampling method failed:', error);
+        return false;
+    }
+};
+
+/**
+ * Enhanced version that also returns transparency type for better format selection.
+ */
+export const checkImageTransparencyDetailed = async (file) => {
+    return new Promise((resolve) => {
+        if (file.type === 'image/svg+xml') {
+            // For SVG, check if it has any transparent elements
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const svgText = e.target.result;
+                const hasTransparency = svgText.includes('opacity=') ||
+                    svgText.includes('fill-opacity') ||
+                    svgText.includes('stroke-opacity') ||
+                    svgText.includes('rgba(') ||
+                    svgText.includes('fill="none"') ||
+                    svgText.includes('fill:#00000000');
+
+                resolve({
+                    hasTransparency,
+                    type: hasTransparency ? 'svg-transparency' : 'opaque',
+                    alphaChannel: hasTransparency
+                });
+            };
+            reader.onerror = () => resolve({
+                hasTransparency: false,
+                type: 'unknown',
+                alphaChannel: false
+            });
+            reader.readAsText(file);
+            return;
+        }
+
+        checkImageTransparency(file).then((hasTransparency) => {
+            // Determine transparency type based on file type
+            let type = 'opaque';
+            if (hasTransparency) {
+                if (file.type === 'image/gif') {
+                    type = 'gif-transparency'; // Indexed transparency
+                } else if (file.type === 'image/png' || file.type === 'image/webp' || file.type === 'image/avif') {
+                    type = 'alpha-channel'; // True alpha channel
+                } else {
+                    type = 'unknown-transparency';
+                }
+            }
+
+            resolve({
+                hasTransparency,
+                type,
+                alphaChannel: hasTransparency && type === 'alpha-channel'
+            });
+        });
+    });
+};
+
+/**
+ * Quick check that avoids loading the entire image when possible.
+ * Useful for format selection decisions.
+ */
+export const checkImageTransparencyQuick = async (file) => {
+    // Quick checks based on file type
+    const nonTransparentFormats = [
+        'image/jpeg',
+        'image/jpg',
+        'image/bmp',
+        'image/tiff',
+        'image/x-icon'
+    ];
+
+    if (nonTransparentFormats.includes(file.type.toLowerCase())) {
+        return false;
+    }
+
+    // For SVG, check file content quickly
+    if (file.type === 'image/svg+xml') {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result.substring(0, 5000); // Check first 5KB
+                resolve(text.includes('opacity') ||
+                    text.includes('rgba(') ||
+                    text.includes('fill="none"'));
+            };
+            reader.onerror = () => resolve(false);
+            reader.readAsText(file.slice(0, 5000)); // Only read first 5KB
+        });
+    }
+
+    // For other formats, need to load the image
+    return checkImageTransparency(file);
 };
 
 /**
@@ -1323,27 +1619,6 @@ export const calculateTotalTemplateFiles = (selectedTemplates, SOCIAL_MEDIA_TEMP
     });
 
     return totalFiles;
-};
-
-/**
- * Gets plural suffix for current language.
- *
- * @param {number} count - Count for pluralization
- * @param {string} language - Current language code
- * @returns {string} Plural suffix
- */
-export const getPluralSuffix = (count, language) => {
-    if (language === 'hr') {
-        const lastDigit = count % 10;
-        const lastTwoDigits = count % 100;
-
-        if (lastDigit === 1 && lastTwoDigits !== 11) return 'a';
-        if (lastDigit >= 2 && lastDigit <= 4 &&
-            (lastTwoDigits < 10 || lastTwoDigits >= 20)) return 'e';
-        return 'a';
-    }
-
-    return count === 1 ? '' : 's';
 };
 
 /**
@@ -1521,6 +1796,7 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
 export const validateProcessingOptions = (processingOptions) => {
     const errors = [];
 
+    // Validate compression quality
     if (processingOptions.compression?.quality) {
         const quality = parseInt(processingOptions.compression.quality);
         if (isNaN(quality) || quality < 1 || quality > 100) {
@@ -1528,31 +1804,128 @@ export const validateProcessingOptions = (processingOptions) => {
         }
     }
 
-    if (processingOptions.resizeDimension) {
-        const dimension = parseInt(processingOptions.resizeDimension);
-        if (isNaN(dimension) || dimension < 1 || dimension > 10000) {
-            errors.push('Resize dimension must be between 1 and 10000');
+    // Validate file size target if provided (optional field)
+    if (processingOptions.compression?.fileSize && processingOptions.compression.fileSize !== '') {
+        const fileSize = parseInt(processingOptions.compression.fileSize);
+        if (isNaN(fileSize) || fileSize < 1) {
+            errors.push('Target file size must be a positive number in KB');
+        } else if (fileSize > 100000) { // 100MB limit
+            errors.push('Target file size cannot exceed 100,000 KB (100MB)');
         }
     }
 
-    if (processingOptions.showCrop && processingOptions.cropWidth && processingOptions.cropHeight) {
+    // Validate resize dimension if provided (optional field)
+    if (processingOptions.resizeDimension && processingOptions.resizeDimension !== '') {
+        const dimension = parseInt(processingOptions.resizeDimension);
+        if (isNaN(dimension) || dimension < 1) {
+            errors.push('Resize dimension must be a positive number');
+        } else if (dimension > 10000) {
+            errors.push('Resize dimension cannot exceed 10000 pixels');
+        }
+    }
+    // If resize is enabled but dimension is empty, that's OK - resize will be skipped
+
+    // Validate crop dimensions if provided (optional fields)
+    if (processingOptions.cropWidth && processingOptions.cropWidth !== '') {
+        const width = parseInt(processingOptions.cropWidth);
+        if (isNaN(width) || width < 1) {
+            errors.push('Crop width must be a positive number');
+        } else if (width > 10000) {
+            errors.push('Crop width cannot exceed 10000 pixels');
+        }
+    }
+
+    if (processingOptions.cropHeight && processingOptions.cropHeight !== '') {
+        const height = parseInt(processingOptions.cropHeight);
+        if (isNaN(height) || height < 1) {
+            errors.push('Crop height must be a positive number');
+        } else if (height > 10000) {
+            errors.push('Crop height cannot exceed 10000 pixels');
+        }
+    }
+
+    // Validate that if one crop dimension is provided, both should be provided
+    if ((processingOptions.cropWidth && processingOptions.cropWidth !== '') !==
+        (processingOptions.cropHeight && processingOptions.cropHeight !== '')) {
+        errors.push('Both crop width and height must be provided together, or leave both empty to skip cropping');
+    }
+
+    // Validate crop aspect ratio when both dimensions are provided
+    if (processingOptions.cropWidth && processingOptions.cropWidth !== '' &&
+        processingOptions.cropHeight && processingOptions.cropHeight !== '') {
         const width = parseInt(processingOptions.cropWidth);
         const height = parseInt(processingOptions.cropHeight);
 
-        if (isNaN(width) || width < 1 || width > 10000) {
-            errors.push('Crop width must be between 1 and 10000');
-        }
-        if (isNaN(height) || height < 1 || height > 10000) {
-            errors.push('Crop height must be between 1 and 10000');
+        if (width > 0 && height > 0) {
+            const aspectRatio = width / height;
+            if (aspectRatio > 100 || aspectRatio < 0.01) {
+                errors.push('Crop dimensions have extreme aspect ratio. Please use reasonable values.');
+            }
         }
     }
 
+    // Validate output formats
     if (processingOptions.output?.formats) {
-        const validFormats = ['webp', 'jpg', 'png', 'original'];
+        const validFormats = ['webp', 'avif', 'jpg', 'jpeg', 'png', 'original'];
         const invalidFormats = processingOptions.output.formats.filter(f => !validFormats.includes(f));
+
         if (invalidFormats.length > 0) {
             errors.push(`Invalid output formats: ${invalidFormats.join(', ')}`);
         }
+
+        if (processingOptions.output.formats.length === 0) {
+            errors.push('At least one output format must be selected');
+        }
+    }
+
+    // Validate rename options only if rename is enabled
+    if (processingOptions.output?.rename) {
+        const newFileName = processingOptions.output?.newFileName || '';
+
+        if (!newFileName.trim()) {
+            errors.push('New file name cannot be empty when rename is enabled');
+        } else {
+            // Check for invalid characters
+            const invalidChars = /[<>:"/\\|?*\x00-\x1F]/g;
+            if (invalidChars.test(newFileName)) {
+                errors.push('New file name contains invalid characters');
+            }
+
+            // Check length
+            if (newFileName.length > 100) {
+                errors.push('New file name cannot exceed 100 characters');
+            }
+        }
+    }
+
+    // Validate crop mode if provided
+    if (processingOptions.cropMode && !['smart', 'standard'].includes(processingOptions.cropMode)) {
+        errors.push('Crop mode must be either "smart" or "standard"');
+    }
+
+    // Validate crop position if provided
+    if (processingOptions.cropPosition) {
+        const validPositions = ['center', 'top-left', 'top', 'top-right', 'left',
+            'right', 'bottom-left', 'bottom', 'bottom-right'];
+        if (!validPositions.includes(processingOptions.cropPosition)) {
+            errors.push('Invalid crop position');
+        }
+    }
+
+    // Validate template mode specific options
+    if (processingOptions.processingMode === 'templates') {
+        if (!processingOptions.templateSelectedImage) {
+            errors.push('No image selected for template processing');
+        }
+
+        if (!processingOptions.selectedTemplates || processingOptions.selectedTemplates.length === 0) {
+            errors.push('No templates selected for processing');
+        }
+    }
+
+    // Validate processing mode
+    if (processingOptions.processingMode && !['custom', 'templates'].includes(processingOptions.processingMode)) {
+        errors.push('Invalid processing mode');
     }
 
     return {
@@ -1578,11 +1951,16 @@ export const getProcessingConfiguration = (processingOptions) => {
             rename: processingOptions.output?.rename || false,
             newFileName: processingOptions.output?.newFileName || ''
         },
-        resize: processingOptions.showResize && processingOptions.resizeDimension ? {
+        // Only enable resize if dimension is provided and not empty
+        resize: (processingOptions.showResize && processingOptions.resizeDimension &&
+            processingOptions.resizeDimension.trim() !== '') ? {
             enabled: true,
             dimension: parseInt(processingOptions.resizeDimension)
         } : { enabled: false },
-        crop: processingOptions.showCrop && processingOptions.cropWidth && processingOptions.cropHeight ? {
+        // Only enable crop if both dimensions are provided and not empty
+        crop: (processingOptions.showCrop && processingOptions.cropWidth &&
+            processingOptions.cropWidth.trim() !== '' && processingOptions.cropHeight &&
+            processingOptions.cropHeight.trim() !== '') ? {
             enabled: true,
             width: parseInt(processingOptions.cropWidth),
             height: parseInt(processingOptions.cropHeight),
@@ -1606,6 +1984,7 @@ export const getProcessingConfiguration = (processingOptions) => {
 export const getAvailableFormats = () => {
     return [
         { id: 'webp', name: 'WebP', description: 'Modern format with excellent compression' },
+        { id: 'avif', name: 'AVIF', description: 'Next-gen format with superior compression' },
         { id: 'jpg', name: 'JPEG', description: 'Standard format with good compression' },
         { id: 'png', name: 'PNG', description: 'Lossless format with transparency support' },
         { id: 'original', name: 'Original', description: 'Keep original format' }
@@ -1817,29 +2196,6 @@ export const handleImageDrop = (e, onUpload, options = {}) => {
 // ================================
 // Internal Helper Functions
 // ================================
-
-const getOperationSuffix = (processingOptions) => {
-    const parts = [];
-
-    if (processingOptions.showResize && processingOptions.resizeDimension) {
-        parts.push(`resized-${processingOptions.resizeDimension}`);
-    }
-
-    if (processingOptions.showCrop && processingOptions.cropWidth && processingOptions.cropHeight) {
-        const cropType = processingOptions.cropMode === 'smart' ? 'smart-crop' : 'crop';
-        parts.push(`${cropType}-${processingOptions.cropWidth}x${processingOptions.cropHeight}`);
-
-        if (processingOptions.cropMode === 'standard' && processingOptions.cropPosition !== 'center') {
-            parts.push(processingOptions.cropPosition);
-        }
-    }
-
-    if (processingOptions.compression.quality < 100) {
-        parts.push(`q${processingOptions.compression.quality}`);
-    }
-
-    return parts.length > 0 ? `-${parts.join('-')}` : '';
-};
 
 const calculateUpscaleFactor = (originalWidth, originalHeight, targetWidth, targetHeight) => {
     const widthScale = targetWidth / originalWidth;
@@ -2777,4 +3133,101 @@ export const getFileExtension = (filename) => {
 
 export const sanitizeFilename = (filename) => {
     return filename.replace(/[^a-zA-Z0-9-_.]/g, '_');
+};
+
+/**
+ * Checks if browser supports AVIF encoding.
+ *
+ * @async
+ * @returns {Promise<boolean>} True if AVIF is supported
+ */
+const checkAVIFSupport = async () => {
+    return new Promise((resolve) => {
+        // Create test image to check AVIF decoding support
+        const avif = new Image();
+        avif.onload = avif.onerror = () => {
+            resolve(avif.height === 2);
+        };
+        avif.src = 'data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADybWV0YQAAAAAAAAAoaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAGxpYmF2aWYAAAAADnBpdG0AAAAAAAEAAAAeaWxvYwAAAABEAAABAAEAAAABAAABGgAAAB0AAAAoaWluZgAAAAAAAQAAABppbmZlAgAAAAABAABhdjAxQ29sb3IAAAAAamlwcnAAAABLaXBjbwAAABRpc3BlAAAAAAAAAAIAAAACAAAAEHBpeGkAAAAAAwgICAAAAAxhdjFDgQ0MAAAAABNjb2xybmNseAACAAIAAYAAAAAXaXBtYQAAAAAAAAABAAEEAQKDBAAAACVtZGF0EgAKCBgANogQEAwgMg8f8D///8WfhwB8+ErK42A=';
+
+        // Set timeout in case the image load hangs
+        setTimeout(() => resolve(false), 1000);
+    });
+};
+
+// Function to encode canvas to AVIF
+const encodeToAVIF = async (canvas, quality) => {
+    // Convert quality (0-1) to AVIF quality parameter (0-100)
+    const avifQuality = Math.round(quality * 100);
+
+    // Use the ImageEncoder API if available (Chrome 94+)
+    if ('ImageEncoder' in window) {
+        try {
+            const encoder = new ImageEncoder({
+                type: 'image/avif',
+                quality: avifQuality
+            });
+
+            const frame = new VideoFrame(canvas, {
+                format: 'RGBA',
+                codedWidth: canvas.width,
+                codedHeight: canvas.height,
+                timestamp: 0
+            });
+
+            const encodeResult = await encoder.encode(frame);
+            frame.close();
+
+            return new Blob([encodeResult.data], { type: 'image/avif' });
+        } catch (error) {
+            console.warn('ImageEncoder API failed:', error);
+            // Fall through to canvas method
+        }
+    }
+
+    // Fallback using canvas.toBlob with polyfill or library
+    // Note: This will only work if the browser supports AVIF in toBlob()
+    return new Promise((resolve, reject) => {
+        canvas.toBlob(
+            (blob) => {
+                if (blob) {
+                    resolve(blob);
+                } else {
+                    reject(new Error('AVIF encoding not supported'));
+                }
+            },
+            'image/avif',
+            avifQuality / 100
+        );
+    });
+};
+
+// Fallback encoding to WebP
+const encodeToWebP = (canvas, quality, ctx, objectUrl, imageFile, extension, resolve, reject) => {
+    canvas.toBlob(
+        (blob) => {
+            URL.revokeObjectURL(objectUrl);
+
+            if (!blob) {
+                reject(new Error('Failed to create blob'));
+                return;
+            }
+
+            const originalName = imageFile.name || 'image';
+            const baseName = originalName.replace(/\.[^/.]+$/, '');
+            const newName = `${baseName}.${extension}`;
+            resolve(new File([blob], newName, { type: 'image/webp' }));
+        },
+        'image/webp',
+        quality
+    );
+};
+
+const warnAboutAVIFSupport = async () => {
+    const supportsAVIF = await checkAVIFSupport();
+    if (!supportsAVIF) {
+        console.warn('AVIF format is not supported in this browser. Consider using WebP as an alternative.');
+        return false;
+    }
+    return true;
 };

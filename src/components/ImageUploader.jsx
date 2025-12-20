@@ -97,7 +97,7 @@ function ImageUploader({ onUpload, fileInputRef }) {
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept="image/*,.svg,.svgz"
+                    accept="image/*,.svg,.svgz,image/avif"
                     onChange={handleFileChange}
                     className="hidden"
                 />
