@@ -17,7 +17,9 @@ import {
   handleFileSelect,
   calculatePercentage,
   validateImageFiles,
-  formatFileSize
+  formatFileSize,
+  cleanupBlobUrls,
+  ensureFileObject
 } from './utils/imageProcessor'
 import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './utils/templateConfigs'
 import RangeSlider from './components/RangeSlider'
@@ -104,17 +106,31 @@ function App() {
   }, [processingOptions.cropMode, t])
 
   /**
+   * Clean up blob URLs when images change or component unmounts
+   */
+  useEffect(() => {
+    return () => {
+      // Clean up all blob URLs when component unmounts
+      cleanupBlobUrls(images);
+    };
+  }, []);
+
+  /**
    * Handle image upload from file input or drag-and-drop
    * @param {File[]} files - Array of uploaded image files
    */
   const handleImageUpload = (files) => {
     const validFiles = validateImageFiles(files)
     const newImages = createImageObjects(validFiles)
-    setImages([...images, ...newImages])
+    setImages(prev => {
+      // Clean up old blob URLs before adding new images
+      cleanupBlobUrls(prev);
+      return [...prev, ...newImages];
+    });
 
     // Auto-select all new images (for custom mode)
     if (processingOptions.processingMode === 'custom') {
-      setSelectedImages([...selectedImages, ...newImages.map(img => img.id)])
+      setSelectedImages(prev => [...prev, ...newImages.map(img => img.id)])
     }
 
     if (processingOptions.processingMode === 'templates' && !processingOptions.templateSelectedImage && newImages.length > 0) {
@@ -176,6 +192,10 @@ function App() {
     const imagesToRemove = processingOptions.processingMode === 'templates'
       ? [processingOptions.templateSelectedImage].filter(Boolean)
       : selectedImages
+
+    // Clean up blob URLs before removing images
+    const imagesToRemoveObjects = images.filter(img => imagesToRemove.includes(img.id));
+    cleanupBlobUrls(imagesToRemoveObjects);
 
     setImages(images.filter(img => !imagesToRemove.includes(img.id)))
     setSelectedImages([])
@@ -371,8 +391,24 @@ function App() {
     showModal(t('message.processingImages'), t('message.processingImages', { count: selectedImagesForProcessing.length }))
 
     try {
+      // FIX: Clean up old blob URLs before processing
+      cleanupBlobUrls(selectedImagesForProcessing);
+
+      // FIX: Ensure all images have valid File objects
+      const imagesWithValidFiles = await Promise.all(
+        selectedImagesForProcessing.map(async (img) => {
+          try {
+            const file = await ensureFileObject(img);
+            return { ...img, file };
+          } catch (error) {
+            console.error(`Failed to get valid file for ${img.name}:`, error);
+            return img; // Keep original but it might fail later
+          }
+        })
+      );
+
       const processedImages = await processCustomImagesBatch(
-        selectedImagesForProcessing,
+        imagesWithValidFiles,
         processingOptions,
         aiModelLoaded
       )
@@ -421,12 +457,25 @@ function App() {
     showModal(t('message.processingImages'), t('message.processingImages', { count: processingOptions.selectedTemplates.length }))
 
     try {
+      // FIX: Clean up old blob URLs before processing
+      cleanupBlobUrls(selectedImagesForProcessing);
+
+      // FIX: Ensure the image has a valid File object
+      const image = selectedImagesForProcessing[0];
+      let validImage = image;
+      try {
+        const file = await ensureFileObject(image);
+        validImage = { ...image, file };
+      } catch (error) {
+        console.error(`Failed to get valid file for ${image.name}:`, error);
+        throw new Error(`Invalid image file: ${image.name}`);
+      }
+
       const selectedTemplates = SOCIAL_MEDIA_TEMPLATES.filter(template =>
         processingOptions.selectedTemplates.includes(template.id)
       )
 
-      const image = selectedImagesForProcessing[0]
-      const processedImages = await processTemplateImages(image, selectedTemplates)
+      const processedImages = await processTemplateImages(validImage, selectedTemplates)
 
       const settings = {
         includeOriginal: false,
@@ -437,7 +486,7 @@ function App() {
         createFolders: true
       }
 
-      const zipBlob = await createExportZip([image], processedImages, settings, 'templates')
+      const zipBlob = await createExportZip([validImage], processedImages, settings, 'templates')
       downloadZip(zipBlob, 'template-images')
 
       closeModal()

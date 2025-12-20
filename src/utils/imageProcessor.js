@@ -15,31 +15,77 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
 
     for (const image of images) {
         try {
+            // Ensure we have a valid File object
+            const imageFile = await ensureFileObject(image);
             let processedFile;
 
-            if (image.file.type === 'image/svg+xml') {
-                processedFile = await processSVGResize(image.file, dimension);
+            if (imageFile.type === 'image/svg+xml') {
+                processedFile = await processSVGResize(imageFile, dimension);
             } else {
-                const img = await createImageBitmap(image.file);
+                // Create a new Image object with error handling
+                const img = new Image();
+
+                // Create object URL from the File/Blob
+                const objectUrl = URL.createObjectURL(imageFile);
+
+                await new Promise((resolve, reject) => {
+                    img.onload = () => {
+                        URL.revokeObjectURL(objectUrl);
+                        resolve();
+                    };
+                    img.onerror = (error) => {
+                        URL.revokeObjectURL(objectUrl);
+                        reject(new Error(`Failed to load image: ${image.name}`));
+                    };
+                    img.src = objectUrl;
+                });
+
+                let newWidth, newHeight;
+                if (img.naturalWidth >= img.naturalHeight) {
+                    newWidth = dimension;
+                    newHeight = Math.round((img.naturalHeight / img.naturalWidth) * dimension);
+                } else {
+                    newHeight = dimension;
+                    newWidth = Math.round((img.naturalWidth / img.naturalHeight) * dimension);
+                }
+
+                // Check if upscaling is needed
+                const needsUpscaling = newWidth > img.naturalWidth || newHeight > img.naturalHeight;
+
+                let sourceFile = imageFile;
+
+                if (needsUpscaling) {
+                    // First upscale, then resize if needed
+                    const upscaleFactor = calculateUpscaleFactor(img.naturalWidth, img.naturalHeight, newWidth, newHeight);
+                    sourceFile = await upscaleImageWithAI(imageFile, upscaleFactor, image.name);
+                }
+
+                // Create canvas for final processing
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
 
-                let newWidth, newHeight;
-                if (img.width >= img.height) {
-                    newWidth = dimension;
-                    newHeight = Math.round((img.height / img.width) * dimension);
-                } else {
-                    newHeight = dimension;
-                    newWidth = Math.round((img.width / img.height) * dimension);
-                }
+                // Load the source file (original or upscaled)
+                const finalImg = new Image();
+                const finalObjectUrl = URL.createObjectURL(sourceFile);
+
+                await new Promise((resolve, reject) => {
+                    finalImg.onload = resolve;
+                    finalImg.onerror = () => {
+                        URL.revokeObjectURL(finalObjectUrl);
+                        reject(new Error(`Failed to load final image: ${image.name}`));
+                    };
+                    finalImg.src = finalObjectUrl;
+                });
 
                 canvas.width = newWidth;
                 canvas.height = newHeight;
-                ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                ctx.drawImage(finalImg, 0, 0, newWidth, newHeight);
 
                 const resizedBlob = await new Promise(resolve => {
                     canvas.toBlob(resolve, 'image/webp', 0.85);
                 });
+
+                URL.revokeObjectURL(finalObjectUrl);
 
                 processedFile = new File([resizedBlob], image.name.replace(/\.[^/.]+$/, '.webp'), {
                     type: 'image/webp'
@@ -49,15 +95,23 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
             const optimizedFile = await optimizeForWeb(processedFile, options.quality, options.format);
 
             results.push({
-                original: image,
+                original: { ...image, file: imageFile },
                 resized: optimizedFile,
                 dimensions: { width: dimension, height: dimension },
-                isSVG: image.file.type === 'image/svg+xml',
+                isSVG: imageFile.type === 'image/svg+xml',
                 optimized: true
             });
 
         } catch (error) {
             console.error(`Error resizing ${image.name}:`, error);
+            results.push({
+                original: image,
+                resized: image.file instanceof File ? image.file : null,
+                dimensions: { width: dimension, height: dimension },
+                isSVG: image.file?.type === 'image/svg+xml',
+                optimized: false,
+                error: error.message
+            });
         }
     }
 
@@ -72,11 +126,14 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
 
     for (const image of images) {
         try {
+            // Ensure we have a valid File object
+            const imageFile = await ensureFileObject(image);
             let croppedFile;
 
-            if (image.file.type === 'image/svg+xml') {
+            if (imageFile.type === 'image/svg+xml') {
+                // SVG processing
                 const img = new Image();
-                const svgUrl = URL.createObjectURL(image.file);
+                const svgUrl = URL.createObjectURL(imageFile);
 
                 await new Promise((resolve, reject) => {
                     img.onload = resolve;
@@ -124,8 +181,33 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
                 URL.revokeObjectURL(svgUrl);
 
             } else {
-                const resized = await resizeImageForCrop(image.file, width, height);
-                croppedFile = await cropFromResized(resized, width, height, cropPosition, image.file);
+                // Check image dimensions
+                const img = new Image();
+                const objectUrl = URL.createObjectURL(imageFile);
+
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = () => {
+                        URL.revokeObjectURL(objectUrl);
+                        reject(new Error('Failed to load image'));
+                    };
+                    img.src = objectUrl;
+                });
+
+                const needsUpscaling = width > img.naturalWidth || height > img.naturalHeight;
+                let sourceFile = imageFile;
+
+                if (needsUpscaling) {
+                    // Upscale first, then crop
+                    const upscaleFactor = calculateUpscaleFactor(img.naturalWidth, img.naturalHeight, width, height);
+                    sourceFile = await upscaleImageWithAI(imageFile, upscaleFactor, image.name);
+                }
+
+                URL.revokeObjectURL(objectUrl);
+
+                // Now crop from the appropriate file
+                const resized = await resizeImageForCrop(sourceFile, width, height);
+                croppedFile = await cropFromResized(resized, width, height, cropPosition, imageFile);
             }
 
             const optimizedFile = await optimizeForWeb(croppedFile, options.quality, options.format);
@@ -134,12 +216,20 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
                 original: image,
                 cropped: optimizedFile,
                 dimensions: { width, height },
-                isSVG: image.file.type === 'image/svg+xml',
+                isSVG: imageFile.type === 'image/svg+xml',
                 optimized: true
             });
 
         } catch (error) {
             console.error(`Error cropping ${image.name}:`, error);
+            results.push({
+                original: image,
+                cropped: image.file instanceof File ? image.file : null,
+                dimensions: { width, height },
+                isSVG: image.file?.type === 'image/svg+xml',
+                optimized: false,
+                error: error.message
+            });
         }
     }
 
@@ -152,6 +242,7 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
 
 let aiModel = null;
 let aiModelLoading = false;
+let upscalerInstances = {}; // Store multiple upscaler instances by scale
 
 /**
  * Load AI model for smart cropping with fallback
@@ -231,15 +322,242 @@ const createSimpleAIModel = () => {
 };
 
 /**
+ * Load UpscalerJS for specific scale
+ */
+const loadUpscalerForScale = async (scale) => {
+    // Return existing instance if already loaded
+    if (upscalerInstances[scale]) {
+        return upscalerInstances[scale];
+    }
+
+    console.log(`Loading UpscalerJS model for ${scale}x scaling...`);
+
+    try {
+        // Dynamically import the UpscalerJS library
+        const upscalerModule = await import('upscaler');
+        const Upscaler = upscalerModule.default || upscalerModule;
+
+        // Load the specific model for the scale
+        let model;
+        switch (scale) {
+            case 2:
+                model = await import('@upscalerjs/esrgan-slim/2x');
+                break;
+            case 3:
+                model = await import('@upscalerjs/esrgan-slim/3x');
+                break;
+            case 4:
+                model = await import('@upscalerjs/esrgan-slim/4x');
+                break;
+            case 8:
+                model = await import('@upscalerjs/esrgan-slim/8x');
+                break;
+            default:
+                throw new Error(`Unsupported scale: ${scale}`);
+        }
+
+        // Create new upscaler instance with the model
+        const upscaler = new Upscaler({
+            model: model.default || model
+        });
+
+        // Store the instance
+        upscalerInstances[scale] = upscaler;
+        console.log(`UpscalerJS ${scale}x model loaded successfully`);
+
+        return upscaler;
+    } catch (error) {
+        console.warn(`Failed to load UpscalerJS ${scale}x model:`, error);
+        // Create fallback upscaler
+        const fallbackUpscaler = createFallbackUpscaler(scale);
+        upscalerInstances[scale] = fallbackUpscaler;
+        return fallbackUpscaler;
+    }
+};
+
+/**
+ * Create a fallback upscaler (bicubic interpolation)
+ */
+const createFallbackUpscaler = (scale) => {
+    return {
+        scale,
+        upscale: async (imageElement) => {
+            console.log(`Using fallback upscaler for ${scale}x scaling`);
+            const canvas = document.createElement('canvas');
+            canvas.width = imageElement.naturalWidth * scale;
+            canvas.height = imageElement.naturalHeight * scale;
+            const ctx = canvas.getContext('2d');
+
+            // Use bicubic interpolation (smoother scaling)
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
+
+            return canvas;
+        }
+    };
+};
+
+/**
+ * Upscale image with AI using UpscalerJS
+ */
+const upscaleImageWithAI = async (imageFile, scale, originalName) => {
+    try {
+        console.log(`Starting AI upscaling at ${scale}x for ${originalName}`);
+
+        // Load the appropriate upscaler for this scale
+        const upscaler = await loadUpscalerForScale(scale);
+
+        // Create image element
+        const img = document.createElement('img');
+        const objectUrl = URL.createObjectURL(imageFile);
+
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = objectUrl;
+        });
+
+        // Upscale the image
+        const upscaledCanvas = await upscaler.upscale(img);
+
+        // Revoke object URL
+        URL.revokeObjectURL(objectUrl);
+
+        // Convert canvas to blob
+        const blob = await new Promise(resolve => {
+            upscaledCanvas.toBlob(resolve, 'image/webp', 0.9);
+        });
+
+        if (!blob) {
+            throw new Error('Failed to create blob from upscaled canvas');
+        }
+
+        // Create new file with upscaled content
+        const extension = originalName.split('.').pop();
+        const newName = originalName.replace(
+            /\.[^/.]+$/,
+            `-upscaled-${scale}x.${extension}`
+        );
+
+        const upscaledFile = new File([blob], newName, { type: 'image/webp' });
+
+        console.log(`AI upscaling completed: ${originalName} upscaled ${scale}x`);
+        return upscaledFile;
+
+    } catch (error) {
+        console.warn('AI upscaling failed, using fallback:', error);
+        return upscaleImageFallback(imageFile, scale, originalName);
+    }
+};
+
+/**
+ * Fallback upscaling using canvas (bicubic interpolation)
+ */
+const upscaleImageFallback = async (imageFile, scale, originalName) => {
+    const img = document.createElement('img');
+    const objectUrl = URL.createObjectURL(imageFile);
+
+    await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = objectUrl;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    const ctx = canvas.getContext('2d');
+
+    // Enable high-quality image smoothing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    // Revoke object URL
+    URL.revokeObjectURL(objectUrl);
+
+    const blob = await new Promise(resolve => {
+        canvas.toBlob(resolve, 'image/webp', 0.85);
+    });
+
+    const extension = originalName.split('.').pop();
+    const newName = originalName.replace(
+        /\.[^/.]+$/,
+        `-upscaled-fallback-${scale}x.${extension}`
+    );
+
+    return new File([blob], newName, { type: 'image/webp' });
+};
+
+/**
+ * Calculate the appropriate upscale factor
+ */
+const calculateUpscaleFactor = (originalWidth, originalHeight, targetWidth, targetHeight) => {
+    // Calculate required scale for each dimension
+    const widthScale = targetWidth / originalWidth;
+    const heightScale = targetHeight / originalHeight;
+
+    // Use the larger scale factor
+    const requiredScale = Math.max(widthScale, heightScale);
+
+    // Available scales from the models
+    const availableScales = [2, 3, 4, 8];
+
+    // Find the smallest available scale that meets or exceeds required scale
+    for (const scale of availableScales) {
+        if (scale >= requiredScale) {
+            return scale;
+        }
+    }
+
+    // If required scale is larger than 8x, use multiple upscales
+    // For example, if we need 16x, do 8x then 2x
+    if (requiredScale > 8) {
+        console.log(`Required scale ${requiredScale}x exceeds maximum, using 8x`);
+        return 8;
+    }
+
+    // This shouldn't happen, but just in case
+    return 2;
+};
+
+/**
  * AI Smart Crop: Resizes first, detects main subject, crops intelligently
  */
 export const processSmartCrop = async (imageFile, targetWidth, targetHeight, options = { quality: 0.85, format: 'webp' }) => {
     try {
-        const resized = await resizeImageForCrop(imageFile, targetWidth, targetHeight);
+        // Check if upscaling is needed
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(imageFile);
+
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = objectUrl;
+        });
+
+        const needsUpscaling = targetWidth > img.naturalWidth || targetHeight > img.naturalHeight;
+        let sourceFile = imageFile;
+
+        if (needsUpscaling) {
+            const upscaleFactor = calculateUpscaleFactor(
+                img.naturalWidth,
+                img.naturalHeight,
+                targetWidth,
+                targetHeight
+            );
+            sourceFile = await upscaleImageWithAI(imageFile, upscaleFactor, imageFile.name);
+        }
+
+        URL.revokeObjectURL(objectUrl);
+
+        const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight);
         const model = await loadAIModel();
-        const img = await loadImage(resized.file);
-        const predictions = await model.detect(img.element);
-        const mainSubject = findMainSubject(predictions, img.width, img.height);
+        const loadedImg = await loadImage(resized.file);
+        const predictions = await model.detect(loadedImg.element);
+        const mainSubject = findMainSubject(predictions, loadedImg.width, loadedImg.height);
 
         let croppedFile;
 
@@ -263,12 +581,37 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
  */
 export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeight, cropPosition = 'center', options = { quality: 0.85, format: 'webp' }) => {
     try {
-        const resized = await resizeImageForCrop(imageFile, targetWidth, targetHeight);
-        const img = await loadImage(resized.file);
+        // Check if upscaling is needed
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(imageFile);
+
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = objectUrl;
+        });
+
+        const needsUpscaling = targetWidth > img.naturalWidth || targetHeight > img.naturalHeight;
+        let sourceFile = imageFile;
+
+        if (needsUpscaling) {
+            const upscaleFactor = calculateUpscaleFactor(
+                img.naturalWidth,
+                img.naturalHeight,
+                targetWidth,
+                targetHeight
+            );
+            sourceFile = await upscaleImageWithAI(imageFile, upscaleFactor, imageFile.name);
+        }
+
+        URL.revokeObjectURL(objectUrl);
+
+        const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight);
+        const loadedImg = await loadImage(resized.file);
 
         // Use simple edge detection instead of TensorFlow
-        const focalPoint = await detectFocalPointSimple(img.element, img.width, img.height);
-        const adjustedPosition = adjustCropPositionForFocalPoint(cropPosition, focalPoint, img.width, img.height);
+        const focalPoint = await detectFocalPointSimple(loadedImg.element, loadedImg.width, loadedImg.height);
+        const adjustedPosition = adjustCropPositionForFocalPoint(cropPosition, focalPoint, loadedImg.width, loadedImg.height);
         const croppedFile = await cropFromResized(resized, targetWidth, targetHeight, adjustedPosition, imageFile);
         const optimizedFile = await optimizeForWeb(croppedFile, options.quality, options.format);
         return optimizedFile;
@@ -542,9 +885,9 @@ const resizeImageForCrop = async (imageFile, targetWidth, targetHeight) => {
         const url = URL.createObjectURL(imageFile);
 
         img.onload = () => {
-            const scale = Math.max(targetWidth / img.width, targetHeight / img.height);
-            const scaledWidth = Math.round(img.width * scale);
-            const scaledHeight = Math.round(img.height * scale);
+            const scale = Math.max(targetWidth / img.naturalWidth, targetHeight / img.naturalHeight);
+            const scaledWidth = Math.round(img.naturalWidth * scale);
+            const scaledHeight = Math.round(img.naturalHeight * scale);
 
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -594,8 +937,8 @@ const loadImage = (file) => {
         img.onload = () => {
             resolve({
                 element: img,
-                width: img.width,
-                height: img.height
+                width: img.naturalWidth,
+                height: img.naturalHeight
             });
         };
 
@@ -799,9 +1142,9 @@ export const getImageDimensions = (file) => {
         const img = new Image();
         img.onload = () => {
             resolve({
-                width: img.width,
-                height: img.height,
-                orientation: img.width >= img.height ? 'landscape' : 'portrait'
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+                orientation: img.naturalWidth >= img.naturalHeight ? 'landscape' : 'portrait'
             });
         };
         img.onerror = reject;
@@ -817,8 +1160,8 @@ export const getImageDimensions = (file) => {
 export const imageToBlob = (img, format = 'webp', quality = 0.85) => {
     return new Promise((resolve) => {
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0);
 
@@ -841,18 +1184,74 @@ export const imageToBlob = (img, format = 'webp', quality = 0.85) => {
 };
 
 /**
- * Create image objects from uploaded files
+ * Create image objects from uploaded files - FIXED VERSION
  */
 export const createImageObjects = (files) => {
-    return Array.from(files).map(file => ({
-        id: Date.now() + Math.random(),
-        file,
-        name: file.name,
-        url: URL.createObjectURL(file),
-        size: file.size,
-        type: file.type,
-        optimized: false
-    }));
+    return Array.from(files).map(file => {
+        // Ensure we have a File object
+        const fileObj = file instanceof File ? file : new File([file], file.name || 'image', { type: file.type });
+
+        return {
+            id: Date.now() + Math.random(),
+            file: fileObj, // Store the actual File object
+            name: fileObj.name,
+            url: URL.createObjectURL(fileObj), // Create blob URL for preview
+            size: fileObj.size,
+            type: fileObj.type,
+            optimized: false
+        };
+    });
+};
+
+/**
+ * Clean up blob URLs - NEW FUNCTION
+ */
+export const cleanupBlobUrls = (imageObjects) => {
+    imageObjects?.forEach(image => {
+        if (image.url && image.url.startsWith('blob:')) {
+            try {
+                URL.revokeObjectURL(image.url);
+            } catch (e) {
+                // Ignore errors if URL is already revoked
+            }
+        }
+    });
+};
+
+/**
+ * Ensure valid File object - NEW FUNCTION
+ */
+export const ensureFileObject = async (image) => {
+    // If already a File or Blob, return it
+    if (image.file instanceof File || image.file instanceof Blob) {
+        return image.file;
+    }
+
+    // If we have a blob URL, fetch it
+    if (image.url && image.url.startsWith('blob:')) {
+        try {
+            const response = await fetch(image.url);
+            const blob = await response.blob();
+            return new File([blob], image.name || 'image', { type: blob.type });
+        } catch (error) {
+            console.warn('Failed to fetch blob from URL:', error);
+            throw new Error('Invalid image file');
+        }
+    }
+
+    // If we have a data URL
+    if (image.url && image.url.startsWith('data:')) {
+        try {
+            const response = await fetch(image.url);
+            const blob = await response.blob();
+            return new File([blob], image.name || 'image', { type: blob.type });
+        } catch (error) {
+            console.warn('Failed to convert data URL to file:', error);
+            throw new Error('Invalid image file');
+        }
+    }
+
+    throw new Error('No valid file data found');
 };
 
 /**
@@ -860,16 +1259,17 @@ export const createImageObjects = (files) => {
  */
 export const processTemplateImages = async (image, selectedTemplates) => {
     const processedImages = [];
-    const isSVG = image.file.type === 'image/svg+xml';
-    const hasTransparency = isSVG ? false : await checkImageTransparency(image.file);
+    const imageFile = await ensureFileObject(image);
+    const isSVG = imageFile.type === 'image/svg+xml';
+    const hasTransparency = isSVG ? false : await checkImageTransparency(imageFile);
 
     for (const template of selectedTemplates) {
-        let processedFile = image.file;
+        let processedFile = imageFile;
 
         if (template.width && template.height) {
             if (template.height === 'auto') {
                 const resizeResults = await processLemGendaryResize(
-                    [image],
+                    [{ ...image, file: imageFile }],
                     template.width
                 );
                 if (resizeResults.length > 0) {
@@ -877,7 +1277,7 @@ export const processTemplateImages = async (image, selectedTemplates) => {
                 }
             } else {
                 const cropResults = await processLemGendaryCrop(
-                    [image],
+                    [{ ...image, file: imageFile }],
                     template.width,
                     template.height,
                     'center'
@@ -971,35 +1371,50 @@ export const processTemplateImages = async (image, selectedTemplates) => {
 };
 
 /**
- * Process custom images with given options
+ * Process custom images with given options - UPDATED VERSION
  */
 export const processCustomImagesBatch = async (selectedImages, processingOptions, aiModelLoaded = false) => {
     const processedImages = [];
 
     for (let i = 0; i < selectedImages.length; i++) {
         const image = selectedImages[i];
-        let processedFile = image.file;
 
-        if (processingOptions.showResize && processingOptions.resizeDimension) {
-            const resizeResults = await processLemGendaryResize(
-                [image],
-                parseInt(processingOptions.resizeDimension)
-            );
-            if (resizeResults.length > 0) {
-                processedFile = resizeResults[0].resized;
+        try {
+            // FIX: Ensure we have a valid File object
+            let processedFile = await ensureFileObject(image);
+
+            if (processingOptions.showResize && processingOptions.resizeDimension) {
+                const resizeResults = await processLemGendaryResize(
+                    [{ ...image, file: processedFile }],
+                    parseInt(processingOptions.resizeDimension)
+                );
+                if (resizeResults.length > 0) {
+                    processedFile = resizeResults[0].resized;
+                }
             }
-        }
 
-        if (processingOptions.showCrop && processingOptions.cropWidth && processingOptions.cropHeight) {
-            if (processingOptions.cropMode === 'smart') {
-                if (aiModelLoaded) {
-                    processedFile = await processSmartCrop(
-                        processedFile,
-                        parseInt(processingOptions.cropWidth),
-                        parseInt(processingOptions.cropHeight)
-                    );
+            if (processingOptions.showCrop && processingOptions.cropWidth && processingOptions.cropHeight) {
+                if (processingOptions.cropMode === 'smart') {
+                    if (aiModelLoaded) {
+                        processedFile = await processSmartCrop(
+                            processedFile,
+                            parseInt(processingOptions.cropWidth),
+                            parseInt(processingOptions.cropHeight)
+                        );
+                    } else {
+                        // Fallback to standard crop if AI not loaded
+                        const cropResults = await processLemGendaryCrop(
+                            [{ ...image, file: processedFile }],
+                            parseInt(processingOptions.cropWidth),
+                            parseInt(processingOptions.cropHeight),
+                            processingOptions.cropPosition
+                        );
+                        if (cropResults.length > 0) {
+                            processedFile = cropResults[0].cropped;
+                        }
+                    }
                 } else {
-                    // Fallback to standard crop if AI not loaded
+                    // Use standard crop with position
                     const cropResults = await processLemGendaryCrop(
                         [{ ...image, file: processedFile }],
                         parseInt(processingOptions.cropWidth),
@@ -1010,64 +1425,65 @@ export const processCustomImagesBatch = async (selectedImages, processingOptions
                         processedFile = cropResults[0].cropped;
                     }
                 }
-            } else {
-                // Use standard crop with position
-                const cropResults = await processLemGendaryCrop(
+            }
+
+            // Apply rename if enabled
+            let finalName = image.name;
+            if (processingOptions.output.rename && processingOptions.output.newFileName) {
+                const renameResults = await processLemGendaryRename(
                     [{ ...image, file: processedFile }],
-                    parseInt(processingOptions.cropWidth),
-                    parseInt(processingOptions.cropHeight),
-                    processingOptions.cropPosition
+                    processingOptions.output.newFileName
                 );
-                if (cropResults.length > 0) {
-                    processedFile = cropResults[0].cropped;
+                if (renameResults.length > 0) {
+                    processedFile = renameResults[0].renamed;
+                    const extension = image.name.split('.').pop();
+                    finalName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}.${extension}`;
                 }
             }
-        }
 
-        // Apply rename if enabled
-        let finalName = image.name;
-        if (processingOptions.output.rename && processingOptions.output.newFileName) {
-            const renameResults = await processLemGendaryRename(
-                [{ ...image, file: processedFile }],
-                processingOptions.output.newFileName
-            );
-            if (renameResults.length > 0) {
-                processedFile = renameResults[0].renamed;
-                const extension = image.name.split('.').pop();
-                finalName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}.${extension}`;
-            }
-        }
+            // Convert to output format if not 'original'
+            if (processingOptions.output.format !== 'original') {
+                const hasTransparency = await checkImageTransparency(processedFile);
+                const targetFormat = processingOptions.output.format;
 
-        // Convert to output format if not 'original'
-        if (processingOptions.output.format !== 'original') {
-            const hasTransparency = await checkImageTransparency(processedFile);
-            const targetFormat = processingOptions.output.format;
+                let finalFormat;
+                if (targetFormat === 'jpg' && hasTransparency) {
+                    finalFormat = 'png';
+                } else {
+                    finalFormat = targetFormat;
+                }
 
-            let finalFormat;
-            if (targetFormat === 'jpg' && hasTransparency) {
-                finalFormat = 'png';
-            } else {
-                finalFormat = targetFormat;
+                processedFile = await optimizeForWeb(
+                    processedFile,
+                    processingOptions.compression.quality / 100,
+                    finalFormat
+                );
+
+                finalName = finalName.replace(/\.[^/.]+$/, '') + '.' + finalFormat;
             }
 
-            processedFile = await optimizeForWeb(
-                processedFile,
-                processingOptions.compression.quality / 100,
-                finalFormat
-            );
+            processedImages.push({
+                ...image,
+                file: processedFile,
+                name: finalName,
+                url: URL.createObjectURL(processedFile), // Create new blob URL for preview
+                processed: true,
+                format: processingOptions.output.format === 'original'
+                    ? image.type?.split('/')[1] || 'webp'
+                    : processingOptions.output.format
+            });
 
-            finalName = finalName.replace(/\.[^/.]+$/, '') + '.' + finalFormat;
+        } catch (error) {
+            console.error(`Error processing ${image.name}:`, error);
+            // Skip this image or add error info
+            processedImages.push({
+                ...image,
+                file: null,
+                name: image.name,
+                processed: false,
+                error: error.message
+            });
         }
-
-        processedImages.push({
-            ...image,
-            file: processedFile,
-            name: finalName,
-            processed: true,
-            format: processingOptions.output.format === 'original'
-                ? image.type.split('/')[1]
-                : processingOptions.output.format
-        });
     }
 
     return processedImages;
@@ -1092,19 +1508,26 @@ export const processLemGendaryRename = async (images, baseName) => {
 };
 
 /**
- * Optimize image for web with format conversion
+ * Optimize image for web with format conversion - FIXED VERSION
  */
 export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') => {
+    // Ensure we have a valid File object
+    if (!(imageFile instanceof File) && !(imageFile instanceof Blob)) {
+        throw new Error('Invalid image file provided to optimizeForWeb');
+    }
+
     if (imageFile.type === 'image/svg+xml') {
         return convertSVGToRaster(imageFile, 1000, 1000, format);
     }
 
     return new Promise((resolve, reject) => {
         const img = new Image();
+        const objectUrl = URL.createObjectURL(imageFile);
+
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
 
             const ctx = canvas.getContext('2d');
 
@@ -1137,13 +1560,15 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
 
             canvas.toBlob(
                 (blob) => {
+                    URL.revokeObjectURL(objectUrl);
+
                     if (!blob) {
                         reject(new Error('Failed to create blob'));
                         return;
                     }
 
-                    const originalName = imageFile.name.replace(/\.[^/.]+$/, '');
-                    const newName = `${originalName}.${extension}`;
+                    const originalName = imageFile.name || 'image';
+                    const newName = originalName.replace(/\.[^/.]+$/, '') + '.' + extension;
                     resolve(new File([blob], newName, { type: mimeType }));
                 },
                 mimeType,
@@ -1152,15 +1577,12 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
         };
 
         img.onerror = (err) => {
+            URL.revokeObjectURL(objectUrl);
             console.error('Image load error:', err);
             reject(new Error('Failed to load image'));
         };
 
-        img.src = URL.createObjectURL(imageFile);
-
-        setTimeout(() => {
-            if (img.src) URL.revokeObjectURL(img.src);
-        }, 1000);
+        img.src = objectUrl;
     });
 };
 
@@ -1188,8 +1610,8 @@ export const checkImageTransparency = async (file) => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0);
 
