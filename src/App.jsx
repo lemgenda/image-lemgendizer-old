@@ -10,12 +10,6 @@ import {
   processTemplateImages,
   createImageObjects,
   loadAIModel,
-  checkImageTransparency,
-  getLanguages,
-  getCurrentLanguage,
-  handleImageDrop,
-  handleFileSelect,
-  calculatePercentage,
   validateImageFiles,
   formatFileSize,
   cleanupBlobUrls,
@@ -68,6 +62,29 @@ function App() {
   })
 
   const fileInputRef = useRef(null)
+
+  const calculateTotalTemplateFiles = (selectedTemplates) => {
+    if (!selectedTemplates || selectedTemplates.length === 0) return 0;
+
+    let totalFiles = 0;
+    const templateIds = selectedTemplates;
+    const templates = SOCIAL_MEDIA_TEMPLATES.filter(t => templateIds.includes(t.id));
+
+    templates.forEach(template => {
+      if (template.category === 'web') {
+        // Web templates: WebP + JPEG/PNG (2 files)
+        totalFiles += 2;
+      } else if (template.category === 'logo') {
+        // Logo templates: JPEG/PNG only (1 file)
+        totalFiles += 1;
+      } else {
+        // Social media templates: JPEG only (1 file)
+        totalFiles += 1;
+      }
+    });
+
+    return totalFiles;
+  };
 
   /**
    * Get plural suffix for current language
@@ -138,11 +155,21 @@ function App() {
       return [...prev, ...newImages];
     });
 
+    // Always update selected images in custom mode
     if (processingOptions.processingMode === 'custom') {
-      setSelectedImages(prev => [...prev, ...newImages.map(img => img.id)])
+      // If no images are selected, select all new images
+      if (selectedImages.length === 0) {
+        setSelectedImages(newImages.map(img => img.id))
+      } else {
+        // Otherwise, add new images to selection
+        setSelectedImages(prev => [...prev, ...newImages.map(img => img.id)])
+      }
     }
 
-    if (processingOptions.processingMode === 'templates' && !processingOptions.templateSelectedImage && newImages.length > 0) {
+    // If switching to templates mode or already in templates mode, set first image
+    if ((processingOptions.processingMode === 'templates' || processingOptions.showTemplates) &&
+      !processingOptions.templateSelectedImage &&
+      newImages.length > 0) {
       setProcessingOptions(prev => ({
         ...prev,
         templateSelectedImage: newImages[0].id
@@ -330,25 +357,35 @@ function App() {
   const toggleProcessingMode = (mode) => {
     const newMode = mode === 'templates' ? 'templates' : 'custom'
 
-    if (newMode === 'templates' && selectedImages.length > 1) {
-      const firstSelected = selectedImages[0]
+    if (newMode === 'templates') {
+      // Preselect first image when switching to templates mode
+      let firstImageId = null;
+
+      // First check if there are any selected images (from custom tab)
+      if (selectedImages.length > 0) {
+        firstImageId = selectedImages[0];
+      }
+      // If no selected images, check if there are any images at all
+      else if (images.length > 0) {
+        firstImageId = images[0].id;
+      }
+
       setProcessingOptions(prev => ({
         ...prev,
         processingMode: newMode,
-        templateSelectedImage: firstSelected,
+        templateSelectedImage: firstImageId,
         showTemplates: true
       }))
+
+      // Update selected images array to match template selection
+      if (firstImageId) {
+        setSelectedImages([firstImageId]);
+      }
     } else {
       setProcessingOptions(prev => ({
         ...prev,
         processingMode: newMode,
-        showTemplates: newMode === 'templates'
-      }))
-    }
-
-    if (newMode !== 'templates') {
-      setProcessingOptions(prev => ({
-        ...prev,
+        showTemplates: newMode === 'templates',
         templateSelectedImage: null
       }))
     }
@@ -686,6 +723,9 @@ function App() {
 
   const selectedImagesForProcessing = getSelectedImagesForProcessing()
   const templateCategories = getTemplateCategories()
+
+  // Get the selected image for templates display
+  const templateSelectedImageObj = images.find(img => img.id === processingOptions.templateSelectedImage)
 
   return (
     <div className="app">
@@ -1218,76 +1258,104 @@ function App() {
                       })}
                     </div>
 
-                    {/* Template Action Section */}
-                    <div className="card">
-                      <div className="card-header">
-                        <div className="flex items-center gap-md">
-                          <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
-                            <i className="fas fa-image text-white text-xl"></i>
-                          </div>
-                          <div>
-                            <h4 className="card-title mb-xs">{t('templates.imageForTemplates')}</h4>
-                            <p className="text-muted">
-                              {processingOptions.templateSelectedImage
-                                ? images.find(img => img.id === processingOptions.templateSelectedImage)?.name
-                                : t('templates.noImageSelected')
-                              }
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-muted mb-xs">
-                            <i className="fas fa-layer-group mr-xs"></i>
-                            {processingOptions.selectedTemplates.length} {t('templates.selected')}
-                          </div>
-                          <div className="text-muted">
-                            <i className="fas fa-file-export mr-xs"></i>
-                            {processingOptions.selectedTemplates.length > 0
-                              ? `${processingOptions.selectedTemplates.length * 2} ${t('templates.filesToGenerate')}`
-                              : t('templates.selectTemplates')}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-center">
-                        <button
-                          className="btn btn-primary btn-lg relative"
-                          disabled={!processingOptions.templateSelectedImage || processingOptions.selectedTemplates.length === 0 || isLoading}
-                          onClick={processTemplates}
-                        >
-                          {isLoading ? (
-                            <>
-                              <i className="fas fa-spinner fa-spin"></i> {t('button.processing')}
-                            </>
-                          ) : (
-                            <>
-                              <i className="fas fa-file-archive"></i> {t('templates.download')}
-                              {processingOptions.selectedTemplates.length > 0 && (
-                                <span className="absolute -top-2 -right-2 bg-danger text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                                  {processingOptions.selectedTemplates.length * 2}
+                      {/* Template Action Section */}
+                      <div className="card">
+                        <div className="card-header">
+                          <div className="flex justify-between items-start w-full">
+                            <div className="flex-1">
+                              <h4 className="card-title mb-xs">{t('templates.imageForTemplates')}</h4>
+                              <div className="flex items-center gap-4 text-sm text-muted">
+                                <span className="truncate max-w-xs">
+                                  {templateSelectedImageObj
+                                    ? templateSelectedImageObj.name
+                                    : t('templates.noImageSelected')
+                                  }
                                 </span>
-                              )}
-                            </>
-                          )}
-                        </button>
+                                {templateSelectedImageObj && (
+                                  <>
+                                    <span className="flex-shrink-0">&nbsp;•&nbsp;</span>
+                                    <span className="flex-shrink-0">
+                                      {formatFileSize(templateSelectedImageObj.size)}
+                                    </span>
+                                    <span className="flex-shrink-0">&nbsp;•&nbsp;</span>
+                                    <span className="flex-shrink-0">
+                                      {templateSelectedImageObj.type.split('/')[1].toUpperCase()}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
 
-                        {processingOptions.selectedTemplates.length > 0 && (
-                          <div className="alert alert-info mt-md">
-                            <i className="fas fa-info-circle"></i>
-                            <span>
-                              {t('templates.eachGenerates')}
-                            </span>
+                        {/* Full-width image preview */}
+                        {templateSelectedImageObj && (
+                          <div className="relative w-full rounded-lg overflow-hidden bg-gray-100 image-preview-container-full mt-4">
+                            <img
+                              alt={templateSelectedImageObj.name}
+                              className="w-full h-auto object-contain max-h-96"
+                              src={templateSelectedImageObj.url}
+                              onError={(e) => {
+                                // Fallback to placeholder if image fails to load
+                                e.target.style.display = 'none';
+                                const container = e.target.parentElement;
+                                container.innerHTML = `
+            <div class="w-full h-64 bg-primary flex items-center justify-center">
+              <i class="fas fa-image text-white text-4xl"></i>
+            </div>
+            <div class="absolute inset-0 border border-gray-200 rounded-lg pointer-events-none"></div>
+          `;
+                              }}
+                            />
+                            <div className="absolute inset-0 border border-gray-200 rounded-lg pointer-events-none"></div>
                           </div>
                         )}
 
-                        {!processingOptions.templateSelectedImage && (
-                          <div className="alert alert-warning mt-md">
-                            <i className="fas fa-exclamation-triangle"></i>
-                            <span>{t('templates.selectImage')}</span>
+                        {/* Template stats row */}
+                        <div className="flex justify-between items-center mt-4 mb-lg">
+                          <div className="flex items-center gap-4 text-sm text-muted">
+                            <div className="flex items-center">
+                              <i className="fas fa-layer-group mr-1 text-sm"></i>
+                              <span>
+                                {processingOptions.selectedTemplates.length} {t('templates.selected')}
+                              </span>
+                            </div>
+                            <span className="text-muted">,&nbsp;</span>
+                            <div className="flex items-center">
+                              <span>
+                                {processingOptions.selectedTemplates.length > 0
+                                  ? `${calculateTotalTemplateFiles(processingOptions.selectedTemplates)} ${t('templates.filesToGenerate')}`
+                                  : t('templates.selectTemplates')
+                                }
+                              </span>
+                            </div>
                           </div>
-                        )}
+                        </div>
+
+                        {/* Download button */}
+                        <div className="text-center mt-6">
+                          <button
+                            className="btn btn-primary btn-lg relative"
+                            disabled={!processingOptions.templateSelectedImage || processingOptions.selectedTemplates.length === 0 || isLoading}
+                            onClick={processTemplates}
+                          >
+                            {isLoading ? (
+                              <>
+                                <i className="fas fa-spinner fa-spin"></i> {t('button.processing')}
+                              </>
+                            ) : (
+                              <>
+                                <i className="fas fa-file-archive"></i> {t('templates.download')}
+                                {processingOptions.selectedTemplates.length > 0 && (
+                                  <span className="absolute -top-2 -right-2 bg-danger text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
+                                      {calculateTotalTemplateFiles(processingOptions.selectedTemplates)}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
-                    </div>
                   </div>
                 </>
               )}

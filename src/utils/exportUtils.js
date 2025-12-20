@@ -14,10 +14,12 @@ export const createExportZip = async (originalImages, processedImages, settings,
     const zip = new JSZip()
 
     // Add original images to OriginalImages folder
-    if (settings.includeOriginal && originalImages.length > 0) {
+    if (settings.includeOriginal && originalImages.length > 0 && originalImages.some(img => img.file)) {
         const originalFolder = zip.folder('OriginalImages')
         for (const image of originalImages) {
-            originalFolder.file(image.name, image.file)
+            if (image.file) {
+                originalFolder.file(image.name, image.file)
+            }
         }
     }
 
@@ -36,7 +38,7 @@ export const createExportZip = async (originalImages, processedImages, settings,
             }
         })
 
-        // Create folder for each format
+        // Create folder for each format only if it has files
         Object.keys(groupedByFormat).forEach(format => {
             if (groupedByFormat[format].length > 0) {
                 const formatFolder = zip.folder(`OptimizedImages/${format.toUpperCase()}`)
@@ -54,14 +56,14 @@ export const createExportZip = async (originalImages, processedImages, settings,
 
     // Add WebImages folder (for templates mode) - WebP + JPEG/PNG
     if (mode === 'templates' && settings.includeWebImages && processedImages.length > 0) {
-        const webFolder = zip.folder('WebImages')
-
         // Filter Web templates
         const webTemplates = processedImages.filter(img =>
-            img.template?.category === 'web'
+            img.template?.category === 'web' && img.file
         )
 
         if (webTemplates.length > 0) {
+            const webFolder = zip.folder('WebImages')
+
             // Separate by format
             const webpImages = webTemplates.filter(img => img.format === 'webp')
             const pngImages = webTemplates.filter(img => img.format === 'png')
@@ -86,14 +88,14 @@ export const createExportZip = async (originalImages, processedImages, settings,
 
     // Add LogoImages folder (for templates mode) - JPEG/PNG(if transparent)
     if (mode === 'templates' && settings.includeLogoImages && processedImages.length > 0) {
-        const logoFolder = zip.folder('LogoImages')
-
         // Filter Logo templates
         const logoTemplates = processedImages.filter(img =>
-            img.template?.category === 'logo'
+            img.template?.category === 'logo' && img.file
         )
 
         if (logoTemplates.length > 0) {
+            const logoFolder = zip.folder('LogoImages')
+
             // Add only PNG and JPG versions (no WebP for logos)
             const pngImages = logoTemplates.filter(img => img.format === 'png')
             const jpgImages = logoTemplates.filter(img => img.format === 'jpg')
@@ -110,12 +112,11 @@ export const createExportZip = async (originalImages, processedImages, settings,
 
     // Add SocialMediaImages folder with organized subfolders (for templates mode) - JPEG only
     if (mode === 'templates' && settings.includeSocialMedia && processedImages.length > 0) {
-        const socialFolder = zip.folder('SocialMediaImages')
-
         // Filter Social Media templates (excluding Web and Logo)
         const socialTemplates = processedImages.filter(img =>
             img.template?.category !== 'web' &&
-            img.template?.category !== 'logo'
+            img.template?.category !== 'logo' &&
+            img.file
         )
 
         if (socialTemplates.length > 0) {
@@ -137,7 +138,7 @@ export const createExportZip = async (originalImages, processedImages, settings,
                 )
 
                 if (platformImages.length > 0) {
-                    const platformFolder = socialFolder.folder(platform)
+                    const platformFolder = zip.folder(`SocialMediaImages/${platform}`)
                     platformImages.forEach(image => {
                         platformFolder.file(image.name, image.file)
                     })

@@ -87,7 +87,7 @@ const resources = {
             'templates.filesToGenerate': 'files to generate',
             'templates.selectTemplates': 'Select templates to generate files',
             'templates.download': 'Download Template Images',
-            'templates.eachGenerates': 'Each template generates WebP + PNG/JPG (based on transparency)',
+            'templates.eachGenerates': 'Web templates generate WebP + JPEG/PNG, logo templates generate JPEG/PNG based on transparency, and social media templates generate JPEG only',
             'templates.selectImage': 'Please select an image from the gallery above to apply templates',
 
             // Image Gallery
@@ -300,7 +300,7 @@ const resources = {
             'templates.filesToGenerate': 'datoteka za generiranje',
             'templates.selectTemplates': 'Odaberite predloške za generiranje datoteka',
             'templates.download': 'Preuzmi slike predložaka',
-            'templates.eachGenerates': 'Svaki predložak generira WebP + PNG/JPG (ovisno o transparentnosti)',
+            'templates.eachGenerates': 'Web predlošci generiraju WebP + JPG/PNG, logo predlošci generiraju JPG/PNG ovisno o transparentnosti, a predlošci za društvene mreže generiraju samo JPG.',
             'templates.selectImage': 'Molimo odaberite sliku iz galerije iznad za primjenu predložaka',
 
             // Image Gallery
