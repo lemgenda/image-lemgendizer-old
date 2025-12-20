@@ -21,7 +21,7 @@ import {
   cleanupBlobUrls,
   ensureFileObject
 } from './utils/imageProcessor'
-import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './utils/templateConfigs'
+import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './configs/templateConfigs'
 import RangeSlider from './components/RangeSlider'
 import './styles/App.css'
 
@@ -33,17 +33,23 @@ function App() {
   const { t, i18n } = useTranslation()
   const [images, setImages] = useState([])
   const [selectedImages, setSelectedImages] = useState([])
-  const [modal, setModal] = useState({ isOpen: false, title: '', message: '' })
+  const [modal, setModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info' // 'info', 'success', 'error', 'summary'
+  })
   const [isLoading, setIsLoading] = useState(false)
   const [aiModelLoaded, setAiModelLoaded] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
+  const [processingSummary, setProcessingSummary] = useState(null)
   const [processingOptions, setProcessingOptions] = useState({
     compression: {
       quality: 80,
       fileSize: ''
     },
     output: {
-      format: 'webp',
+      formats: ['webp'],
       rename: false,
       newFileName: ''
     },
@@ -84,11 +90,14 @@ function App() {
   }
 
   /**
-   * Load AI model on component mount
+   * Load AI model on component mount - UPDATED FOR TEMPLATE USE
    */
   useEffect(() => {
     const loadAIModelAsync = async () => {
-      if (processingOptions.cropMode === 'smart' && !aiModelLoaded) {
+      const needsAI = (processingOptions.cropMode === 'smart' && !aiModelLoaded) ||
+        (processingOptions.processingMode === 'templates' && !aiModelLoaded);
+
+      if (needsAI) {
         try {
           setAiLoading(true)
           await loadAIModel()
@@ -97,20 +106,22 @@ function App() {
         } catch (error) {
           console.error('Failed to load AI model:', error)
           setAiLoading(false)
-          showModal(t('message.error'), t('message.aiFailed'))
-          setProcessingOptions(prev => ({ ...prev, cropMode: 'standard' }))
+          showModal(t('message.error'), t('message.aiFailed'), 'error')
+
+          if (processingOptions.cropMode === 'smart') {
+            setProcessingOptions(prev => ({ ...prev, cropMode: 'standard' }))
+          }
         }
       }
     }
     loadAIModelAsync()
-  }, [processingOptions.cropMode, t])
+  }, [processingOptions.cropMode, processingOptions.processingMode, t])
 
   /**
    * Clean up blob URLs when images change or component unmounts
    */
   useEffect(() => {
     return () => {
-      // Clean up all blob URLs when component unmounts
       cleanupBlobUrls(images);
     };
   }, []);
@@ -123,12 +134,10 @@ function App() {
     const validFiles = validateImageFiles(files)
     const newImages = createImageObjects(validFiles)
     setImages(prev => {
-      // Clean up old blob URLs before adding new images
       cleanupBlobUrls(prev);
       return [...prev, ...newImages];
     });
 
-    // Auto-select all new images (for custom mode)
     if (processingOptions.processingMode === 'custom') {
       setSelectedImages(prev => [...prev, ...newImages.map(img => img.id)])
     }
@@ -147,7 +156,7 @@ function App() {
       a: i18n.language === 'hr' ? suffix : '',
       e: i18n.language === 'hr' ? suffix : ''
     })
-    showModal(t('message.success'), message)
+    showModal(t('message.success'), message, 'success')
   }
 
   /**
@@ -193,7 +202,6 @@ function App() {
       ? [processingOptions.templateSelectedImage].filter(Boolean)
       : selectedImages
 
-    // Clean up blob URLs before removing images
     const imagesToRemoveObjects = images.filter(img => imagesToRemove.includes(img.id));
     cleanupBlobUrls(imagesToRemoveObjects);
 
@@ -207,23 +215,39 @@ function App() {
       }))
     }
 
-    showModal(t('message.removed'), t('message.removedImages'))
+    showModal(t('message.removed'), t('message.removedImages'), 'success')
   }
 
   /**
    * Display modal dialog
    * @param {string} title - Modal title
    * @param {string} message - Modal message content
+   * @param {string} type - Modal type ('info', 'success', 'error', 'summary')
    */
-  const showModal = (title, message) => {
-    setModal({ isOpen: true, title, message })
+  const showModal = (title, message, type = 'info') => {
+    setModal({ isOpen: true, title, message, type })
+  }
+
+  /**
+   * Show summary modal with processing details
+   * @param {Object} summary - Processing summary object
+   */
+  const showSummaryModal = (summary) => {
+    setProcessingSummary(summary)
+    setModal({
+      isOpen: true,
+      title: t('summary.title'),
+      message: '',
+      type: 'summary'
+    })
   }
 
   /**
    * Close modal dialog
    */
   const closeModal = () => {
-    setModal({ isOpen: false, title: '', message: '' })
+    setModal({ isOpen: false, title: '', message: '', type: 'info' })
+    setProcessingSummary(null)
   }
 
   /**
@@ -244,6 +268,58 @@ function App() {
     setProcessingOptions(prev => ({
       ...prev,
       cropMode: prev.cropMode === 'smart' ? 'standard' : 'smart'
+    }))
+  }
+
+  /**
+   * Toggle format selection
+   * @param {string} format - Format to toggle
+   */
+  const handleFormatToggle = (format) => {
+    setProcessingOptions(prev => {
+      const currentFormats = prev.output.formats || []
+      const newFormats = currentFormats.includes(format)
+        ? currentFormats.filter(f => f !== format)
+        : [...currentFormats, format]
+
+      if (newFormats.length === 0) {
+        return prev
+      }
+
+      return {
+        ...prev,
+        output: {
+          ...prev.output,
+          formats: newFormats
+        }
+      }
+    })
+  }
+
+  /**
+   * Select all output formats
+   */
+  const handleSelectAllFormats = () => {
+    const allFormats = ['webp', 'jpg', 'png', 'original']
+    setProcessingOptions(prev => ({
+      ...prev,
+      output: {
+        ...prev.output,
+        formats: allFormats
+      }
+    }))
+  }
+
+  /**
+   * Clear all output formats
+   */
+  const handleClearAllFormats = () => {
+    setProcessingOptions(prev => ({
+      ...prev,
+      output: {
+        ...prev.output,
+        formats: ['webp']
+      }
     }))
   }
 
@@ -376,25 +452,34 @@ function App() {
   }
 
   /**
-   * Process images using custom settings
+   * Process images using custom settings - UPDATED FOR AI UPSCALING
    * @async
    * @returns {Promise<void>}
    */
   const processCustomImages = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing()
     if (selectedImagesForProcessing.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectImages'))
+      showModal(t('message.error'), t('message.errorSelectImages'), 'error')
+      return
+    }
+
+    if (!processingOptions.output.formats || processingOptions.output.formats.length === 0) {
+      showModal(t('message.error'), t('message.errorSelectFormat'), 'error')
       return
     }
 
     setIsLoading(true)
-    showModal(t('message.processingImages'), t('message.processingImages', { count: selectedImagesForProcessing.length }))
+    const suffix = getPluralSuffix(selectedImagesForProcessing.length)
+    const processingMessage = t('message.processingImages', {
+      count: selectedImagesForProcessing.length,
+      s: i18n.language === 'en' ? (selectedImagesForProcessing.length === 1 ? '' : 's') : '',
+      e: i18n.language === 'hr' ? suffix : ''
+    })
+    showModal(t('message.processingImages'), processingMessage, 'info')
 
     try {
-      // FIX: Clean up old blob URLs before processing
       cleanupBlobUrls(selectedImagesForProcessing);
 
-      // FIX: Ensure all images have valid File objects
       const imagesWithValidFiles = await Promise.all(
         selectedImagesForProcessing.map(async (img) => {
           try {
@@ -402,7 +487,7 @@ function App() {
             return { ...img, file };
           } catch (error) {
             console.error(`Failed to get valid file for ${img.name}:`, error);
-            return img; // Keep original but it might fail later
+            return img;
           }
         })
       );
@@ -410,10 +495,9 @@ function App() {
       const processedImages = await processCustomImagesBatch(
         imagesWithValidFiles,
         processingOptions,
-        aiModelLoaded
+        true // aiModelLoaded - let imageProcessor.js handle it
       )
 
-      // Create ZIP with custom processed images
       const settings = {
         includeOriginal: true,
         includeOptimized: true,
@@ -423,44 +507,74 @@ function App() {
         createFolders: true
       }
 
-      const zipBlob = await createExportZip(selectedImagesForProcessing, processedImages, settings, 'custom')
+      const zipBlob = await createExportZip(selectedImagesForProcessing, processedImages, settings, 'custom', processingOptions.output.formats)
       downloadZip(zipBlob, 'custom-processed-images')
 
+      const summary = {
+        mode: 'custom',
+        imagesProcessed: selectedImagesForProcessing.length,
+        formatsExported: processingOptions.output.formats,
+        operations: [],
+        aiUsed: (processingOptions.cropMode === 'smart') || false,
+        upscalingUsed: false,
+        totalFiles: selectedImagesForProcessing.length * processingOptions.output.formats.length
+      }
+
+      if (processingOptions.resizeDimension) {
+        summary.operations.push(`Resized to ${processingOptions.resizeDimension}px (maintaining aspect ratio)`)
+        summary.upscalingUsed = true
+      }
+      if (processingOptions.cropWidth && processingOptions.cropHeight) {
+        const cropType = processingOptions.cropMode === 'smart' ? 'AI Smart Crop' : 'Standard Crop'
+        summary.operations.push(`${cropType} to ${processingOptions.cropWidth}x${processingOptions.cropHeight}px`)
+        summary.upscalingUsed = true
+      }
+      if (processingOptions.compression.quality < 100) {
+        summary.operations.push(`Compressed with ${processingOptions.compression.quality}% quality`)
+      }
+      if (processingOptions.output.rename && processingOptions.output.newFileName) {
+        summary.operations.push(`Renamed using pattern: ${processingOptions.output.newFileName}`)
+      }
+
+      if (summary.upscalingUsed) {
+        summary.operations.push('Auto upscaling applied when needed')
+      }
+
       closeModal()
+      showSummaryModal(summary)
 
     } catch (error) {
       console.error('Custom processing error:', error)
-      showModal(t('message.error'), t('message.errorProcessing'))
+      showModal(t('message.error'), t('message.errorProcessing'), 'error')
     } finally {
       setIsLoading(false)
     }
   }
 
   /**
-   * Process images using social media templates
+   * Process images using social media templates - UPDATED WITH AI CROP
    * @async
    * @returns {Promise<void>}
    */
   const processTemplates = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing()
     if (selectedImagesForProcessing.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectImage'))
+      showModal(t('message.error'), t('message.errorSelectImage'), 'error')
       return
     }
 
     if (processingOptions.selectedTemplates.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectTemplate'))
+      showModal(t('message.error'), t('message.errorSelectTemplate'), 'error')
       return
     }
 
     setIsLoading(true)
-    showModal(t('message.processingImages'), t('message.processingImages', { count: processingOptions.selectedTemplates.length }))
+    const imageCount = processingOptions.selectedTemplates.length
+    showModal(t('message.processingImages'), t('message.processingImages', { count: imageCount }), 'info')
 
     try {
-      // FIX: Clean up old blob URLs before processing
       cleanupBlobUrls(selectedImagesForProcessing);
 
-      // FIX: Ensure the image has a valid File object
       const image = selectedImagesForProcessing[0];
       let validImage = image;
       try {
@@ -475,7 +589,14 @@ function App() {
         processingOptions.selectedTemplates.includes(template.id)
       )
 
-      const processedImages = await processTemplateImages(validImage, selectedTemplates)
+      // DO NOT load AI model here - let the image processor handle it
+      // Just pass aiModelLoaded = true to indicate we want to use AI if available
+      const processedImages = await processTemplateImages(
+        validImage,
+        selectedTemplates,
+        true, // useSmartCrop
+        true // aiModelLoaded - let imageProcessor.js handle actual loading
+      )
 
       const settings = {
         includeOriginal: false,
@@ -489,11 +610,28 @@ function App() {
       const zipBlob = await createExportZip([validImage], processedImages, settings, 'templates')
       downloadZip(zipBlob, 'template-images')
 
+      const summary = {
+        mode: 'templates',
+        imagesProcessed: 1,
+        templatesApplied: selectedTemplates.length,
+        categoriesApplied: [...new Set(selectedTemplates.map(t => t.category))].length,
+        formatsExported: ['webp', 'jpg', 'png'],
+        operations: [
+          `Applied ${selectedTemplates.length} templates`,
+          'Auto upscaling applied when needed',
+          'AI smart cropping enabled'
+        ],
+        aiUsed: true,
+        upscalingUsed: true,
+        totalFiles: processedImages.length
+      }
+
       closeModal()
+      showSummaryModal(summary)
 
     } catch (error) {
       console.error('Template processing error:', error)
-      showModal(t('message.error'), t('message.errorApplying'))
+      showModal(t('message.error'), t('message.errorApplying'), 'error')
     } finally {
       setIsLoading(false)
     }
@@ -513,8 +651,6 @@ function App() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-
-    showModal(t('message.success'), t('message.successDownload'))
   }
 
   /**
@@ -559,6 +695,11 @@ function App() {
           <div className="loading-spinner">
             <i className="fas fa-spinner fa-spin fa-3x"></i>
             <p>{t('loading.preparing')}</p>
+            <p className="text-muted text-sm mt-2">
+              {processingOptions.processingMode === 'templates' && aiModelLoaded
+                ? t('loading.aiCropping')
+                : t('loading.upscalingWhenNeeded')}
+            </p>
           </div>
         </div>
       )}
@@ -570,6 +711,11 @@ function App() {
             <i className="fas fa-brain fa-spin fa-3x"></i>
             <p>{t('loading.aiModel')}</p>
             <p className="text-muted">{t('loading.oncePerSession')}</p>
+            <p className="text-sm mt-2">
+              {processingOptions.processingMode === 'templates'
+                ? t('loading.aiForTemplates')
+                : t('loading.aiForSmartCrop')}
+            </p>
           </div>
         </div>
       )}
@@ -623,7 +769,6 @@ function App() {
                         <i className="fas fa-compress"></i> {t('compression.title')}
                       </h3>
                       <div className="form-group">
-                        <label className="form-label">{t('compression.quality')}</label>
                         <div className="range-wrapper">
                           <RangeSlider
                             label={t('compression.quality')}
@@ -672,19 +817,75 @@ function App() {
                       <h3 className="card-title">
                         <i className="fas fa-file-export"></i> {t('output.title')}
                       </h3>
+
+                      {/* Format Selection */}
                       <div className="form-group">
                         <label className="form-label">{t('output.format')}</label>
-                        <select
-                          className="select-field"
-                          value={processingOptions.output.format}
-                          onChange={(e) => handleOptionChange('output', 'format', e.target.value)}
-                        >
-                          <option value="webp">{t('output.format.webp')}</option>
-                          <option value="jpg">{t('output.format.jpg')}</option>
-                          <option value="png">{t('output.format.png')}</option>
-                          <option value="original">{t('output.format.original')}</option>
-                        </select>
+                        <div className="space-y-sm mb-md">
+                          {/* Format checkboxes */}
+                          <div className="grid grid-cols-2 gap-sm">
+                            <label className="checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                className="checkbox-input"
+                                checked={processingOptions.output.formats.includes('webp')}
+                                onChange={() => handleFormatToggle('webp')}
+                              />
+                              <span className="checkbox-custom"></span>
+                              <span className="checkbox-label">
+                                {t('output.format.webp')}
+                              </span>
+                            </label>
+                            <label className="checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                className="checkbox-input"
+                                checked={processingOptions.output.formats.includes('jpg')}
+                                onChange={() => handleFormatToggle('jpg')}
+                              />
+                              <span className="checkbox-custom"></span>
+                              <span className="checkbox-label">{t('output.format.jpg')}</span>
+                            </label>
+                            <label className="checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                className="checkbox-input"
+                                checked={processingOptions.output.formats.includes('png')}
+                                onChange={() => handleFormatToggle('png')}
+                              />
+                              <span className="checkbox-custom"></span>
+                              <span className="checkbox-label">{t('output.format.png')}</span>
+                            </label>
+                            <label className="checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                className="checkbox-input"
+                                checked={processingOptions.output.formats.includes('original')}
+                                onChange={() => handleFormatToggle('original')}
+                              />
+                              <span className="checkbox-custom"></span>
+                              <span className="checkbox-label">{t('output.format.original')}</span>
+                            </label>
+                          </div>
+
+                          {/* Quick selection buttons */}
+                          <div className="flex flex-col gap-xs mt-sm">
+                            <button
+                              className="btn btn-secondary btn-xs"
+                              onClick={handleSelectAllFormats}
+                            >
+                              <i className="fas fa-check-square"></i> {t('output.selectAll')}
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-xs"
+                              onClick={handleClearAllFormats}
+                            >
+                              <i className="fas fa-times-circle"></i> {t('output.clearAll')}
+                            </button>
+                          </div>
+                        </div>
                       </div>
+
                       <div className="form-group">
                         <label className="checkbox-wrapper">
                           <input
@@ -720,11 +921,10 @@ function App() {
                           </>
                         ) : (
                           <>
-                            <i className="fas fa-crop-alt"></i> {
-                              processingOptions.cropMode === 'smart'
-                                ? t('crop.switchToStandard').replace('Switch to ', '') // "Smart Crop"
-                                : t('crop.switchToSmart').replace('Switch to ', '')    // "Standard Crop"
-                            }
+                            <i className="fas fa-crop-alt"></i> {t('crop.title')}
+                            <span className="ml-2 text-sm text-muted">
+                              ({processingOptions.cropMode === 'smart' ? t('crop.switchToSmart') : t('crop.switchToStandard')})
+                            </span>
                           </>
                         )}
                       </h3>
@@ -790,16 +990,23 @@ function App() {
                               >
                                 {processingOptions.cropMode === 'smart' ? (
                                   <>
-                                    <i className="fas fa-brain"></i> {t('crop.switchToStandard')}
+                                    <i className="fas fa-crop-alt"></i> {t('crop.switchToStandard')}
                                     {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
                                   </>
                                 ) : (
                                   <>
-                                    <i className="fas fa-crop-alt"></i> {t('crop.switchToSmart')}
+                                    <i className="fas fa-brain"></i> {t('crop.switchToSmart')}
+                                    {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
                                   </>
                                 )}
                               </button>
                             </div>
+                            {processingOptions.cropMode === 'smart' && (
+                              <p className="text-sm text-muted mt-1">
+                                <i className="fas fa-info-circle mr-1"></i>
+                                {t('crop.smartBest')}
+                              </p>
+                            )}
                           </div>
 
                           <div className="grid grid-cols-2 gap-md">
@@ -901,7 +1108,7 @@ function App() {
                   <div className="text-center">
                     <button
                       className="btn btn-primary btn-lg"
-                      disabled={selectedImagesForProcessing.length === 0 || isLoading || (processingOptions.cropMode === 'smart' && aiLoading)}
+                      disabled={selectedImagesForProcessing.length === 0 || isLoading || (processingOptions.cropMode === 'smart' && aiLoading) || !processingOptions.output.formats || processingOptions.output.formats.length === 0}
                       onClick={processCustomImages}
                     >
                       {isLoading ? (
@@ -914,7 +1121,10 @@ function App() {
                         </>
                       ) : (
                         <>
-                          <i className="fas fa-download"></i> {t('button.process')} ({selectedImagesForProcessing.length})
+                          <i className="fas fa-download"></i> {t('button.process')}
+                          <span className="ml-1">
+                            ({selectedImagesForProcessing.length} images × {processingOptions.output.formats.length} formats)
+                          </span>
                         </>
                       )}
                     </button>
@@ -1034,8 +1244,7 @@ function App() {
                             <i className="fas fa-file-export mr-xs"></i>
                             {processingOptions.selectedTemplates.length > 0
                               ? `${processingOptions.selectedTemplates.length * 2} ${t('templates.filesToGenerate')}`
-                              : t('templates.selectTemplates')
-                            }
+                              : t('templates.selectTemplates')}
                           </div>
                         </div>
                       </div>
@@ -1154,20 +1363,133 @@ function App() {
 
       <Footer />
 
+      {/* Regular Modal */}
       <Modal
-        isOpen={modal.isOpen}
+        isOpen={modal.isOpen && modal.type !== 'summary'}
         onClose={closeModal}
         title={modal.title}
+        type={modal.type}
+      >
+        <p>{modal.message}</p>
+      </Modal>
+
+      {/* Summary Modal */}
+      <Modal
+        isOpen={modal.isOpen && modal.type === 'summary'}
+        onClose={closeModal}
+        title={modal.title}
+        type="summary"
         actions={
           <button className="btn btn-primary" onClick={closeModal}>
             {t('button.ok')}
           </button>
         }
       >
-        <p>{modal.message}</p>
+        {processingSummary && (
+          <div className="summary-content">
+            <div className="summary-section">
+              <h4 className="summary-title">
+                <i className="fas fa-check-circle text-success mr-2"></i>
+                {t('summary.processingComplete')}
+              </h4>
+
+              <div className="summary-grid">
+                <div className="summary-item">
+                  <div className="summary-label">{t('summary.mode')}:</div>
+                  <div className="summary-value capitalize">{processingSummary.mode}</div>
+                </div>
+
+                <div className="summary-item">
+                  <div className="summary-label">
+                    {processingSummary.mode === 'templates'
+                      ? t('summary.templatesApplied')
+                      : t('summary.imagesProcessed')}:
+                  </div>
+                  <div className="summary-value">
+                    {processingSummary.mode === 'templates'
+                      ? `${processingSummary.templatesApplied} templates`
+                      : processingSummary.imagesProcessed}
+                  </div>
+                </div>
+
+                {processingSummary.mode === 'templates' && (
+                  <div className="summary-item">
+                    <div className="summary-label">{t('summary.categoriesApplied')}:</div>
+                    <div className="summary-value">{processingSummary.categoriesApplied}</div>
+                  </div>
+                )}
+
+                <div className="summary-item">
+                  <div className="summary-label">{t('summary.formatsExported')}:</div>
+                  <div className="summary-value">
+                    {processingSummary.formatsExported.map(format => (
+                      <span key={format} className="format-badge">
+                        {format.toUpperCase()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="summary-item">
+                  <div className="summary-label">{t('summary.totalFiles')}:</div>
+                  <div className="summary-value">{processingSummary.totalFiles}</div>
+                </div>
+
+                <div className="summary-item">
+                  <div className="summary-label">{t('summary.aiUsed')}:</div>
+                  <div className="summary-value">
+                    {processingSummary.aiUsed ? (
+                      <span className="text-success">
+                        <i className="fas fa-brain mr-1"></i> {t('summary.yes')}
+                      </span>
+                    ) : (
+                      <span className="text-muted">{t('summary.no')}</span>
+                    )}
+                  </div>
+                </div>
+
+                {processingSummary.upscalingUsed && (
+                  <div className="summary-item">
+                    <div className="summary-label">{t('summary.upscalingUsed')}:</div>
+                    <div className="summary-value text-success">
+                      <i className="fas fa-expand-arrows-alt mr-1"></i> {t('summary.yes')}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {processingSummary.operations && processingSummary.operations.length > 0 && (
+              <div className="summary-section">
+                <h5 className="summary-subtitle">
+                  <i className="fas fa-tasks mr-2"></i>
+                  {t('summary.operationsPerformed')}:
+                </h5>
+                <ul className="summary-list">
+                  {processingSummary.operations.map((op, index) => (
+                    <li key={index} className="summary-list-item">
+                      <i className="fas fa-check text-success mr-2"></i>
+                      {op}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="alert alert-success mt-4">
+              <i className="fas fa-info-circle"></i>
+              {t('summary.downloadComplete')}
+              {processingSummary.mode === 'templates' && (
+                <div className="mt-1 text-sm">
+                  {t('summary.templatesNote', { count: processingSummary.templatesApplied })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )
 }
 
-export default App
+export default App;

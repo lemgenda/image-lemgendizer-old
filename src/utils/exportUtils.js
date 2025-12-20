@@ -7,9 +7,10 @@ import JSZip from 'jszip'
  * @param {Array<Object>} processedImages - Processed image objects with file, name, and optional template properties
  * @param {Object} settings - Export settings with include flags
  * @param {string} mode - Processing mode ('custom' or 'templates')
+ * @param {Array<string>} formats - Array of selected output formats (for custom mode)
  * @returns {Promise<Blob>} ZIP file blob
  */
-export const createExportZip = async (originalImages, processedImages, settings, mode) => {
+export const createExportZip = async (originalImages, processedImages, settings, mode, formats = ['webp']) => {
     const zip = new JSZip()
 
     // Add original images to OriginalImages folder
@@ -20,12 +21,35 @@ export const createExportZip = async (originalImages, processedImages, settings,
         }
     }
 
-    // Add processed images to OptimizedImages folder (for custom mode)
+    // For custom mode: organize by format
     if (mode === 'custom' && settings.includeOptimized && processedImages.length > 0) {
-        const optimizedFolder = zip.folder('OptimizedImages')
-        for (const image of processedImages) {
-            optimizedFolder.file(image.name, image.file)
-        }
+        // Group processed images by format
+        const groupedByFormat = {}
+        processedImages.forEach(image => {
+            const format = image.format || 'webp'
+            if (!groupedByFormat[format]) {
+                groupedByFormat[format] = []
+            }
+            // Only add if file exists and name is valid
+            if (image.file && image.name && !image.name.includes('.undefined')) {
+                groupedByFormat[format].push(image)
+            }
+        })
+
+        // Create folder for each format
+        Object.keys(groupedByFormat).forEach(format => {
+            if (groupedByFormat[format].length > 0) {
+                const formatFolder = zip.folder(`OptimizedImages/${format.toUpperCase()}`)
+                groupedByFormat[format].forEach(image => {
+                    // Ensure filename has proper extension
+                    let fileName = image.name
+                    if (!fileName.includes('.')) {
+                        fileName = `${fileName}.${format}`
+                    }
+                    formatFolder.file(fileName, image.file)
+                })
+            }
+        })
     }
 
     // Add WebImages folder (for templates mode) - WebP + JPEG/PNG

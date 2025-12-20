@@ -1,35 +1,4 @@
 /* ============================================
-   LOADING ANIMATION FOR INDEX.HTML
-   ============================================ */
-.loading {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    background-color: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    font-size: 1.5rem;
-}
-
-.loading::after {
-    content: '';
-    display: inline-block;
-    width: 1em;
-    height: 1em;
-    margin-left: 0.5em;
-    border: 2px solid var(--color-text-primary);
-    border-radius: 50%;
-    border-top-color: transparent;
-    animation: loading-spin 0.8s linear infinite;
-}
-
-@keyframes loading-spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-/* ============================================
    CSS RESET & BASE STYLES
    ============================================ */
 * {
@@ -53,6 +22,15 @@
     --color-warning: #f59e0b;
     --color-success: #10b981;
     --color-info: #60a5fa;
+
+    /* SPINNER COLORS - ADDED */
+    --color-spinner-primary: #3b82f6;
+    --color-spinner-secondary: #e5e7eb;
+    --color-spinner-success: #10b981;
+    --color-spinner-danger: #ef4444;
+    --color-spinner-warning: #f59e0b;
+    --color-spinner-info: #60a5fa;
+    --color-spinner-ai: #8b5cf6;
 
     /* NEUTRAL COLORS */
     --color-bg-primary: #0f172a;
@@ -98,6 +76,10 @@
     --z-dropdown: 100;
     --z-modal: 1000;
     --z-loading: 1100;
+
+    /* Summary Modal Colors */
+    --primary-light: rgba(59, 130, 246, 0.2);
+    --primary-dark: #3b82f6;
 }
 
 body {
@@ -108,6 +90,306 @@ body {
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================
+   LOADING SPINNERS - COMPLETE FIX
+   ============================================ */
+
+/* Main spin animation - FIXED: Now properly defined */
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Alternative name for same animation */
+@keyframes loading-spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Fade in with slide up */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Pulse animation for attention */
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Loading overlay for the whole app */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(15, 23, 42, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--z-loading);
+    backdrop-filter: blur(4px);
+}
+
+/* Main loading spinner container */
+.loading-spinner {
+    text-align: center;
+    color: var(--color-spinner-primary);
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl);
+    max-width: 400px;
+    width: 90%;
+    box-shadow: var(--shadow-xl);
+    border: 1px solid var(--border-color);
+    animation: fadeInUp 0.3s ease-out;
+}
+
+/* Spinner icons with spinning animation - FIXED: Added proper animation */
+.loading-spinner i.fa-spinner,
+.loading-spinner i.fa-spin,
+.loading-spinner i.fa-sync {
+    animation: spin 1s linear infinite;
+    color: var(--color-spinner-primary);
+    margin-bottom: var(--space-lg);
+    font-size: 3rem !important;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* AI brain spinner specific styling */
+.loading-spinner i.fa-brain {
+    animation: spin 1s linear infinite;
+    color: var(--color-spinner-ai);
+    margin-bottom: var(--space-lg);
+    font-size: 3rem !important;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Button loading states - FIXED: Added spinner animation */
+.btn i.fa-spinner,
+.btn i.fa-spin {
+    animation: spin 1s linear infinite !important;
+    margin-right: var(--space-xs) !important;
+    display: inline-block;
+}
+
+/* Disabled button with spinner */
+.btn:disabled i.fa-spinner,
+.btn:disabled i.fa-spin {
+    color: var(--color-text-muted);
+}
+
+/* Index.html loading spinner */
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-size: 1.5rem;
+    font-weight: 500;
+}
+
+.loading::after {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    margin-left: 12px;
+    border: 3px solid var(--color-spinner-primary);
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: loading-spin 0.8s linear infinite;
+}
+
+/* Spinner text */
+.loading-spinner p {
+    color: var(--color-text-primary);
+    font-size: 1.1rem;
+    margin: var(--space-sm) 0 0 0;
+}
+
+.loading-spinner .text-muted {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    margin-top: var(--space-xs);
+}
+
+.loading-spinner .text-sm {
+    font-size: 0.85rem;
+}
+
+/* ============================================
+   SPECIFIC SPINNER TYPES
+   ============================================ */
+
+/* Primary spinner */
+.spinner-primary {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--color-spinner-secondary);
+    border-radius: 50%;
+    border-top-color: var(--color-spinner-primary);
+    animation: spin 1s linear infinite;
+}
+
+/* Small spinner */
+.spinner-sm {
+    width: 20px;
+    height: 20px;
+    border-width: 2px;
+}
+
+/* Large spinner */
+.spinner-lg {
+    width: 60px;
+    height: 60px;
+    border-width: 6px;
+}
+
+/* Success spinner */
+.spinner-success {
+    border-color: var(--color-spinner-secondary);
+    border-top-color: var(--color-spinner-success);
+}
+
+/* Danger spinner */
+.spinner-danger {
+    border-color: var(--color-spinner-secondary);
+    border-top-color: var(--color-spinner-danger);
+}
+
+/* Warning spinner */
+.spinner-warning {
+    border-color: var(--color-spinner-secondary);
+    border-top-color: var(--color-spinner-warning);
+}
+
+/* Info spinner */
+.spinner-info {
+    border-color: var(--color-spinner-secondary);
+    border-top-color: var(--color-spinner-info);
+}
+
+/* AI brain spinner special */
+.spinner-ai {
+    position: relative;
+    width: 50px;
+    height: 50px;
+}
+
+.spinner-ai::before {
+    content: '🧠';
+    font-size: 50px;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+/* ============================================
+   LOADING STATES FOR COMPONENTS
+   ============================================ */
+
+/* Image loading placeholder */
+.image-loading {
+    position: relative;
+    background: linear-gradient(90deg,
+            var(--color-bg-tertiary) 25%,
+            var(--color-bg-secondary) 50%,
+            var(--color-bg-tertiary) 75%);
+    background-size: 200% 100%;
+    animation: loading-shimmer 1.5s infinite;
+    border-radius: var(--radius-md);
+}
+
+@keyframes loading-shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* Button loading state */
+.btn-loading {
+    position: relative;
+    color: transparent !important;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid var(--color-spinner-secondary);
+    border-top-color: var(--color-spinner-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Shake animation for errors */
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-5px);
+    }
+
+    75% {
+        transform: translateX(5px);
+    }
 }
 
 /* ============================================
@@ -202,14 +484,13 @@ small,
     display: flex;
     flex-direction: column;
     gap: var(--space-xl);
-    /* ADDED: Space between cards */
 }
 
 /* ============================================
    ICON STYLES - STANDARDIZED
    ============================================ */
 
-/* Icon sizes - FIXED: Applied directly to icons */
+/* Icon sizes */
 .fas.icon-xs,
 .fab.icon-xs,
 .far.icon-xs {
@@ -240,7 +521,7 @@ small,
     font-size: 1.5rem !important;
 }
 
-/* Icon utilities - FIXED: Applied directly to icons */
+/* Icon utilities */
 .fas.icon-left,
 .fab.icon-left,
 .far.icon-left {
@@ -314,7 +595,7 @@ p .far {
     cursor: not-allowed;
 }
 
-/* NUMBER INPUT STYLING - FIXED: Proper spinner buttons */
+/* NUMBER INPUT STYLING */
 .input-field[type="number"] {
     -moz-appearance: textfield;
     appearance: textfield;
@@ -334,7 +615,6 @@ p .far {
 
 .number-input-wrapper .input-field[type="number"] {
     padding-right: 40px;
-    /* Space for spinner buttons */
     width: 100%;
 }
 
@@ -405,7 +685,11 @@ p .far {
     padding-right: 48px;
 }
 
-/* CHECKBOXES */
+/* ============================================
+   ENHANCED CHECKBOX STYLING FOR FORMAT SELECTION
+   ============================================ */
+
+/* CHECKBOXES BASE */
 .checkbox-wrapper {
     display: flex;
     align-items: center;
@@ -452,6 +736,119 @@ p .far {
 .checkbox-input:disabled+.checkbox-custom {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+/* Format checkbox container */
+.grid.grid-cols-2.gap-sm {
+    background-color: var(--color-bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm);
+    border: 1px solid var(--border-color);
+    margin-bottom: var(--space-sm);
+}
+
+/* Format checkbox wrapper specific styling */
+.grid.grid-cols-2.gap-sm .checkbox-wrapper {
+    padding: 10px 12px;
+    margin: 2px;
+    border-radius: var(--radius-sm);
+    background-color: var(--color-bg-secondary);
+    transition: all var(--transition-fast);
+    border: 1px solid transparent;
+}
+
+.grid.grid-cols-2.gap-sm .checkbox-wrapper:hover {
+    background-color: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* Unselected checkbox styling */
+.grid.grid-cols-2.gap-sm .checkbox-custom {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-color);
+    background-color: var(--color-bg-primary);
+    position: relative;
+    flex-shrink: 0;
+}
+
+/* Selected checkbox styling */
+.grid.grid-cols-2.gap-sm .checkbox-input:checked+.checkbox-custom {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.grid.grid-cols-2.gap-sm .checkbox-input:checked+.checkbox-custom::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background-color: white;
+    border-radius: 2px;
+}
+
+/* Checkbox label text */
+.checkbox-label {
+    color: var(--color-text-secondary);
+    transition: color var(--transition-fast);
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.checkbox-input:checked~.checkbox-label {
+    color: var(--color-text-primary);
+    font-weight: 500;
+}
+
+/* Checkbox wrapper text styling */
+.checkbox-wrapper span:not(.checkbox-custom) {
+    color: var(--color-text-secondary);
+    transition: color var(--transition-fast);
+}
+
+.checkbox-input:checked~span:not(.checkbox-custom) {
+    color: var(--color-text-primary);
+    font-weight: 500;
+}
+
+/* Format selection buttons - vertical stack */
+.flex.flex-col.gap-xs.mt-sm {
+    margin-top: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.flex.flex-col.gap-xs.mt-sm .btn.btn-secondary.btn-xs {
+    width: 100%;
+    justify-content: center;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    border: 1px solid var(--border-color);
+    background-color: var(--color-bg-tertiary);
+}
+
+.flex.flex-col.gap-xs.mt-sm .btn.btn-secondary.btn-xs:hover {
+    background-color: var(--color-bg-secondary);
+    border-color: var(--border-color-hover);
+}
+
+/* Format info text */
+.text-sm.text-muted.mb-md {
+    background-color: rgba(96, 165, 250, 0.1);
+    padding: var(--space-sm);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--color-info);
+    margin-top: var(--space-md);
+    font-size: 0.875rem;
+}
+
+.text-sm.text-muted.mb-md i {
+    color: var(--color-info);
+    margin-right: var(--space-xs);
 }
 
 /* RADIO BUTTONS */
@@ -591,6 +988,12 @@ p .far {
 }
 
 /* BUTTON SIZES */
+.btn-xs {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    min-height: 28px;
+}
+
 .btn-sm {
     padding: 8px 16px;
     font-size: 0.875rem;
@@ -660,9 +1063,11 @@ p .far {
     font-size: 1.25rem;
     margin: 0;
     padding-bottom: 10px;
-    /* ADDED: Card title padding */
     flex: 1;
     min-width: 200px;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
 }
 
 .card-actions {
@@ -943,6 +1348,11 @@ p .far {
 .alert i {
     font-size: 1.25rem;
     margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.alert div {
+    flex: 1;
 }
 
 .alert-info {
@@ -969,11 +1379,29 @@ p .far {
     color: var(--color-danger);
 }
 
-/* Smart crop note - changed from warning to info */
+/* Smart crop note */
 .smart-crop-note {
     background-color: rgba(96, 165, 250, 0.1) !important;
     border-color: rgba(96, 165, 250, 0.2) !important;
     color: var(--color-info) !important;
+}
+
+/* Crop mode alert styling */
+.alert.alert-info p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.alert.alert-info .font-medium {
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 4px;
+}
+
+.alert.alert-info .text-xs {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    line-height: 1.4;
 }
 
 /* ============================================
@@ -1057,6 +1485,26 @@ p .far {
     margin-bottom: var(--space-xl);
 }
 
+.ml-xs {
+    margin-left: var(--space-xs);
+}
+
+.ml-sm {
+    margin-left: var(--space-sm);
+}
+
+.ml-md {
+    margin-left: var(--space-md);
+}
+
+.ml-lg {
+    margin-left: var(--space-lg);
+}
+
+.ml-2 {
+    margin-left: 0.5rem;
+}
+
 .mx-auto {
     margin-left: auto;
     margin-right: auto;
@@ -1130,6 +1578,107 @@ p .far {
     color: var(--color-info);
 }
 
+.capitalize {
+    text-transform: capitalize;
+}
+
+/* ============================================
+   SUMMARY MODAL STYLES
+   ============================================ */
+.summary-content {
+    padding: 1rem 0;
+}
+
+.summary-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.summary-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.summary-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+}
+
+.summary-subtitle {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.summary-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+}
+
+.summary-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Format badges in summary */
+.format-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    margin: 0.125rem;
+    background-color: var(--primary-light);
+    color: var(--primary-dark);
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.summary-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.summary-list-item {
+    padding: 0.5rem 0;
+    display: flex;
+    align-items: flex-start;
+    font-size: 0.9375rem;
+    color: var(--color-text-secondary);
+}
+
+.summary-list-item i {
+    margin-top: 0.125rem;
+    flex-shrink: 0;
+    color: var(--color-success);
+}
+
 /* ============================================
    RESPONSIVE DESIGN
    ============================================ */
@@ -1190,6 +1739,14 @@ p .far {
         align-items: flex-start;
         gap: var(--space-sm);
     }
+
+    .grid.grid-cols-2.gap-sm {
+        grid-template-columns: 1fr;
+    }
+
+    .summary-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1205,5 +1762,9 @@ p .far {
 
     .image-grid {
         grid-template-columns: 1fr;
+    }
+
+    .card-title {
+        font-size: 1.1rem;
     }
 }

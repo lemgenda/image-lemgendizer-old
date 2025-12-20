@@ -35,10 +35,13 @@ const resources = {
             // Output Settings
             'output.title': 'Output Settings',
             'output.format': 'Output Format',
-            'output.format.webp': 'WebP (Recommended)',
+            'output.format.webp': 'WebP',
             'output.format.jpg': 'JPEG',
             'output.format.png': 'PNG',
-            'output.format.original': 'Keep Original',
+            'output.format.original': 'Original',
+            'output.selectAll': 'Select All Formats',
+            'output.clearAll': 'Clear All',
+            'output.multiFormatInfo': 'Select multiple formats to export each image in all selected formats',
             'output.rename': 'Batch Rename',
             'output.newFileName': 'New File Name',
             'output.newFileName.placeholder': 'e.g., product-image',
@@ -107,6 +110,7 @@ const resources = {
             // Messages
             'message.success': 'Success',
             'message.error': 'Error',
+            'message.warning': 'Warning',
             'message.removed': 'Removed',
             'message.successUpload': 'Successfully uploaded {{count}} image{{s}}',
             'message.removedImages': 'Selected images have been removed',
@@ -115,19 +119,54 @@ const resources = {
             'message.errorSelectImages': 'Please select images to process',
             'message.errorSelectImage': 'Please select an image for templates',
             'message.errorSelectTemplate': 'Please select at least one template',
+            'message.errorSelectFormat': 'Please select at least one output format',
             'message.errorProcessing': 'Error processing images',
             'message.errorApplying': 'Error applying templates',
             'message.successDownload': 'ZIP file downloaded successfully! Check your downloads folder.',
             'message.aiFailed': 'AI model could not be loaded. Using standard crop instead.',
+            'message.aiTemplateFallback': 'AI model not available, using standard cropping for templates',
+            'message.cleanupMemory': 'Clean up GPU memory? This may improve performance.',
+            'message.memoryCleaned': 'GPU memory has been cleaned up.',
+            'message.largeImageWarning': 'Large image detected. Using optimized processing to prevent memory issues.',
 
             // Loading States
             'loading.preparing': 'Preparing your ZIP file...',
             'loading.aiModel': 'Loading AI model for smart cropping...',
             'loading.oncePerSession': 'This only happens once per session',
+            'loading.aiCropping': 'Applying AI smart cropping...',
+            'loading.upscalingWhenNeeded': 'Processing (auto upscaling applied when needed)...',
+            'loading.aiForTemplates': 'AI model loading for smart template cropping',
+            'loading.aiForSmartCrop': 'AI model loading for smart crop',
+
+            // Summary Modal
+            'summary.title': 'Processing Complete',
+            'summary.processingComplete': 'Image Processing Complete',
+            'summary.mode': 'Processing Mode',
+            'summary.imagesProcessed': 'Images Processed',
+            'summary.formatsExported': 'Formats Exported',
+            'summary.totalFiles': 'Total Files Generated',
+            'summary.aiUsed': 'AI Processing Used',
+            'summary.upscalingUsed': 'AI Upscaling',
+            'summary.categoriesApplied': 'Categories Applied',
+            'summary.operationsPerformed': 'Operations Performed',
+            'summary.templatesApplied': 'Templates Applied',
+            'summary.downloadComplete': 'All files have been downloaded in the ZIP archive.',
+            'summary.templatesNote': 'All {{count}} templates were processed with optimal cropping and upscaling.',
+            'summary.yes': 'Yes',
+            'summary.no': 'No',
 
             // Footer
             'footer.createdBy': 'Created by',
             'footer.aiEnabled': 'AI Smart Crop enabled',
+
+            // Modal Accessibility
+            'modal.close': 'Close',
+            'modal.clickOutside': 'Click outside to close',
+            'modal.escKey': 'Press ESC to close',
+
+            // Accessibility
+            'accessibility.modal': 'Modal dialog',
+            'accessibility.closeModal': 'Close modal dialog',
 
             // Template Categories
             'category.web': 'Web',
@@ -209,10 +248,13 @@ const resources = {
             // Output Settings
             'output.title': 'Postavke izlaza',
             'output.format': 'Izlazni format',
-            'output.format.webp': 'WebP (Preporučeno)',
+            'output.format.webp': 'WebP',
             'output.format.jpg': 'JPEG',
             'output.format.png': 'PNG',
-            'output.format.original': 'Zadrži original',
+            'output.format.original': 'Original',
+            'output.selectAll': 'Odaberi sve formate',
+            'output.clearAll': 'Očisti sve',
+            'output.multiFormatInfo': 'Odaberite više formata da biste izvezli svaku sliku u svim odabranim formatima',
             'output.rename': 'Grupno preimenovanje',
             'output.newFileName': 'Novi naziv datoteke',
             'output.newFileName.placeholder': 'npr., slika-proizvoda',
@@ -281,6 +323,7 @@ const resources = {
             // Messages
             'message.success': 'Uspjeh',
             'message.error': 'Greška',
+            'message.warning': 'Upozorenje',
             'message.removed': 'Uklonjeno',
             'message.successUpload': 'Uspješno učitano {{count}} slik{{a}}',
             'message.removedImages': 'Odabrane slike su uklonjene',
@@ -289,19 +332,54 @@ const resources = {
             'message.errorSelectImages': 'Molimo odaberite slike za obradu',
             'message.errorSelectImage': 'Molimo odaberite sliku za predloške',
             'message.errorSelectTemplate': 'Molimo odaberite barem jedan predložak',
+            'message.errorSelectFormat': 'Molimo odaberite barem jedan izlazni format',
             'message.errorProcessing': 'Greška pri obradi slika',
             'message.errorApplying': 'Greška pri primjeni predložaka',
             'message.successDownload': 'ZIP datoteka uspješno preuzeta! Provjerite vašu mapu s preuzimanjima.',
             'message.aiFailed': 'AI model se nije mogao učitati. Koristim standardno obrezivanje umjesto toga.',
+            'message.aiTemplateFallback': 'AI model nije dostupan, koristim standardno obrezivanje za predloške',
+            'message.cleanupMemory': 'Očistiti GPU memoriju? Ovo može poboljšati performanse.',
+            'message.memoryCleaned': 'GPU memorija je očišćena.',
+            'message.largeImageWarning': 'Otkrivena velika slika. Koristim optimiziranu obradu kako bih spriječio probleme s memorijom.',
 
             // Loading States
             'loading.preparing': 'Pripremam vašu ZIP datoteku...',
             'loading.aiModel': 'Učitavam AI model za pametno obrezivanje...',
             'loading.oncePerSession': 'Ovo se događa samo jednom po sesiji',
+            'loading.aiCropping': 'Primjenjujem pametno AI obrezivanje...',
+            'loading.upscalingWhenNeeded': 'Obrada (automatsko povećavanje primijenjeno kada je potrebno)...',
+            'loading.aiForTemplates': 'Učitavam AI model za pametno obrezivanje predložaka',
+            'loading.aiForSmartCrop': 'Učitavam AI model za pametno obrezivanje',
+
+            // Summary Modal
+            'summary.title': 'Obrada Završena',
+            'summary.processingComplete': 'Obrada slika završena',
+            'summary.mode': 'Način obrade',
+            'summary.imagesProcessed': 'Obrađene slike',
+            'summary.formatsExported': 'Izvozni formati',
+            'summary.totalFiles': 'Ukupno generiranih datoteka',
+            'summary.aiUsed': 'AI obrada korištena',
+            'summary.upscalingUsed': 'AI povećavanje',
+            'summary.categoriesApplied': 'Primijenjene kategorije',
+            'summary.operationsPerformed': 'Izvedene operacije',
+            'summary.templatesApplied': 'Primijenjeni predlošci',
+            'summary.downloadComplete': 'Sve datoteke su preuzete u ZIP arhivi.',
+            'summary.templatesNote': 'Svi {{count}} predložaka obrađeni su s optimalnim obrezivanjem i povećavanjem.',
+            'summary.yes': 'Da',
+            'summary.no': 'Ne',
 
             // Footer
             'footer.createdBy': 'Kreirao',
             'footer.aiEnabled': 'Pametno obrezivanje AI-om omogućeno',
+
+            // Modal Accessibility
+            'modal.close': 'Zatvori',
+            'modal.clickOutside': 'Kliknite izvan da zatvorite',
+            'modal.escKey': 'Pritisnite ESC da zatvorite',
+
+            // Accessibility
+            'accessibility.modal': 'Modalni dijalog',
+            'accessibility.closeModal': 'Zatvori modalni dijalog',
 
             // Template Categories
             'category.web': 'Web',
