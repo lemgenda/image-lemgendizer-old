@@ -15,7 +15,7 @@ const resources = {
 
             // Upload Section
             'upload.dropZone.title': 'Drop images here or click to upload',
-            'upload.dropZone.supported': 'Supports JPG, PNG, WebP, GIF, SVG, AVIF',
+            'upload.dropZone.supported': 'Supports JPG, PNG, GIF, WebP, SVG, AVIF, TIFF, BMP, ICO',
             'upload.dropZone.processing': 'All processing happens in your browser',
             'upload.selectImages': 'Select Images',
 
@@ -36,7 +36,7 @@ const resources = {
             'output.title': 'Output Settings',
             'output.format': 'Output Format',
             'output.format.webp': 'WebP',
-            'output.format.jpg': 'JPEG',
+            'output.format.jpg': 'JPG',
             'output.format.png': 'PNG',
             'output.format.avif': 'AVIF',
             'output.format.original': 'Original',
@@ -99,7 +99,7 @@ const resources = {
             'templates.filesToGenerate': 'files to generate',
             'templates.selectTemplates': 'Select templates to generate files',
             'templates.download': 'Download Template Images',
-            'templates.eachGenerates': 'Web templates generate WebP + JPEG/PNG, logo templates generate JPEG/PNG based on transparency, and social media templates generate JPEG only',
+            'templates.eachGenerates': 'Web templates generate WebP + JPG/PNG, logo templates generate JPG/PNG based on transparency, and social media templates generate JPG only',
             'templates.selectImage': 'Please select an image from the gallery above to apply templates',
 
             // Image Gallery
@@ -259,7 +259,7 @@ const resources = {
 
             // Upload Section
             'upload.dropZone.title': 'Povucite slike ovdje ili kliknite za učitavanje',
-            'upload.dropZone.supported': 'Podržava JPG, PNG, WebP, GIF, SVG, AVIF',
+            'upload.dropZone.supported': 'Podržava JPG, PNG, GIF, WebP, SVG, AVIF, TIFF, BMP, ICO',
             'upload.dropZone.processing': 'Sva obrada se odvija u vašem pregledniku',
             'upload.selectImages': 'Odaberi slike',
 
@@ -280,7 +280,7 @@ const resources = {
             'output.title': 'Postavke izlaza',
             'output.format': 'Izlazni format',
             'output.format.webp': 'WebP',
-            'output.format.jpg': 'JPEG',
+            'output.format.jpg': 'JPG',
             'output.format.png': 'PNG',
             'output.format.avif': 'AVIF',
             'output.format.original': 'Original',

@@ -19,7 +19,7 @@ All notable changes to the Image LemGendizer project will be documented in this 
 
 ### New Files Added
 - `src/i18n.js`: i18next configuration with translation resources
-- `src/utils/i18nHelpers.js`: Helper functions for pluralization rules
+- `src/helpers/i18nHelpers.js`: Helper functions for pluralization rules
 - Updated `package.json` with new dependencies
 
 ### Dependencies Added

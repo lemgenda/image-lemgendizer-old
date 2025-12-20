@@ -1,7 +1,7 @@
 {
   "name": "image-lemgendizer",
   "private": false,
-  "version": "2.1.0",
+  "version": "2.4.0",
   "type": "module",
   "homepage": "https://lemgenda.github.io/image-lemgendizer-old",
   "repository": {
@@ -42,7 +42,8 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-i18next": "^16.5.0",
-    "upscaler": "^1.0.0-beta.19"
+    "upscaler": "^1.0.0-beta.19",
+    "utif": "^3.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.7",

@@ -20,7 +20,8 @@ import {
   getAvailableFormats,
   getTemplateById,
   getTemplatesByCategory,
-  generateFileName
+  generateFileName,
+  loadUTIFLibrary
 } from './utils/imageProcessor';
 import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './configs/templateConfigs';
 import './styles/App.css';
@@ -71,6 +72,20 @@ function App() {
   const fileInputRef = useRef(null);
 
   /**
+   * Preload UTIF.js library for TIFF support
+   */
+  useEffect(() => {
+    const preloadLibraries = async () => {
+      try {
+        await loadUTIFLibrary();
+      } catch (error) {
+      }
+    };
+
+    preloadLibraries();
+  }, []);
+
+  /**
    * Loads AI model when needed for smart cropping or templates.
    */
   useEffect(() => {
@@ -85,7 +100,6 @@ function App() {
           setAiModelLoaded(true);
           setAiLoading(false);
         } catch (error) {
-          console.error('Failed to load AI model:', error);
           setAiLoading(false);
           showModal(t('message.error'), t('message.aiFailed'), 'error');
 
@@ -112,31 +126,40 @@ function App() {
    *
    * @param {File[]} files - Array of uploaded image files
    */
-  const handleImageUpload = (files) => {
-    const newImages = createImageObjects(files);
-    setImages(prev => {
-      cleanupBlobUrls(prev);
-      return [...prev, ...newImages];
-    });
+  const handleImageUpload = async (files) => {
+    try {
+      setIsLoading(true);
+      const newImages = await createImageObjects(files);
 
-    if (processingOptions.processingMode === 'custom') {
-      if (selectedImages.length === 0) {
-        setSelectedImages(newImages.map(img => img.id));
-      } else {
-        setSelectedImages(prev => [...prev, ...newImages.map(img => img.id)]);
+      setImages(prev => {
+        cleanupBlobUrls(prev);
+        return [...prev, ...newImages];
+      });
+
+      if (processingOptions.processingMode === 'custom') {
+        if (selectedImages.length === 0) {
+          setSelectedImages(newImages.map(img => img.id));
+        } else {
+          setSelectedImages(prev => [...prev, ...newImages.map(img => img.id)]);
+        }
       }
-    }
 
-    if ((processingOptions.processingMode === 'templates' || processingOptions.showTemplates) &&
-      !processingOptions.templateSelectedImage &&
-      newImages.length > 0) {
-      setProcessingOptions(prev => ({
-        ...prev,
-        templateSelectedImage: newImages[0].id
-      }));
-    }
+      if ((processingOptions.processingMode === 'templates' || processingOptions.showTemplates) &&
+        !processingOptions.templateSelectedImage &&
+        newImages.length > 0) {
+        setProcessingOptions(prev => ({
+          ...prev,
+          templateSelectedImage: newImages[0].id
+        }));
+      }
 
-    showModal(t('message.success'), t('message.successUpload', { count: files.length }), 'success');
+      showModal(t('message.success'), t('message.successUpload', { count: files.length }), 'success');
+
+    } catch (error) {
+      showModal(t('message.error'), t('message.errorUpload'), 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   /**
@@ -280,7 +303,7 @@ function App() {
    * Selects all output formats.
    */
   const handleSelectAllFormats = () => {
-    const allFormats = ['webp', 'avif', 'jpg', 'png', 'original'];
+    const allFormats = ['webp', 'avif', 'jpg', 'png'];
     setProcessingOptions(prev => ({
       ...prev,
       output: {
@@ -298,7 +321,7 @@ function App() {
       ...prev,
       output: {
         ...prev.output,
-        formats: ['webp']
+        formats: ['original']
       }
     }));
   };
@@ -489,7 +512,6 @@ function App() {
       showSummaryModal(summary);
 
     } catch (error) {
-      console.error('Custom processing error:', error);
       showModal(t('message.error'), t('message.errorProcessing'), 'error');
     } finally {
       setIsLoading(false);
@@ -538,7 +560,6 @@ function App() {
       showSummaryModal(summary);
 
     } catch (error) {
-      console.error('Template processing error:', error);
       showModal(t('message.error'), t('message.errorApplying'), 'error');
     } finally {
       setIsLoading(false);
@@ -700,8 +721,7 @@ function App() {
                             <button
                               type="button"
                               className="number-input-button"
-                              onClick={() => handleOptionChange('compression', 'fileSize', String(Math.max(1, parseInt(processingOptions.compression.fileSize || 10) - 10)))}
-                            >
+                              onClick={() => handleOptionChange('compression', 'fileSize', String(Math.max(1, parseInt(processingOptions.compression.fileSize || 10) - 10)))}>
                               <i className="fas fa-chevron-down"></i>
                             </button>
                           </div>
@@ -830,7 +850,7 @@ function App() {
                           </>
                         ) : (
                           <>
-                              <i className="fas fa-crop-alt"></i> {processingOptions.cropMode === 'smart' ? t('crop.switchToSmart') : t('crop.switchToStandard')}
+                            <i className="fas fa-crop-alt"></i> {processingOptions.cropMode === 'smart' ? t('crop.switchToSmart') : t('crop.switchToStandard')}
                           </>
                         )}
                       </h3>
@@ -1145,7 +1165,8 @@ function App() {
                                   </span>
                                   <span className="flex-shrink-0">&nbsp;•&nbsp;</span>
                                   <span className="flex-shrink-0">
-                                    {templateSelectedImageObj.type.split('/')[1].toUpperCase()}
+                                    {templateSelectedImageObj.originalFormat?.toUpperCase() || templateSelectedImageObj.type.split('/')[1].toUpperCase()}
+                                    {templateSelectedImageObj.isTIFF && <span className="ml-1 px-1 py-0.5 bg-orange-100 text-orange-800 text-xs rounded">TIFF</span>}
                                   </span>
                                 </>
                               )}
@@ -1157,21 +1178,57 @@ function App() {
                       {/* Full-width image preview */}
                       {templateSelectedImageObj && (
                         <div className="relative w-full rounded-lg overflow-hidden bg-gray-100 image-preview-container-full mt-4">
-                          <img
-                            alt={templateSelectedImageObj.name}
-                            className="w-full h-auto object-contain max-h-96"
-                            src={templateSelectedImageObj.url}
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              const container = e.target.parentElement;
-                              container.innerHTML = `
-                                                                <div class="w-full h-64 bg-primary flex items-center justify-center">
-                                                                    <i class="fas fa-image text-white text-4xl"></i>
-                                                                </div>
-                                                                <div class="absolute inset-0 border border-gray-200 rounded-lg pointer-events-none"></div>
-                                                            `;
-                            }}
-                          />
+                          {templateSelectedImageObj.isTIFF ? (
+                            <div className="relative w-full h-96 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+                              <img
+                                alt={templateSelectedImageObj.name}
+                                className="w-full h-auto object-contain max-h-full"
+                                src={templateSelectedImageObj.url}
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  const container = e.target.parentElement;
+                                  const placeholder = document.createElement('div');
+                                  placeholder.className = 'tiff-preview-placeholder';
+                                  placeholder.innerHTML = `
+                                    <div class="text-center p-8">
+                                      <div class="tiff-preview-icon mb-4">
+                                        <i class="fas fa-file-image text-5xl text-gray-400"></i>
+                                      </div>
+                                      <div class="text-gray-700 font-medium mb-2">${templateSelectedImageObj.name}</div>
+                                      <div class="text-gray-500 text-sm">
+                                        TIFF Image • ${formatFileSize(templateSelectedImageObj.size)}
+                                      </div>
+                                      <div class="mt-4 px-4 py-2 bg-blue-100 text-blue-800 rounded-full inline-block text-sm font-medium">
+                                        <i class="fas fa-sync-alt mr-2"></i>Converted for preview
+                                      </div>
+                                    </div>
+                                  `;
+                                  container.appendChild(placeholder);
+                                }}
+                              />
+                              <div className="absolute bottom-4 right-4 bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                                <i className="fas fa-file-image mr-1"></i> TIFF
+                              </div>
+                            </div>
+                          ) : (
+                            <img
+                              alt={templateSelectedImageObj.name}
+                              className="w-full h-auto object-contain max-h-96"
+                              src={templateSelectedImageObj.url}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                const container = e.target.parentElement;
+                                container.innerHTML = `
+                                  <div class="w-full h-64 bg-gray-100 flex items-center justify-center">
+                                    <div class="text-center">
+                                      <i class="fas fa-image text-gray-400 text-4xl mb-2"></i>
+                                      <div class="text-gray-600">Cannot display image preview</div>
+                                    </div>
+                                  </div>
+                                `;
+                              }}
+                            />
+                          )}
                           <div className="absolute inset-0 border border-gray-200 rounded-lg pointer-events-none"></div>
                         </div>
                       )}
@@ -1266,6 +1323,8 @@ function App() {
                     ? image.id === processingOptions.templateSelectedImage
                     : selectedImages.includes(image.id);
 
+                  const isTIFF = image.isTIFF;
+
                   return (
                     <div
                       key={image.id}
@@ -1280,10 +1339,65 @@ function App() {
                           <i className="fas fa-th-large mr-1"></i> {t('gallery.templateImage')}
                         </div>
                       )}
-                      <img src={image.url} alt={image.name} />
+
+                      {isTIFF ? (
+                        <div className="relative">
+                          {/* TIFF preview image (converted to PNG) */}
+                          <img
+                            src={image.url}
+                            alt={image.name}
+                            className="image-preview"
+                            onError={(e) => {
+                              // If the converted image fails to load, show a better placeholder
+                              e.target.style.display = 'none';
+                              const parent = e.target.parentElement;
+                              const placeholder = parent.querySelector('.tiff-placeholder');
+                              if (placeholder) placeholder.style.display = 'flex';
+                            }}
+                          />
+                          {/* Fallback placeholder */}
+                          <div className="tiff-placeholder" style={{ display: 'none' }}>
+                            <div className="tiff-icon">
+                              <i className="fas fa-file-image"></i>
+                            </div>
+                            <div className="tiff-label">TIFF</div>
+                            <div className="tiff-info">
+                              <span className="tiff-name">{image.name}</span>
+                              <span className="tiff-size">{formatFileSize(image.size)}</span>
+                            </div>
+                          </div>
+                          {/* TIFF badge overlay */}
+                          <div className="tiff-badge-overlay">
+                            <span className="tiff-badge">TIFF</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <img
+                          src={image.url}
+                          alt={image.name}
+                          className="image-preview"
+                          onError={(e) => {
+                            // Fallback for broken images
+                            e.target.style.display = 'none';
+                            const parent = e.target.parentElement;
+                            const fallback = parent.querySelector('.image-fallback');
+                            if (fallback) fallback.style.display = 'flex';
+                          }}
+                        />
+                      )}
+
+                      {/* Fallback for broken non-TIFF images */}
+                      <div className="image-fallback" style={{ display: 'none' }}>
+                        <i className="fas fa-image"></i>
+                        <span className="image-fallback-name">{image.name}</span>
+                      </div>
+
                       <div className="image-info">
                         <span className="image-name">{image.name}</span>
-                        <span className="image-size">{formatFileSize(image.size)} • {image.type.split('/')[1].toUpperCase()}</span>
+                        <span className="image-size">
+                          {formatFileSize(image.size)} • {image.originalFormat?.toUpperCase() || image.type.split('/')[1].toUpperCase()}
+                          {isTIFF && <span className="image-format-badge">TIFF</span>}
+                        </span>
                       </div>
                     </div>
                   );
