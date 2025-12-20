@@ -1,42 +1,49 @@
-import { useState, useRef, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import ImageUploader from './components/ImageUploader'
-import Header from './components/Header'
-import Footer from './components/Footer'
-import Modal from './components/Modal'
-import { createExportZip } from './utils/exportUtils'
+import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import ImageUploader from './components/ImageUploader';
+import Header from './components/Header';
+import Footer from './components/Footer';
+import Modal from './components/Modal';
+import RangeSlider from './components/RangeSlider';
+import { createExportZip, downloadZip, generateExportSettings } from './utils/exportUtils';
 import {
-  processCustomImagesBatch,
-  processTemplateImages,
+  orchestrateCustomProcessing,
+  orchestrateTemplateProcessing,
   createImageObjects,
   loadAIModel,
-  validateImageFiles,
+  validateProcessingOptions,
+  getProcessingConfiguration,
+  createProcessingSummary,
+  calculateTotalTemplateFiles,
   formatFileSize,
   cleanupBlobUrls,
-  ensureFileObject
-} from './utils/imageProcessor'
-import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './configs/templateConfigs'
-import RangeSlider from './components/RangeSlider'
-import './styles/App.css'
+  getAvailableFormats,
+  getTemplateById,
+  getTemplatesByCategory,
+  generateFileName
+} from './utils/imageProcessor';
+import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './configs/templateConfigs';
+import './styles/App.css';
 
 /**
- * Main App Component - Image LemGendizer
+ * Main application component for image processing and optimization.
+ *
  * @returns {JSX.Element} Rendered application
  */
 function App() {
-  const { t, i18n } = useTranslation()
-  const [images, setImages] = useState([])
-  const [selectedImages, setSelectedImages] = useState([])
+  const { t, i18n } = useTranslation();
+  const [images, setImages] = useState([]);
+  const [selectedImages, setSelectedImages] = useState([]);
   const [modal, setModal] = useState({
     isOpen: false,
     title: '',
     message: '',
-    type: 'info' // 'info', 'success', 'error', 'summary'
-  })
-  const [isLoading, setIsLoading] = useState(false)
-  const [aiModelLoaded, setAiModelLoaded] = useState(false)
-  const [aiLoading, setAiLoading] = useState(false)
-  const [processingSummary, setProcessingSummary] = useState(null)
+    type: 'info'
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [aiModelLoaded, setAiModelLoaded] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [processingSummary, setProcessingSummary] = useState(null);
   const [processingOptions, setProcessingOptions] = useState({
     compression: {
       quality: 80,
@@ -59,55 +66,12 @@ function App() {
     smartCrop: false,
     cropMode: 'smart',
     cropPosition: 'center'
-  })
+  });
 
-  const fileInputRef = useRef(null)
-
-  const calculateTotalTemplateFiles = (selectedTemplates) => {
-    if (!selectedTemplates || selectedTemplates.length === 0) return 0;
-
-    let totalFiles = 0;
-    const templateIds = selectedTemplates;
-    const templates = SOCIAL_MEDIA_TEMPLATES.filter(t => templateIds.includes(t.id));
-
-    templates.forEach(template => {
-      if (template.category === 'web') {
-        // Web templates: WebP + JPEG/PNG (2 files)
-        totalFiles += 2;
-      } else if (template.category === 'logo') {
-        // Logo templates: JPEG/PNG only (1 file)
-        totalFiles += 1;
-      } else {
-        // Social media templates: JPEG only (1 file)
-        totalFiles += 1;
-      }
-    });
-
-    return totalFiles;
-  };
+  const fileInputRef = useRef(null);
 
   /**
-   * Get plural suffix for current language
-   * @param {number} count - Count for pluralization
-   * @returns {string} Plural suffix
-   */
-  const getPluralSuffix = (count) => {
-    const language = i18n.language
-    if (language === 'hr') {
-      const lastDigit = count % 10
-      const lastTwoDigits = count % 100
-
-      if (lastDigit === 1 && lastTwoDigits !== 11) return 'a'
-      if (lastDigit >= 2 && lastDigit <= 4 &&
-        (lastTwoDigits < 10 || lastTwoDigits >= 20)) return 'e'
-      return 'a'
-    }
-
-    return count === 1 ? '' : 's'
-  }
-
-  /**
-   * Load AI model on component mount - UPDATED FOR TEMPLATE USE
+   * Loads AI model when needed for smart cropping or templates.
    */
   useEffect(() => {
     const loadAIModelAsync = async () => {
@@ -116,26 +80,26 @@ function App() {
 
       if (needsAI) {
         try {
-          setAiLoading(true)
-          await loadAIModel()
-          setAiModelLoaded(true)
-          setAiLoading(false)
+          setAiLoading(true);
+          await loadAIModel();
+          setAiModelLoaded(true);
+          setAiLoading(false);
         } catch (error) {
-          console.error('Failed to load AI model:', error)
-          setAiLoading(false)
-          showModal(t('message.error'), t('message.aiFailed'), 'error')
+          console.error('Failed to load AI model:', error);
+          setAiLoading(false);
+          showModal(t('message.error'), t('message.aiFailed'), 'error');
 
           if (processingOptions.cropMode === 'smart') {
-            setProcessingOptions(prev => ({ ...prev, cropMode: 'standard' }))
+            setProcessingOptions(prev => ({ ...prev, cropMode: 'standard' }));
           }
         }
       }
-    }
-    loadAIModelAsync()
-  }, [processingOptions.cropMode, processingOptions.processingMode, t])
+    };
+    loadAIModelAsync();
+  }, [processingOptions.cropMode, processingOptions.processingMode, t]);
 
   /**
-   * Clean up blob URLs when images change or component unmounts
+   * Cleans up blob URLs when component unmounts.
    */
   useEffect(() => {
     return () => {
@@ -144,50 +108,40 @@ function App() {
   }, []);
 
   /**
-   * Handle image upload from file input or drag-and-drop
+   * Handles image upload from file input or drag-and-drop.
+   *
    * @param {File[]} files - Array of uploaded image files
    */
   const handleImageUpload = (files) => {
-    const validFiles = validateImageFiles(files)
-    const newImages = createImageObjects(validFiles)
+    const newImages = createImageObjects(files);
     setImages(prev => {
       cleanupBlobUrls(prev);
       return [...prev, ...newImages];
     });
 
-    // Always update selected images in custom mode
     if (processingOptions.processingMode === 'custom') {
-      // If no images are selected, select all new images
       if (selectedImages.length === 0) {
-        setSelectedImages(newImages.map(img => img.id))
+        setSelectedImages(newImages.map(img => img.id));
       } else {
-        // Otherwise, add new images to selection
-        setSelectedImages(prev => [...prev, ...newImages.map(img => img.id)])
+        setSelectedImages(prev => [...prev, ...newImages.map(img => img.id)]);
       }
     }
 
-    // If switching to templates mode or already in templates mode, set first image
     if ((processingOptions.processingMode === 'templates' || processingOptions.showTemplates) &&
       !processingOptions.templateSelectedImage &&
       newImages.length > 0) {
       setProcessingOptions(prev => ({
         ...prev,
         templateSelectedImage: newImages[0].id
-      }))
+      }));
     }
 
-    const suffix = getPluralSuffix(files.length)
-    const message = t('message.successUpload', {
-      count: files.length,
-      s: i18n.language === 'en' ? (files.length === 1 ? '' : 's') : '',
-      a: i18n.language === 'hr' ? suffix : '',
-      e: i18n.language === 'hr' ? suffix : ''
-    })
-    showModal(t('message.success'), message, 'success')
-  }
+    showModal(t('message.success'), t('message.successUpload', { count: files.length }), 'success');
+  };
 
   /**
-   * Handle image selection in gallery
+   * Handles image selection in gallery.
+   *
    * @param {string} imageId - Unique identifier of the image
    */
   const handleImageSelect = (imageId) => {
@@ -195,123 +149,122 @@ function App() {
       setProcessingOptions(prev => ({
         ...prev,
         templateSelectedImage: imageId
-      }))
-      setSelectedImages([imageId])
+      }));
+      setSelectedImages([imageId]);
     } else {
       setSelectedImages(prev =>
         prev.includes(imageId)
           ? prev.filter(id => id !== imageId)
           : [...prev, imageId]
-      )
+      );
     }
-  }
+  };
 
   /**
-   * Select or deselect all images
+   * Selects or deselects all images.
    */
   const handleSelectAll = () => {
-    if (processingOptions.processingMode === 'templates') {
-      return
-    }
+    if (processingOptions.processingMode === 'templates') return;
 
     if (selectedImages.length === images.length) {
-      setSelectedImages([])
+      setSelectedImages([]);
     } else {
-      setSelectedImages(images.map(img => img.id))
+      setSelectedImages(images.map(img => img.id));
     }
-  }
+  };
 
   /**
-   * Remove selected images from the gallery
+   * Removes selected images from the gallery.
    */
   const handleRemoveSelected = () => {
     const imagesToRemove = processingOptions.processingMode === 'templates'
       ? [processingOptions.templateSelectedImage].filter(Boolean)
-      : selectedImages
+      : selectedImages;
 
     const imagesToRemoveObjects = images.filter(img => imagesToRemove.includes(img.id));
     cleanupBlobUrls(imagesToRemoveObjects);
 
-    setImages(images.filter(img => !imagesToRemove.includes(img.id)))
-    setSelectedImages([])
+    setImages(images.filter(img => !imagesToRemove.includes(img.id)));
+    setSelectedImages([]);
 
     if (processingOptions.processingMode === 'templates') {
       setProcessingOptions(prev => ({
         ...prev,
         templateSelectedImage: null
-      }))
+      }));
     }
 
-    showModal(t('message.removed'), t('message.removedImages'), 'success')
-  }
+    showModal(t('message.removed'), t('message.removedImages'), 'success');
+  };
 
   /**
-   * Display modal dialog
+   * Displays modal dialog.
+   *
    * @param {string} title - Modal title
    * @param {string} message - Modal message content
    * @param {string} type - Modal type ('info', 'success', 'error', 'summary')
    */
   const showModal = (title, message, type = 'info') => {
-    setModal({ isOpen: true, title, message, type })
-  }
+    setModal({ isOpen: true, title, message, type });
+  };
 
   /**
-   * Show summary modal with processing details
+   * Shows summary modal with processing details.
+   *
    * @param {Object} summary - Processing summary object
    */
   const showSummaryModal = (summary) => {
-    setProcessingSummary(summary)
+    setProcessingSummary(summary);
     setModal({
       isOpen: true,
       title: t('summary.title'),
       message: '',
       type: 'summary'
-    })
-  }
+    });
+  };
 
   /**
-   * Close modal dialog
+   * Closes modal dialog.
    */
   const closeModal = () => {
-    setModal({ isOpen: false, title: '', message: '', type: 'info' })
-    setProcessingSummary(null)
-  }
+    setModal({ isOpen: false, title: '', message: '', type: 'info' });
+    setProcessingSummary(null);
+  };
 
   /**
-   * Toggle between resize and crop modes
+   * Toggles between resize and crop modes.
    */
   const toggleResizeCrop = () => {
     setProcessingOptions(prev => ({
       ...prev,
       showResize: !prev.showResize,
       showCrop: !prev.showCrop
-    }))
-  }
+    }));
+  };
 
   /**
-   * Toggle crop mode between standard and smart
+   * Toggles crop mode between standard and smart.
    */
   const toggleCropMode = () => {
     setProcessingOptions(prev => ({
       ...prev,
       cropMode: prev.cropMode === 'smart' ? 'standard' : 'smart'
-    }))
-  }
+    }));
+  };
 
   /**
-   * Toggle format selection
+   * Toggles format selection.
+   *
    * @param {string} format - Format to toggle
    */
   const handleFormatToggle = (format) => {
     setProcessingOptions(prev => {
-      const currentFormats = prev.output.formats || []
+      const currentFormats = prev.output.formats || [];
       const newFormats = currentFormats.includes(format)
         ? currentFormats.filter(f => f !== format)
-        : [...currentFormats, format]
+        : [...currentFormats, format];
 
-      if (newFormats.length === 0) {
-        return prev
-      }
+      if (newFormats.length === 0) return prev;
 
       return {
         ...prev,
@@ -319,26 +272,26 @@ function App() {
           ...prev.output,
           formats: newFormats
         }
-      }
-    })
-  }
+      };
+    });
+  };
 
   /**
-   * Select all output formats
+   * Selects all output formats.
    */
   const handleSelectAllFormats = () => {
-    const allFormats = ['webp', 'jpg', 'png', 'original']
+    const allFormats = ['webp', 'jpg', 'png', 'original'];
     setProcessingOptions(prev => ({
       ...prev,
       output: {
         ...prev.output,
         formats: allFormats
       }
-    }))
-  }
+    }));
+  };
 
   /**
-   * Clear all output formats
+   * Clears all output formats.
    */
   const handleClearAllFormats = () => {
     setProcessingOptions(prev => ({
@@ -347,26 +300,23 @@ function App() {
         ...prev.output,
         formats: ['webp']
       }
-    }))
-  }
+    }));
+  };
 
   /**
-   * Switch between custom processing and templates mode
+   * Switches between custom processing and templates mode.
+   *
    * @param {'custom'|'templates'} mode - Processing mode
    */
   const toggleProcessingMode = (mode) => {
-    const newMode = mode === 'templates' ? 'templates' : 'custom'
+    const newMode = mode === 'templates' ? 'templates' : 'custom';
 
     if (newMode === 'templates') {
-      // Preselect first image when switching to templates mode
       let firstImageId = null;
 
-      // First check if there are any selected images (from custom tab)
       if (selectedImages.length > 0) {
         firstImageId = selectedImages[0];
-      }
-      // If no selected images, check if there are any images at all
-      else if (images.length > 0) {
+      } else if (images.length > 0) {
         firstImageId = images[0].id;
       }
 
@@ -375,79 +325,80 @@ function App() {
         processingMode: newMode,
         templateSelectedImage: firstImageId,
         showTemplates: true
-      }))
+      }));
 
-      // Update selected images array to match template selection
-      if (firstImageId) {
-        setSelectedImages([firstImageId]);
-      }
+      if (firstImageId) setSelectedImages([firstImageId]);
     } else {
       setProcessingOptions(prev => ({
         ...prev,
         processingMode: newMode,
         showTemplates: newMode === 'templates',
         templateSelectedImage: null
-      }))
+      }));
     }
-  }
+  };
 
   /**
-   * Toggle selection of a specific template
+   * Toggles selection of a specific template.
+   *
    * @param {string} templateId - Unique identifier of the template
    */
   const handleTemplateToggle = (templateId) => {
     setProcessingOptions(prev => {
       const newSelected = prev.selectedTemplates.includes(templateId)
         ? prev.selectedTemplates.filter(id => id !== templateId)
-        : [...prev.selectedTemplates, templateId]
+        : [...prev.selectedTemplates, templateId];
 
-      return { ...prev, selectedTemplates: newSelected }
-    })
-  }
+      return { ...prev, selectedTemplates: newSelected };
+    });
+  };
 
   /**
-   * Select all available templates
+   * Selects all available templates.
    */
   const handleSelectAllTemplates = () => {
-    const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id)
+    const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id);
     setProcessingOptions(prev => ({
       ...prev,
       selectedTemplates: allTemplateIds
-    }))
-  }
+    }));
+  };
 
   /**
-   * Select all templates in a specific category
+   * Selects all templates in a specific category.
+   *
    * @param {string} category - Template category identifier
    */
   const handleSelectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
-      .map(template => template.id)
+      .map(template => template.id);
 
     setProcessingOptions(prev => ({
       ...prev,
       selectedTemplates: [...new Set([...prev.selectedTemplates, ...categoryTemplates])]
-    }))
-  }
+    }));
+  };
 
   /**
-   * Deselect all templates in a specific category
+   * Deselects all templates in a specific category.
+   *
    * @param {string} category - Template category identifier
    */
   const handleDeselectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
-      .map(template => template.id)
+      .map(template => template.id);
 
     setProcessingOptions(prev => ({
       ...prev,
       selectedTemplates: prev.selectedTemplates.filter(id => !categoryTemplates.includes(id))
-    }))
-  }
+    }));
+  };
 
   /**
-   * Update processing options
+   * Updates processing options.
+   *
    * @param {string} category - Option category
    * @param {string} key - Option key within the category
    * @param {any} value - New option value
@@ -459,11 +410,12 @@ function App() {
         ...prev[category],
         [key]: value
       }
-    }))
-  }
+    }));
+  };
 
   /**
-   * Update single processing option
+   * Updates single processing option.
+   *
    * @param {string} key - Option key to update
    * @param {any} value - New option value
    */
@@ -471,261 +423,172 @@ function App() {
     setProcessingOptions(prev => ({
       ...prev,
       [key]: value
-    }))
-  }
+    }));
+  };
 
   /**
-   * Get currently selected images for processing
+   * Gets currently selected images for processing.
+   *
    * @returns {Array<Object>} Array of selected image objects
    */
   const getSelectedImagesForProcessing = () => {
     if (processingOptions.processingMode === 'templates') {
       return processingOptions.templateSelectedImage
         ? images.filter(img => img.id === processingOptions.templateSelectedImage)
-        : []
+        : [];
     } else {
-      return images.filter(img => selectedImages.includes(img.id))
+      return images.filter(img => selectedImages.includes(img.id));
     }
-  }
+  };
 
   /**
-   * Process images using custom settings - UPDATED FOR AI UPSCALING
-   * @async
-   * @returns {Promise<void>}
+   * Processes images using custom settings.
    */
   const processCustomImages = async () => {
-    const selectedImagesForProcessing = getSelectedImagesForProcessing()
+    const selectedImagesForProcessing = getSelectedImagesForProcessing();
     if (selectedImagesForProcessing.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectImages'), 'error')
-      return
+      showModal(t('message.error'), t('message.errorSelectImages'), 'error');
+      return;
     }
 
-    if (!processingOptions.output.formats || processingOptions.output.formats.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectFormat'), 'error')
-      return
+    const validation = validateProcessingOptions(processingOptions);
+    if (!validation.isValid) {
+      showModal(t('message.error'), validation.errors.join('\n'), 'error');
+      return;
     }
 
-    setIsLoading(true)
-    const suffix = getPluralSuffix(selectedImagesForProcessing.length)
-    const processingMessage = t('message.processingImages', {
-      count: selectedImagesForProcessing.length,
-      s: i18n.language === 'en' ? (selectedImagesForProcessing.length === 1 ? '' : 's') : '',
-      e: i18n.language === 'hr' ? suffix : ''
-    })
-    showModal(t('message.processingImages'), processingMessage, 'info')
+    setIsLoading(true);
+    showModal(t('message.processingImages'), t('message.processingImages', { count: selectedImagesForProcessing.length }), 'info');
 
     try {
-      cleanupBlobUrls(selectedImagesForProcessing);
-
-      const imagesWithValidFiles = await Promise.all(
-        selectedImagesForProcessing.map(async (img) => {
-          try {
-            const file = await ensureFileObject(img);
-            return { ...img, file };
-          } catch (error) {
-            console.error(`Failed to get valid file for ${img.name}:`, error);
-            return img;
-          }
-        })
+      const processingConfig = getProcessingConfiguration(processingOptions);
+      const processedImages = await orchestrateCustomProcessing(
+        selectedImagesForProcessing,
+        processingConfig,
+        aiModelLoaded,
+        (stage, progress) => {
+          console.log(`Processing ${stage}: ${progress}%`);
+        }
       );
 
-      const processedImages = await processCustomImagesBatch(
-        imagesWithValidFiles,
-        processingOptions,
-        true // aiModelLoaded - let imageProcessor.js handle it
-      )
+      const settings = generateExportSettings('custom');
+      const zipBlob = await createExportZip(
+        selectedImagesForProcessing,
+        processedImages,
+        settings,
+        'custom',
+        processingOptions.output.formats
+      );
 
-      const settings = {
-        includeOriginal: true,
-        includeOptimized: true,
-        includeWebImages: false,
-        includeLogoImages: false,
-        includeSocialMedia: false,
-        createFolders: true
-      }
+      downloadZip(zipBlob, 'custom-processed-images');
 
-      const zipBlob = await createExportZip(selectedImagesForProcessing, processedImages, settings, 'custom', processingOptions.output.formats)
-      downloadZip(zipBlob, 'custom-processed-images')
-
-      const summary = {
-        mode: 'custom',
+      const summary = createProcessingSummary({
         imagesProcessed: selectedImagesForProcessing.length,
-        formatsExported: processingOptions.output.formats,
-        operations: [],
-        aiUsed: (processingOptions.cropMode === 'smart') || false,
-        upscalingUsed: false,
-        totalFiles: selectedImagesForProcessing.length * processingOptions.output.formats.length
-      }
+        totalFiles: processedImages.length,
+        success: true
+      }, processingConfig, t);
 
-      if (processingOptions.resizeDimension) {
-        summary.operations.push(`Resized to ${processingOptions.resizeDimension}px (maintaining aspect ratio)`)
-        summary.upscalingUsed = true
-      }
-      if (processingOptions.cropWidth && processingOptions.cropHeight) {
-        const cropType = processingOptions.cropMode === 'smart' ? 'AI Smart Crop' : 'Standard Crop'
-        summary.operations.push(`${cropType} to ${processingOptions.cropWidth}x${processingOptions.cropHeight}px`)
-        summary.upscalingUsed = true
-      }
-      if (processingOptions.compression.quality < 100) {
-        summary.operations.push(`Compressed with ${processingOptions.compression.quality}% quality`)
-      }
-      if (processingOptions.output.rename && processingOptions.output.newFileName) {
-        summary.operations.push(`Renamed using pattern: ${processingOptions.output.newFileName}`)
-      }
-
-      if (summary.upscalingUsed) {
-        summary.operations.push('Auto upscaling applied when needed')
-      }
-
-      closeModal()
-      showSummaryModal(summary)
+      closeModal();
+      showSummaryModal(summary);
 
     } catch (error) {
-      console.error('Custom processing error:', error)
-      showModal(t('message.error'), t('message.errorProcessing'), 'error')
+      console.error('Custom processing error:', error);
+      showModal(t('message.error'), t('message.errorProcessing'), 'error');
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   /**
-   * Process images using social media templates - UPDATED WITH AI CROP
-   * @async
-   * @returns {Promise<void>}
+   * Processes images using social media templates.
    */
   const processTemplates = async () => {
-    const selectedImagesForProcessing = getSelectedImagesForProcessing()
+    const selectedImagesForProcessing = getSelectedImagesForProcessing();
     if (selectedImagesForProcessing.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectImage'), 'error')
-      return
+      showModal(t('message.error'), t('message.errorSelectImage'), 'error');
+      return;
     }
 
     if (processingOptions.selectedTemplates.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectTemplate'), 'error')
-      return
+      showModal(t('message.error'), t('message.errorSelectTemplate'), 'error');
+      return;
     }
 
-    setIsLoading(true)
-    const imageCount = processingOptions.selectedTemplates.length
-    showModal(t('message.processingImages'), t('message.processingImages', { count: imageCount }), 'info')
+    setIsLoading(true);
+    showModal(t('message.processingImages'), t('message.processingImages', { count: processingOptions.selectedTemplates.length }), 'info');
 
     try {
-      cleanupBlobUrls(selectedImagesForProcessing);
+      const processingConfig = getProcessingConfiguration(processingOptions);
+      const processedImages = await orchestrateTemplateProcessing(
+        selectedImagesForProcessing[0],
+        processingOptions.selectedTemplates,
+        SOCIAL_MEDIA_TEMPLATES,
+        true,
+        aiModelLoaded,
+        (stage, progress) => {
+          console.log(`Template processing ${stage}: ${progress}%`);
+        }
+      );
 
-      const image = selectedImagesForProcessing[0];
-      let validImage = image;
-      try {
-        const file = await ensureFileObject(image);
-        validImage = { ...image, file };
-      } catch (error) {
-        console.error(`Failed to get valid file for ${image.name}:`, error);
-        throw new Error(`Invalid image file: ${image.name}`);
-      }
+      const settings = generateExportSettings('templates');
+      const zipBlob = await createExportZip([selectedImagesForProcessing[0]], processedImages, settings, 'templates');
+      downloadZip(zipBlob, 'template-images');
 
-      const selectedTemplates = SOCIAL_MEDIA_TEMPLATES.filter(template =>
-        processingOptions.selectedTemplates.includes(template.id)
-      )
-
-      // DO NOT load AI model here - let the image processor handle it
-      // Just pass aiModelLoaded = true to indicate we want to use AI if available
-      const processedImages = await processTemplateImages(
-        validImage,
-        selectedTemplates,
-        true, // useSmartCrop
-        true // aiModelLoaded - let imageProcessor.js handle actual loading
-      )
-
-      const settings = {
-        includeOriginal: false,
-        includeOptimized: false,
-        includeWebImages: true,
-        includeLogoImages: true,
-        includeSocialMedia: true,
-        createFolders: true
-      }
-
-      const zipBlob = await createExportZip([validImage], processedImages, settings, 'templates')
-      downloadZip(zipBlob, 'template-images')
-
-      const summary = {
-        mode: 'templates',
+      const summary = createProcessingSummary({
         imagesProcessed: 1,
-        templatesApplied: selectedTemplates.length,
-        categoriesApplied: [...new Set(selectedTemplates.map(t => t.category))].length,
-        formatsExported: ['webp', 'jpg', 'png'],
-        operations: [
-          `Applied ${selectedTemplates.length} templates`,
-          'Auto upscaling applied when needed',
-          'AI smart cropping enabled'
-        ],
-        aiUsed: true,
-        upscalingUsed: true,
-        totalFiles: processedImages.length
-      }
+        totalFiles: processedImages.length,
+        success: true
+      }, processingConfig, t);
 
-      closeModal()
-      showSummaryModal(summary)
+      closeModal();
+      showSummaryModal(summary);
 
     } catch (error) {
-      console.error('Template processing error:', error)
-      showModal(t('message.error'), t('message.errorApplying'), 'error')
+      console.error('Template processing error:', error);
+      showModal(t('message.error'), t('message.errorApplying'), 'error');
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   /**
-   * Download processed images as ZIP file
-   * @param {Blob} zipBlob - ZIP file blob
-   * @param {string} prefix - File name prefix
-   */
-  const downloadZip = (zipBlob, prefix) => {
-    const url = URL.createObjectURL(zipBlob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${prefix}-${Date.now()}.zip`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-
-  /**
-   * Format template names for display using translations
+   * Formats template names for display using translations.
+   *
    * @param {string} name - Original template name
    * @returns {string} Formatted display name
    */
   const formatTemplateName = (name) => {
-    return t(`template.${name}`) || name
-  }
+    return t(`template.${name}`) || name;
+  };
 
   /**
-   * Increment number value
+   * Increments number value.
+   *
    * @param {string} key - State key to update
    * @param {number} increment - Amount to increment by
    */
   const incrementValue = (key, increment = 1) => {
-    const currentValue = parseInt(processingOptions[key] || '0')
-    const newValue = Math.max(1, currentValue + increment)
-    handleSingleOptionChange(key, String(newValue))
-  }
+    const currentValue = parseInt(processingOptions[key] || '0');
+    const newValue = Math.max(1, currentValue + increment);
+    handleSingleOptionChange(key, String(newValue));
+  };
 
   /**
-   * Decrement number value
+   * Decrements number value.
+   *
    * @param {string} key - State key to update
    * @param {number} decrement - Amount to decrement by
    */
   const decrementValue = (key, decrement = 1) => {
-    const currentValue = parseInt(processingOptions[key] || '1')
-    const newValue = Math.max(1, currentValue - decrement)
-    handleSingleOptionChange(key, String(newValue))
-  }
+    const currentValue = parseInt(processingOptions[key] || '1');
+    const newValue = Math.max(1, currentValue - decrement);
+    handleSingleOptionChange(key, String(newValue));
+  };
 
-  const selectedImagesForProcessing = getSelectedImagesForProcessing()
-  const templateCategories = getTemplateCategories()
-
-  // Get the selected image for templates display
-  const templateSelectedImageObj = images.find(img => img.id === processingOptions.templateSelectedImage)
+  // UI state
+  const selectedImagesForProcessing = getSelectedImagesForProcessing();
+  const templateCategories = getTemplateCategories();
+  const templateSelectedImageObj = images.find(img => img.id === processingOptions.templateSelectedImage);
 
   return (
     <div className="app">
@@ -1206,7 +1069,7 @@ function App() {
                       {templateCategories.map((category) => {
                         const categoryTemplates = SOCIAL_MEDIA_TEMPLATES.filter(template =>
                           template.category === category.id
-                        )
+                        );
 
                         return (
                           <div key={category.id} className="card">
@@ -1254,108 +1117,107 @@ function App() {
                               ))}
                             </div>
                           </div>
-                        )
+                        );
                       })}
                     </div>
 
-                      {/* Template Action Section */}
-                      <div className="card">
-                        <div className="card-header">
-                          <div className="flex justify-between items-start w-full">
-                            <div className="flex-1">
-                              <h4 className="card-title mb-xs">{t('templates.imageForTemplates')}</h4>
-                              <div className="flex items-center gap-4 text-sm text-muted">
-                                <span className="truncate max-w-xs">
-                                  {templateSelectedImageObj
-                                    ? templateSelectedImageObj.name
-                                    : t('templates.noImageSelected')
-                                  }
-                                </span>
-                                {templateSelectedImageObj && (
-                                  <>
-                                    <span className="flex-shrink-0">&nbsp;•&nbsp;</span>
-                                    <span className="flex-shrink-0">
-                                      {formatFileSize(templateSelectedImageObj.size)}
-                                    </span>
-                                    <span className="flex-shrink-0">&nbsp;•&nbsp;</span>
-                                    <span className="flex-shrink-0">
-                                      {templateSelectedImageObj.type.split('/')[1].toUpperCase()}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Full-width image preview */}
-                        {templateSelectedImageObj && (
-                          <div className="relative w-full rounded-lg overflow-hidden bg-gray-100 image-preview-container-full mt-4">
-                            <img
-                              alt={templateSelectedImageObj.name}
-                              className="w-full h-auto object-contain max-h-96"
-                              src={templateSelectedImageObj.url}
-                              onError={(e) => {
-                                // Fallback to placeholder if image fails to load
-                                e.target.style.display = 'none';
-                                const container = e.target.parentElement;
-                                container.innerHTML = `
-            <div class="w-full h-64 bg-primary flex items-center justify-center">
-              <i class="fas fa-image text-white text-4xl"></i>
-            </div>
-            <div class="absolute inset-0 border border-gray-200 rounded-lg pointer-events-none"></div>
-          `;
-                              }}
-                            />
-                            <div className="absolute inset-0 border border-gray-200 rounded-lg pointer-events-none"></div>
-                          </div>
-                        )}
-
-                        {/* Template stats row */}
-                        <div className="flex justify-between items-center mt-4 mb-lg">
-                          <div className="flex items-center gap-4 text-sm text-muted">
-                            <div className="flex items-center">
-                              <i className="fas fa-layer-group mr-1 text-sm"></i>
-                              <span>
-                                {processingOptions.selectedTemplates.length} {t('templates.selected')}
-                              </span>
-                            </div>
-                            <span className="text-muted">,&nbsp;</span>
-                            <div className="flex items-center">
-                              <span>
-                                {processingOptions.selectedTemplates.length > 0
-                                  ? `${calculateTotalTemplateFiles(processingOptions.selectedTemplates)} ${t('templates.filesToGenerate')}`
-                                  : t('templates.selectTemplates')
+                    {/* Template Action Section */}
+                    <div className="card">
+                      <div className="card-header">
+                        <div className="flex justify-between items-start w-full">
+                          <div className="flex-1">
+                            <h4 className="card-title mb-xs">{t('templates.imageForTemplates')}</h4>
+                            <div className="flex items-center gap-4 text-sm text-muted">
+                              <span className="truncate max-w-xs">
+                                {templateSelectedImageObj
+                                  ? templateSelectedImageObj.name
+                                  : t('templates.noImageSelected')
                                 }
                               </span>
+                              {templateSelectedImageObj && (
+                                <>
+                                  <span className="flex-shrink-0">&nbsp;•&nbsp;</span>
+                                  <span className="flex-shrink-0">
+                                    {formatFileSize(templateSelectedImageObj.size)}
+                                  </span>
+                                  <span className="flex-shrink-0">&nbsp;•&nbsp;</span>
+                                  <span className="flex-shrink-0">
+                                    {templateSelectedImageObj.type.split('/')[1].toUpperCase()}
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
+                      </div>
 
-                        {/* Download button */}
-                        <div className="text-center mt-6">
-                          <button
-                            className="btn btn-primary btn-lg relative"
-                            disabled={!processingOptions.templateSelectedImage || processingOptions.selectedTemplates.length === 0 || isLoading}
-                            onClick={processTemplates}
-                          >
-                            {isLoading ? (
-                              <>
-                                <i className="fas fa-spinner fa-spin"></i> {t('button.processing')}
-                              </>
-                            ) : (
-                              <>
-                                <i className="fas fa-file-archive"></i> {t('templates.download')}
-                                {processingOptions.selectedTemplates.length > 0 && (
-                                  <span className="absolute -top-2 -right-2 bg-danger text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                                      {calculateTotalTemplateFiles(processingOptions.selectedTemplates)}
-                                  </span>
-                                )}
-                              </>
-                            )}
-                          </button>
+                      {/* Full-width image preview */}
+                      {templateSelectedImageObj && (
+                        <div className="relative w-full rounded-lg overflow-hidden bg-gray-100 image-preview-container-full mt-4">
+                          <img
+                            alt={templateSelectedImageObj.name}
+                            className="w-full h-auto object-contain max-h-96"
+                            src={templateSelectedImageObj.url}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              const container = e.target.parentElement;
+                              container.innerHTML = `
+                                                                <div class="w-full h-64 bg-primary flex items-center justify-center">
+                                                                    <i class="fas fa-image text-white text-4xl"></i>
+                                                                </div>
+                                                                <div class="absolute inset-0 border border-gray-200 rounded-lg pointer-events-none"></div>
+                                                            `;
+                            }}
+                          />
+                          <div className="absolute inset-0 border border-gray-200 rounded-lg pointer-events-none"></div>
+                        </div>
+                      )}
+
+                      {/* Template stats row */}
+                      <div className="flex justify-between items-center mt-4 mb-lg">
+                        <div className="flex items-center gap-4 text-sm text-muted">
+                          <div className="flex items-center">
+                            <i className="fas fa-layer-group mr-1 text-sm"></i>
+                            <span>
+                              {processingOptions.selectedTemplates.length} {t('templates.selected')}
+                            </span>
+                          </div>
+                          <span className="text-muted">,&nbsp;</span>
+                          <div className="flex items-center">
+                            <span>
+                              {processingOptions.selectedTemplates.length > 0
+                                ? `${calculateTotalTemplateFiles(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES)} ${t('templates.filesToGenerate')}`
+                                : t('templates.selectTemplates')
+                              }
+                            </span>
+                          </div>
                         </div>
                       </div>
+
+                      {/* Download button */}
+                      <div className="text-center mt-6">
+                        <button
+                          className="btn btn-primary btn-lg relative"
+                          disabled={!processingOptions.templateSelectedImage || processingOptions.selectedTemplates.length === 0 || isLoading}
+                          onClick={processTemplates}
+                        >
+                          {isLoading ? (
+                            <>
+                              <i className="fas fa-spinner fa-spin"></i> {t('button.processing')}
+                            </>
+                          ) : (
+                            <>
+                              <i className="fas fa-file-archive"></i> {t('templates.download')}
+                              {processingOptions.selectedTemplates.length > 0 && (
+                                <span className="absolute -top-2 -right-2 bg-danger text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
+                                  {calculateTotalTemplateFiles(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES)}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </>
               )}
@@ -1399,7 +1261,7 @@ function App() {
                 {images.map(image => {
                   const isSelected = processingOptions.processingMode === 'templates'
                     ? image.id === processingOptions.templateSelectedImage
-                    : selectedImages.includes(image.id)
+                    : selectedImages.includes(image.id);
 
                   return (
                     <div
@@ -1421,7 +1283,7 @@ function App() {
                         <span className="image-size">{formatFileSize(image.size)} • {image.type.split('/')[1].toUpperCase()}</span>
                       </div>
                     </div>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -1557,7 +1419,7 @@ function App() {
         )}
       </Modal>
     </div>
-  )
+  );
 }
 
 export default App;
