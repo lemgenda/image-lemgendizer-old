@@ -1,5 +1,14 @@
 import JSZip from 'jszip'
 
+/**
+ * Create export ZIP file with organized folder structure
+ * @async
+ * @param {Array<Object>} originalImages - Original image objects with file and name properties
+ * @param {Array<Object>} processedImages - Processed image objects with file, name, and optional template properties
+ * @param {Object} settings - Export settings with include flags
+ * @param {string} mode - Processing mode ('custom' or 'templates')
+ * @returns {Promise<Blob>} ZIP file blob
+ */
 export const createExportZip = async (originalImages, processedImages, settings, mode) => {
     const zip = new JSZip()
 

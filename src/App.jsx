@@ -1,29 +1,30 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import ImageUploader from './components/ImageUploader'
-import LanguageSwitcher from './components/LanguageSwitcher'
+import Header from './components/Header'
+import Footer from './components/Footer'
 import Modal from './components/Modal'
 import { createExportZip } from './utils/exportUtils'
 import {
-  processLemGendaryResize,
-  processLemGendaryCrop,
-  processLemGendaryRename,
-  optimizeForWeb,
+  processCustomImagesBatch,
+  processTemplateImages,
+  createImageObjects,
+  loadAIModel,
   checkImageTransparency,
-  processSmartCrop
+  getLanguages,
+  getCurrentLanguage,
+  handleImageDrop,
+  handleFileSelect,
+  calculatePercentage,
+  validateImageFiles,
+  formatFileSize
 } from './utils/imageProcessor'
-import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES, getTemplatesByCategory } from './utils/templateConfigs'
+import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './utils/templateConfigs'
 import RangeSlider from './components/RangeSlider'
 import './styles/App.css'
 
-// Import logos (assuming they're in src/assets/)
-import lemGendaIcon from '../src/assets/lemgenda-icon.svg'
-import lemGendaLogo from '../src/assets/lemgenda-logo.svg'
-
 /**
  * Main App Component - Image LemGendizer
- * @component
- * @description Main application component for batch image processing and optimization
  * @returns {JSX.Element} Rendered application
  */
 function App() {
@@ -62,14 +63,12 @@ function App() {
 
   /**
    * Get plural suffix for current language
-   * @function
    * @param {number} count - Count for pluralization
    * @returns {string} Plural suffix
    */
   const getPluralSuffix = (count) => {
     const language = i18n.language
     if (language === 'hr') {
-      // Croatian plural rules
       const lastDigit = count % 10
       const lastTwoDigits = count % 100
 
@@ -79,21 +78,17 @@ function App() {
       return 'a'
     }
 
-    // English plural rules
     return count === 1 ? '' : 's'
   }
 
   /**
    * Load AI model on component mount
-   * @effect
-   * @description Loads TensorFlow.js AI model for smart cropping functionality
    */
   useEffect(() => {
-    const loadAIModel = async () => {
+    const loadAIModelAsync = async () => {
       if (processingOptions.cropMode === 'smart' && !aiModelLoaded) {
         try {
           setAiLoading(true)
-          const { loadAIModel } = await import('./utils/imageProcessor')
           await loadAIModel()
           setAiModelLoaded(true)
           setAiLoading(false)
@@ -105,25 +100,16 @@ function App() {
         }
       }
     }
-    loadAIModel()
+    loadAIModelAsync()
   }, [processingOptions.cropMode, t])
 
   /**
    * Handle image upload from file input or drag-and-drop
-   * @function
    * @param {File[]} files - Array of uploaded image files
-   * @description Processes uploaded files and adds them to the image list
    */
   const handleImageUpload = (files) => {
-    const newImages = Array.from(files).map(file => ({
-      id: Date.now() + Math.random(),
-      file,
-      name: file.name,
-      url: URL.createObjectURL(file),
-      size: file.size,
-      type: file.type,
-      optimized: false
-    }))
+    const validFiles = validateImageFiles(files)
+    const newImages = createImageObjects(validFiles)
     setImages([...images, ...newImages])
 
     // Auto-select all new images (for custom mode)
@@ -150,9 +136,7 @@ function App() {
 
   /**
    * Handle image selection in gallery
-   * @function
    * @param {string} imageId - Unique identifier of the image
-   * @description Toggles image selection based on current processing mode
    */
   const handleImageSelect = (imageId) => {
     if (processingOptions.processingMode === 'templates') {
@@ -172,8 +156,6 @@ function App() {
 
   /**
    * Select or deselect all images
-   * @function
-   * @description Toggles selection state of all uploaded images
    */
   const handleSelectAll = () => {
     if (processingOptions.processingMode === 'templates') {
@@ -189,8 +171,6 @@ function App() {
 
   /**
    * Remove selected images from the gallery
-   * @function
-   * @description Removes selected images based on current processing mode
    */
   const handleRemoveSelected = () => {
     const imagesToRemove = processingOptions.processingMode === 'templates'
@@ -212,10 +192,8 @@ function App() {
 
   /**
    * Display modal dialog
-   * @function
    * @param {string} title - Modal title
    * @param {string} message - Modal message content
-   * @description Shows a modal dialog with specified title and message
    */
   const showModal = (title, message) => {
     setModal({ isOpen: true, title, message })
@@ -223,8 +201,6 @@ function App() {
 
   /**
    * Close modal dialog
-   * @function
-   * @description Closes the currently open modal
    */
   const closeModal = () => {
     setModal({ isOpen: false, title: '', message: '' })
@@ -232,8 +208,6 @@ function App() {
 
   /**
    * Toggle between resize and crop modes
-   * @function
-   * @description Switches UI between resize and crop configuration sections
    */
   const toggleResizeCrop = () => {
     setProcessingOptions(prev => ({
@@ -245,8 +219,6 @@ function App() {
 
   /**
    * Toggle crop mode between standard and smart
-   * @function
-   * @description Switches between standard cropping and AI-powered smart cropping
    */
   const toggleCropMode = () => {
     setProcessingOptions(prev => ({
@@ -257,9 +229,7 @@ function App() {
 
   /**
    * Switch between custom processing and templates mode
-   * @function
-   * @param {string} mode - 'custom' or 'templates'
-   * @description Changes the main processing mode of the application
+   * @param {'custom'|'templates'} mode - Processing mode
    */
   const toggleProcessingMode = (mode) => {
     const newMode = mode === 'templates' ? 'templates' : 'custom'
@@ -290,9 +260,7 @@ function App() {
 
   /**
    * Toggle selection of a specific template
-   * @function
    * @param {string} templateId - Unique identifier of the template
-   * @description Adds or removes a template from the selected templates list
    */
   const handleTemplateToggle = (templateId) => {
     setProcessingOptions(prev => {
@@ -306,8 +274,6 @@ function App() {
 
   /**
    * Select all available templates
-   * @function
-   * @description Selects every template in the template library
    */
   const handleSelectAllTemplates = () => {
     const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id)
@@ -319,9 +285,7 @@ function App() {
 
   /**
    * Select all templates in a specific category
-   * @function
    * @param {string} category - Template category identifier
-   * @description Selects all templates belonging to the specified category
    */
   const handleSelectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
@@ -336,9 +300,7 @@ function App() {
 
   /**
    * Deselect all templates in a specific category
-   * @function
    * @param {string} category - Template category identifier
-   * @description Deselects all templates belonging to the specified category
    */
   const handleDeselectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
@@ -353,11 +315,9 @@ function App() {
 
   /**
    * Update processing options
-   * @function
-   * @param {string} category - Option category ('compression', 'output', etc.)
+   * @param {string} category - Option category
    * @param {string} key - Option key within the category
    * @param {any} value - New option value
-   * @description Updates a specific processing option value
    */
   const handleOptionChange = (category, key, value) => {
     setProcessingOptions(prev => ({
@@ -371,10 +331,8 @@ function App() {
 
   /**
    * Update single processing option
-   * @function
    * @param {string} key - Option key to update
    * @param {any} value - New option value
-   * @description Updates a top-level processing option
    */
   const handleSingleOptionChange = (key, value) => {
     setProcessingOptions(prev => ({
@@ -385,9 +343,7 @@ function App() {
 
   /**
    * Get currently selected images for processing
-   * @function
-   * @returns {Array} Array of selected image objects
-   * @description Returns images selected based on current processing mode
+   * @returns {Array<Object>} Array of selected image objects
    */
   const getSelectedImagesForProcessing = () => {
     if (processingOptions.processingMode === 'templates') {
@@ -402,8 +358,7 @@ function App() {
   /**
    * Process images using custom settings
    * @async
-   * @function
-   * @description Applies custom processing options to selected images
+   * @returns {Promise<void>}
    */
   const processCustomImages = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing()
@@ -416,111 +371,11 @@ function App() {
     showModal(t('message.processingImages'), t('message.processingImages', { count: selectedImagesForProcessing.length }))
 
     try {
-      const processedImages = []
-
-      for (let i = 0; i < selectedImagesForProcessing.length; i++) {
-        const image = selectedImagesForProcessing[i]
-        let processedFile = image.file
-
-        // Apply resize if dimension is set
-        if (processingOptions.showResize && processingOptions.resizeDimension) {
-          const resizeResults = await processLemGendaryResize(
-            [image],
-            parseInt(processingOptions.resizeDimension)
-          )
-          if (resizeResults.length > 0) {
-            processedFile = resizeResults[0].resized
-          }
-        }
-
-        // Apply crop if dimensions are set
-        if (processingOptions.showCrop && processingOptions.cropWidth && processingOptions.cropHeight) {
-          let cropResults
-
-          if (processingOptions.cropMode === 'smart') {
-            // Use AI smart crop
-            if (aiLoading) {
-              showModal(t('message.aiLoading'), t('message.aiLoading'))
-              await new Promise(resolve => setTimeout(resolve, 1000))
-            }
-
-            if (aiModelLoaded) {
-              processedFile = await processSmartCrop(
-                processedFile,
-                parseInt(processingOptions.cropWidth),
-                parseInt(processingOptions.cropHeight)
-              )
-            } else {
-              // Fallback to standard crop if AI not loaded
-              cropResults = await processLemGendaryCrop(
-                [{ ...image, file: processedFile }],
-                parseInt(processingOptions.cropWidth),
-                parseInt(processingOptions.cropHeight),
-                processingOptions.cropPosition
-              )
-              if (cropResults.length > 0) {
-                processedFile = cropResults[0].cropped
-              }
-            }
-          } else {
-            // Use standard crop with position
-            cropResults = await processLemGendaryCrop(
-              [{ ...image, file: processedFile }],
-              parseInt(processingOptions.cropWidth),
-              parseInt(processingOptions.cropHeight),
-              processingOptions.cropPosition
-            )
-            if (cropResults.length > 0) {
-              processedFile = cropResults[0].cropped
-            }
-          }
-        }
-
-        // Apply rename if enabled
-        let finalName = image.name
-        if (processingOptions.output.rename && processingOptions.output.newFileName) {
-          const renameResults = await processLemGendaryRename(
-            [{ ...image, file: processedFile }],
-            processingOptions.output.newFileName
-          )
-          if (renameResults.length > 0) {
-            processedFile = renameResults[0].renamed
-            const extension = image.name.split('.').pop()
-            finalName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}.${extension}`
-          }
-        }
-
-        // Convert to output format if not 'original'
-        if (processingOptions.output.format !== 'original') {
-          const hasTransparency = await checkImageTransparency(processedFile)
-          const targetFormat = processingOptions.output.format
-
-          let finalFormat
-          if (targetFormat === 'jpg' && hasTransparency) {
-            finalFormat = 'png'
-          } else {
-            finalFormat = targetFormat
-          }
-
-          processedFile = await optimizeForWeb(
-            processedFile,
-            processingOptions.compression.quality / 100,
-            finalFormat
-          )
-
-          finalName = finalName.replace(/\.[^/.]+$/, '') + '.' + finalFormat
-        }
-
-        processedImages.push({
-          ...image,
-          file: processedFile,
-          name: finalName,
-          processed: true,
-          format: processingOptions.output.format === 'original'
-            ? image.type.split('/')[1]
-            : processingOptions.output.format
-        })
-      }
+      const processedImages = await processCustomImagesBatch(
+        selectedImagesForProcessing,
+        processingOptions,
+        aiModelLoaded
+      )
 
       // Create ZIP with custom processed images
       const settings = {
@@ -548,8 +403,7 @@ function App() {
   /**
    * Process images using social media templates
    * @async
-   * @function
-   * @description Applies selected social media templates to an image
+   * @returns {Promise<void>}
    */
   const processTemplates = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing()
@@ -571,117 +425,8 @@ function App() {
         processingOptions.selectedTemplates.includes(template.id)
       )
 
-      const processedImages = []
       const image = selectedImagesForProcessing[0]
-
-      const isSVG = image.file.type === 'image/svg+xml'
-      const hasTransparency = isSVG ? false : await checkImageTransparency(image.file)
-
-      for (const template of selectedTemplates) {
-        let processedFile = image.file
-
-        // Apply template dimensions
-        if (template.width && template.height) {
-          if (template.height === 'auto') {
-            const resizeResults = await processLemGendaryResize(
-              [image],
-              template.width
-            )
-            if (resizeResults.length > 0) {
-              processedFile = resizeResults[0].resized
-            }
-          } else {
-            // For templates, always use standard crop (not smart crop)
-            const cropResults = await processLemGendaryCrop(
-              [image],
-              template.width,
-              template.height,
-              'center' // Templates use center crop
-            )
-            if (cropResults.length > 0) {
-              processedFile = cropResults[0].cropped
-            }
-          }
-        }
-
-        if (isSVG) {
-          const webpFile = await optimizeForWeb(processedFile, 0.8, 'webp')
-          const jpgPngFile = await optimizeForWeb(processedFile, 0.85, 'png')
-
-          const baseName = `${template.platform}-${template.name}-${image.name.replace(/\.[^/.]+$/, '')}`
-
-          const webpName = `${baseName}.webp`
-          processedImages.push({
-            ...image,
-            file: webpFile,
-            name: webpName,
-            template: template,
-            format: 'webp',
-            processed: true
-          })
-
-          if (template.category === 'web' || template.category === 'logo') {
-            const pngName = `${baseName}.png`
-            processedImages.push({
-              ...image,
-              file: jpgPngFile,
-              name: pngName,
-              template: template,
-              format: 'png',
-              processed: true
-            })
-          } else {
-            const jpgName = `${baseName}.jpg`
-            const socialJpgFile = await optimizeForWeb(processedFile, 0.85, 'jpg')
-            processedImages.push({
-              ...image,
-              file: socialJpgFile,
-              name: jpgName,
-              template: template,
-              format: 'jpg',
-              processed: true
-            })
-          }
-        } else {
-          const webpFile = await optimizeForWeb(processedFile, 0.8, 'webp')
-          const jpgPngFile = await optimizeForWeb(processedFile, 0.85, hasTransparency ? 'png' : 'jpg')
-
-          const baseName = `${template.platform}-${template.name}-${image.name.replace(/\.[^/.]+$/, '')}`
-
-          const webpName = `${baseName}.webp`
-          processedImages.push({
-            ...image,
-            file: webpFile,
-            name: webpName,
-            template: template,
-            format: 'webp',
-            processed: true
-          })
-
-          if (template.category === 'web' || template.category === 'logo') {
-            const jpgPngName = `${baseName}.${hasTransparency ? 'png' : 'jpg'}`
-            processedImages.push({
-              ...image,
-              file: jpgPngFile,
-              name: jpgPngName,
-              template: template,
-              format: hasTransparency ? 'png' : 'jpg',
-              processed: true
-            })
-          } else {
-            const jpgName = `${baseName}.jpg`
-            const socialJpgFile = await optimizeForWeb(processedFile, 0.85, 'jpg')
-            processedImages.push({
-              ...image,
-              file: socialJpgFile,
-              name: jpgName,
-              template: template,
-              format: 'jpg',
-              processed: true
-            })
-          }
-        }
-      }
+      const processedImages = await processTemplateImages(image, selectedTemplates)
 
       const settings = {
         includeOriginal: false,
@@ -707,10 +452,8 @@ function App() {
 
   /**
    * Download processed images as ZIP file
-   * @function
    * @param {Blob} zipBlob - ZIP file blob
    * @param {string} prefix - File name prefix
-   * @description Creates and triggers download of ZIP file containing processed images
    */
   const downloadZip = (zipBlob, prefix) => {
     const url = URL.createObjectURL(zipBlob)
@@ -727,10 +470,8 @@ function App() {
 
   /**
    * Format template names for display using translations
-   * @function
    * @param {string} name - Original template name
    * @returns {string} Formatted display name
-   * @description Converts internal template names to user-friendly display names
    */
   const formatTemplateName = (name) => {
     return t(`template.${name}`) || name
@@ -738,10 +479,8 @@ function App() {
 
   /**
    * Increment number value
-   * @function
    * @param {string} key - State key to update
    * @param {number} increment - Amount to increment by
-   * @description Increases a numeric value by the specified increment
    */
   const incrementValue = (key, increment = 1) => {
     const currentValue = parseInt(processingOptions[key] || '0')
@@ -751,10 +490,8 @@ function App() {
 
   /**
    * Decrement number value
-   * @function
    * @param {string} key - State key to update
    * @param {number} decrement - Amount to decrement by
-   * @description Decreases a numeric value by the specified decrement
    */
   const decrementValue = (key, decrement = 1) => {
     const currentValue = parseInt(processingOptions[key] || '1')
@@ -767,9 +504,6 @@ function App() {
 
   return (
     <div className="app">
-      {/* Language Switcher */}
-      <LanguageSwitcher />
-
       {/* Loading Overlay */}
       {isLoading && (
         <div className="loading-overlay">
@@ -791,28 +525,13 @@ function App() {
         </div>
       )}
 
-      <header className="app-header">
-        <div className="app-header-logo">
-          <img
-            src={lemGendaIcon}
-            alt="LemGenda Icon"
-            className="header-icon"
-          />
-          <div className="header-title">
-            <h1>{t('app.title')}</h1>
-            <p className="app-subtitle">{t('app.subtitle')}</p>
-          </div>
-        </div>
-        <LanguageSwitcher />
-      </header>
+      <Header />
 
       <main className="main-content">
-        <div className="upload-section">
-          <ImageUploader
-            onUpload={handleImageUpload}
-            fileInputRef={fileInputRef}
-          />
-        </div>
+        <ImageUploader
+          onUpload={handleImageUpload}
+          fileInputRef={fileInputRef}
+        />
 
         {images.length > 0 && (
           <>
@@ -849,6 +568,7 @@ function App() {
               {processingOptions.processingMode === 'custom' ? (
                 <>
                   <div className="grid grid-cols-auto gap-lg mb-lg">
+                    {/* Compression Card */}
                     <div className="card">
                       <h3 className="card-title">
                         <i className="fas fa-compress"></i> {t('compression.title')}
@@ -898,6 +618,7 @@ function App() {
                       </div>
                     </div>
 
+                    {/* Output Card */}
                     <div className="card">
                       <h3 className="card-title">
                         <i className="fas fa-file-export"></i> {t('output.title')}
@@ -941,6 +662,7 @@ function App() {
                       )}
                     </div>
 
+                    {/* Resize/Crop Card */}
                     <div className="card">
                       <h3 className="card-title">
                         {processingOptions.showResize ? (
@@ -949,7 +671,11 @@ function App() {
                           </>
                         ) : (
                           <>
-                            <i className="fas fa-crop-alt"></i> {t('crop.title')}
+                            <i className="fas fa-crop-alt"></i> {
+                              processingOptions.cropMode === 'smart'
+                                ? t('crop.switchToStandard').replace('Switch to ', '') // "Smart Crop"
+                                : t('crop.switchToSmart').replace('Switch to ', '')    // "Standard Crop"
+                            }
                           </>
                         )}
                       </h3>
@@ -1025,14 +751,6 @@ function App() {
                                 )}
                               </button>
                             </div>
-
-                            {processingOptions.cropMode === 'smart' && (
-                              <div className="alert alert-info mt-sm">
-                                <i className="fas fa-info-circle"></i>
-                                {t('crop.aiPowered')}
-                                {!aiModelLoaded && !aiLoading && <span className="font-semibold">{t('crop.aiNeedsLoad')}</span>}
-                              </div>
-                            )}
                           </div>
 
                           <div className="grid grid-cols-2 gap-md">
@@ -1124,13 +842,6 @@ function App() {
                               <p className="form-helper">
                                 {t('crop.helper')}
                               </p>
-                            </div>
-                          )}
-
-                          {processingOptions.cropMode === 'smart' && (
-                            <div className="alert alert-info">
-                              <i className="fas fa-lightbulb"></i>
-                              <span>{t('crop.smartBest')}</span>
                             </div>
                           )}
                         </div>
@@ -1381,7 +1092,7 @@ function App() {
                       <img src={image.url} alt={image.name} />
                       <div className="image-info">
                         <span className="image-name">{image.name}</span>
-                        <span className="image-size">{(image.size / 1024).toFixed(2)} KB • {image.type.split('/')[1].toUpperCase()}</span>
+                        <span className="image-size">{formatFileSize(image.size)} • {image.type.split('/')[1].toUpperCase()}</span>
                       </div>
                     </div>
                   )
@@ -1392,37 +1103,7 @@ function App() {
         )}
       </main>
 
-      <footer className="app-footer">
-        <div className="footer-left">
-          <div className="footer-logo-container">
-            <p className="text-muted mb-xs">{t('footer.createdBy')}</p>
-            <a
-              href="https://lemgenda.hr"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block"
-            >
-              <img
-                src={lemGendaLogo}
-                alt="LemGenda Logo"
-                className="footer-logo"
-              />
-            </a>
-          </div>
-        </div>
-
-        <div className="footer-right">
-          <div className="footer-text">
-            <p className="text-muted">{t('app.version')} - {t('app.processClientSide')}</p>
-            <p className="text-muted text-sm mt-xs">
-              <i className="fas fa-shield-alt"></i> {t('app.imagesNeverLeave')}
-            </p>
-            <p className="text-muted text-sm mt-xs">
-              <i className="fas fa-brain"></i> {t('footer.aiEnabled')}
-            </p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
 
       <Modal
         isOpen={modal.isOpen}

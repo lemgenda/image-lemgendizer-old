@@ -1,22 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getLanguages, getCurrentLanguage } from '../utils/imageProcessor';
 
+/**
+ * A dropdown component for switching between application languages.
+ */
 function LanguageSwitcher() {
     const { i18n } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
 
-    const languages = [
-        { code: 'en', name: 'English', flag: '🇺🇸' },
-        { code: 'hr', name: 'Hrvatski', flag: '🇭🇷' }
-    ];
-
-    const currentLanguage = languages.find(lang => lang.code === i18n.language) || languages[0];
-
-    const changeLanguage = (lng) => {
-        i18n.changeLanguage(lng);
-        setIsOpen(false);
-    };
+    const languages = getLanguages();
+    const currentLanguage = getCurrentLanguage(i18n.language);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -191,7 +186,10 @@ function LanguageSwitcher() {
                                 <button
                                     key={lang.code}
                                     className={`language-option-btn ${i18n.language === lang.code ? 'active' : ''}`}
-                                    onClick={() => changeLanguage(lang.code)}
+                                    onClick={() => {
+                                        i18n.changeLanguage(lang.code);
+                                        setIsOpen(false);
+                                    }}
                                     aria-label={`Switch to ${lang.name}`}
                                 >
                                     <span className="language-flag">{lang.flag}</span>

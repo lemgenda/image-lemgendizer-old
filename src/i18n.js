@@ -45,15 +45,15 @@ const resources = {
 
             // Resize
             'resize.title': 'Resize',
-            'resize.switchToCrop': 'Switch to Crop Mode',
-            'resize.switchToResize': 'Switch to Resize Mode',
+            'resize.switchToCrop': 'Crop Mode',
+            'resize.switchToResize': 'Resize Mode',
             'resize.dimension': 'Resize Dimension (px)',
             'resize.helper': 'For portrait: sets height. For landscape: sets width. Aspect ratio maintained.',
 
             // Crop
             'crop.title': 'Crop',
-            'crop.switchToStandard': 'Switch to Standard Crop',
-            'crop.switchToSmart': 'Switch to Smart Crop',
+            'crop.switchToStandard': 'Standard Crop',
+            'crop.switchToSmart': 'Smart Crop',
             'crop.aiPowered': 'AI-powered: Detects main subject and crops intelligently',
             'crop.aiNeedsLoad': ' (AI model needs to load)',
             'crop.width': 'Crop Width (px)',
@@ -219,15 +219,15 @@ const resources = {
 
             // Resize
             'resize.title': 'Promjena veličine',
-            'resize.switchToCrop': 'Prebaci na način obrezivanja',
-            'resize.switchToResize': 'Prebaci na način promjene veličine',
+            'resize.switchToCrop': 'Obrezivanje',
+            'resize.switchToResize': 'Promjena veličine',
             'resize.dimension': 'Dimenzija promjene veličine (px)',
             'resize.helper': 'Za portret: postavlja visinu. Za pejzaž: postavlja širinu. Omjer slike se održava.',
 
             // Crop
             'crop.title': 'Obrezivanje',
-            'crop.switchToStandard': 'Prebaci na standardno obrezivanje',
-            'crop.switchToSmart': 'Prebaci na pametno obrezivanje',
+            'crop.switchToStandard': 'Standardno obrezivanje',
+            'crop.switchToSmart': 'Pametno obrezivanje',
             'crop.aiPowered': 'AI-powered: Detektira glavni subjekt i pametno obrezuje',
             'crop.aiNeedsLoad': ' (AI model se treba učitati)',
             'crop.width': 'Širina obrezivanja (px)',
