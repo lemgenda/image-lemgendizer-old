@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from './LanguageSwitcher';
-import lemGendaIcon from '../assets/lemgenda-icon.svg';
+import { LemGendaIcon } from './LemGendaIcon';
 
 function Header() {
     const { t } = useTranslation();
@@ -9,8 +9,10 @@ function Header() {
         <>
             <style>{`
                 .app-header {
-                    text-align: center;
-                    padding-bottom: var(--space-lg);
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: var(--space-lg) 0;
                     border-bottom: 1px solid var(--border-color);
                     position: relative;
                 }
@@ -18,50 +20,97 @@ function Header() {
                 .app-header-logo {
                     display: flex;
                     align-items: center;
-                    justify-content: center;
                     gap: var(--space-lg);
-                    margin-bottom: var(--space-sm);
                 }
 
                 .header-icon {
-                    width: 60px;
-                    height: 60px;
+                    width: 80px;
+                    height: 80px;
+                    flex-shrink: 0;
+                    color: var(--color-primary);
+                }
+
+                .header-title {
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
                 }
 
                 .header-title h1 {
                     color: var(--color-primary);
-                    margin-bottom: var(--space-xs);
+                    margin: 0;
+                    font-size: 1.8rem;
+                    line-height: 1.2;
                 }
 
                 .app-subtitle {
                     color: var(--color-text-muted);
                     font-size: 1rem;
                     font-weight: 400;
+                    margin-top: var(--space-xs);
+                    margin-bottom: 0;
+                }
+
+                .header-right {
+                    display: flex;
+                    align-items: center;
                 }
 
                 /* Mobile adjustments */
+                @media (max-width: 768px) {
+                    .app-header {
+                        flex-direction: column;
+                        align-items: stretch;
+                        gap: var(--space-md);
+                    }
+
+                    .app-header-logo {
+                        justify-content: center;
+                        text-align: center;
+                    }
+
+                    .header-title h1 {
+                        font-size: 1.6rem;
+                    }
+
+                    .header-icon {
+                        width: 60px;
+                        height: 60px;
+                    }
+                }
+
                 @media (max-width: 480px) {
                     .app-header-logo {
                         flex-direction: column;
-                        text-align: center;
                         gap: var(--space-md);
+                    }
+
+                    .header-title {
+                        text-align: center;
+                    }
+
+                    .header-title h1 {
+                        font-size: 1.4rem;
+                    }
+
+                    .header-icon {
+                        width: 50px;
+                        height: 50px;
                     }
                 }
             `}</style>
 
             <header className="app-header">
                 <div className="app-header-logo">
-                    <img
-                        src={lemGendaIcon}
-                        alt="LemGenda Icon"
-                        className="header-icon"
-                    />
+                    <LemGendaIcon className="header-icon" />
                     <div className="header-title">
                         <h1>{t('app.title')}</h1>
                         <p className="app-subtitle">{t('app.subtitle')}</p>
                     </div>
                 </div>
-                <LanguageSwitcher />
+                <div className="header-right">
+                    <LanguageSwitcher />
+                </div>
             </header>
         </>
     );

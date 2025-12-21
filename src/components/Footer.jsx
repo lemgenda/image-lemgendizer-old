@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import lemGendaLogo from '../assets/lemgenda-logo.svg';
+import { LemGendaLogo } from './LemGendaLogo'; // Import the new component
 
 function Footer() {
     const { t } = useTranslation();
@@ -8,9 +8,9 @@ function Footer() {
         <>
             <style>{`
                 .app-footer {
-                    margin-top: var(--space-xl);
+                    margin-top: var(--space-sm);
                     color: var(--color-text-muted);
-                    padding-top: var(--space-lg);
+                    padding-top: var(--space-xs);
                     border-top: 1px solid var(--border-color);
                     font-size: 0.875rem;
                     display: flex;
@@ -33,13 +33,14 @@ function Footer() {
                 }
 
                 .footer-logo-container {
-                    margin-bottom: var(--space-md);
+                    margin-bottom: var(--space-xs);
                 }
 
                 .footer-logo {
                     height: 30px;
                     opacity: 0.8;
                     transition: opacity var(--transition-fast);
+                    color: var(--color-primary); /* Color controlled here */
                 }
 
                 .footer-logo:hover {
@@ -48,6 +49,26 @@ function Footer() {
 
                 .footer-text {
                     margin-bottom: var(--space-xs);
+                }
+
+                .text-muted {
+                    color: var(--color-text-muted);
+                }
+
+                .mb-xs {
+                    margin-bottom: var(--space-xs);
+                }
+
+                .mt-xs {
+                    margin-top: var(--space-xs);
+                }
+
+                .text-sm {
+                    font-size: 0.8125rem;
+                }
+
+                .inline-block {
+                    display: inline-block;
                 }
 
                 /* Mobile adjustments */
@@ -68,32 +89,27 @@ function Footer() {
 
             <footer className="app-footer">
                 <div className="footer-left">
+                    <div className="footer-text">
+                        <p className="text-muted text-sm mb-xs">
+                            <i className="fas fa-shield-alt"></i> {t('app.imagesNeverLeave')}
+                        </p>
+                        <p className="text-muted text-sm mb-xs">
+                            <i className="fas fa-brain"></i> {t('footer.aiEnabled')}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="footer-right">
                     <div className="footer-logo-container">
-                        <p className="text-muted mb-xs">{t('footer.createdBy')}</p>
+                        <p className="text-muted mb-xs">{t('app.version')}</p>
                         <a
                             href="https://lemgenda.hr"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-block"
                         >
-                            <img
-                                src={lemGendaLogo}
-                                alt="LemGenda Logo"
-                                className="footer-logo"
-                            />
+                            <LemGendaLogo className="footer-logo" />
                         </a>
-                    </div>
-                </div>
-
-                <div className="footer-right">
-                    <div className="footer-text">
-                        <p className="text-muted">{t('app.version')} - {t('app.processClientSide')}</p>
-                        <p className="text-muted text-sm mt-xs">
-                            <i className="fas fa-shield-alt"></i> {t('app.imagesNeverLeave')}
-                        </p>
-                        <p className="text-muted text-sm mt-xs">
-                            <i className="fas fa-brain"></i> {t('footer.aiEnabled')}
-                        </p>
                     </div>
                 </div>
             </footer>
