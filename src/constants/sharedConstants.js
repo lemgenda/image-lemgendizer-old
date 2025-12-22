@@ -34,12 +34,36 @@ export const MAX_TOTAL_PIXELS = 16000000;
 export const MAX_TOTAL_PIXELS_FOR_AI = 8000000;
 
 /**
+ * Maximum scale factor for upscaling operations
+ * Prevents excessive upscaling that could cause quality issues
+ * @constant {number}
+ * @default 4
+ */
+export const MAX_SCALE_FACTOR = 4;
+
+/**
+ * Maximum pixels for smart sharpening operations
+ * Prevents performance issues with large images
+ * @constant {number}
+ * @default 4000000
+ */
+export const MAX_PIXELS_FOR_SMART_SHARPENING = 4000000;
+
+/**
  * Maximum dimension for AI processing in pixels
  * Increased from 2000 to 3000 for better AI performance
  * @constant {number}
  * @default 3000
  */
 export const MAX_DIMENSION_FOR_AI = 3000;
+
+/**
+ * Large image threshold for template processing
+ * Images larger than this will use simpler processing
+ * @constant {number}
+ * @default 4000000
+ */
+export const LARGE_IMAGE_THRESHOLD = 4000000;
 
 /**
  * Supported input image MIME types and formats
@@ -92,6 +116,17 @@ export const AVAILABLE_UPSCALE_FACTORS = [2, 3, 4];
  */
 export const TILE_SIZE = 2048;
 
+/**
+ * AI model settings
+ * @constant {Object}
+ */
+export const AI_SETTINGS = {
+    MIN_CONFIDENCE: 0.3,
+    FACE_DETECTION_ENABLED: true,
+    OBJECT_DETECTION_ENABLED: true,
+    DEFAULT_CROP_STRATEGY: 'balanced'
+};
+
 // ================================
 // Performance Constants
 // ================================
@@ -128,6 +163,16 @@ export const MEMORY_CLEANUP_INTERVAL = 10000;
  */
 export const UPSCALER_IDLE_TIMEOUT = 30000;
 
+/**
+ * Processing delays for better UI responsiveness
+ * @constant {Object}
+ */
+export const PROCESSING_DELAYS = {
+    BETWEEN_IMAGES: 100,
+    BETWEEN_BATCHES: 500,
+    MEMORY_CLEANUP: 50
+};
+
 // ================================
 // Quality Constants
 // ================================
@@ -139,6 +184,24 @@ export const UPSCALER_IDLE_TIMEOUT = 30000;
  * @default 0.85
  */
 export const DEFAULT_QUALITY = 0.85;
+
+/**
+ * Default compression quality percentage (1-100 scale)
+ * Used in UI components
+ * @constant {number}
+ * @default 85
+ */
+export const DEFAULT_COMPRESSION_QUALITY = 85;
+
+/**
+ * Compression quality range
+ * @constant {Object}
+ */
+export const COMPRESSION_QUALITY_RANGE = {
+    MIN: 1,
+    MAX: 100,
+    DEFAULT: 85
+};
 
 /**
  * Default WebP compression quality (0-1 scale)
@@ -161,6 +224,12 @@ export const DEFAULT_PNG_QUALITY = 0.9;
 // ================================
 
 /**
+ * Default output formats
+ * @constant {string[]}
+ */
+export const DEFAULT_OUTPUT_FORMATS = ['webp'];
+
+/**
  * Available output formats with descriptions for UI display
  * @constant {Array<{id: string, name: string, description: string}>}
  */
@@ -170,6 +239,18 @@ export const OUTPUT_FORMATS = [
     { id: 'jpg', name: 'JPEG', description: 'Standard format with good compression' },
     { id: 'png', name: 'PNG', description: 'Lossless format with transparency support' },
     { id: 'original', name: 'Original', description: 'Keep original format' }
+];
+
+/**
+ * Output format options for UI selection
+ * @constant {Array<{id: string, name: string}>}
+ */
+export const OUTPUT_FORMAT_OPTIONS = [
+    { id: 'webp', name: 'WebP' },
+    { id: 'avif', name: 'AVIF' },
+    { id: 'jpg', name: 'JPEG' },
+    { id: 'png', name: 'PNG' },
+    { id: 'original', name: 'Original' }
 ];
 
 /**
@@ -220,12 +301,33 @@ export const MAX_TARGET_FILESIZE_KB = 100000;
 export const MAX_CROP_DIMENSION = 10000;
 
 /**
+ * Crop dimension range
+ * @constant {Object}
+ */
+export const CROP_DIMENSION_RANGE = {
+    MIN: 1,
+    MAX: MAX_CROP_DIMENSION,
+    DEFAULT_WIDTH: 1080,
+    DEFAULT_HEIGHT: 1080
+};
+
+/**
  * Maximum resize dimension in pixels
  * Prevents unrealistic resize operations
  * @constant {number}
  * @default 10000
  */
 export const MAX_RESIZE_DIMENSION = 10000;
+
+/**
+ * Resize dimension range
+ * @constant {Object}
+ */
+export const RESIZE_DIMENSION_RANGE = {
+    MIN: 1,
+    MAX: MAX_RESIZE_DIMENSION,
+    DEFAULT: 1080
+};
 
 /**
  * Regex pattern for invalid filename characters
@@ -288,3 +390,101 @@ export const CROP_POSITIONS = [
     'center', 'top-left', 'top', 'top-right', 'left',
     'right', 'bottom-left', 'bottom', 'bottom-right'
 ];
+
+/**
+ * Default margin for crop operations in pixels
+ * Prevents cropping too close to image edges
+ * @constant {number}
+ * @default 10
+ */
+export const CROP_MARGIN = 10;
+
+// ================================
+// Export Constants
+// ================================
+
+/**
+ * Export folder names for organized file structure
+ * @constant {Object}
+ */
+export const EXPORT_FOLDERS = {
+    ORIGINAL_IMAGES: 'OriginalImages',
+    OPTIMIZED_IMAGES: 'OptimizedImages',
+    WEB_IMAGES: 'WebImages',
+    LOGO_IMAGES: 'LogoImages',
+    SOCIAL_MEDIA_IMAGES: 'SocialMediaImages'
+};
+
+/**
+ * Social media platform names for organized export
+ * @constant {Object}
+ */
+export const PLATFORM_NAMES = {
+    INSTAGRAM: 'Instagram',
+    FACEBOOK: 'Facebook',
+    TWITTER_X: 'Twitter/X',
+    LINKEDIN: 'LinkedIn',
+    YOUTUBE: 'YouTube',
+    PINTEREST: 'Pinterest',
+    TIKTOK: 'TikTok'
+};
+
+/**
+ * Template names for different social media platforms
+ * @constant {Object}
+ */
+export const TEMPLATE_NAMES = {
+    INSTAGRAM: [
+        'InstagramProfile',
+        'InstagramSquare',
+        'InstagramPortrait',
+        'InstagramLandscape',
+        'InstagramStoriesReels'
+    ],
+    FACEBOOK: [
+        'FacebookProfile',
+        'FacebookCoverBanner',
+        'FacebookSharedImage',
+        'FacebookSquarePost',
+        'FacebookStories'
+    ],
+    TWITTER_X: [
+        'XProfile',
+        'XHeaderBanner',
+        'XLandscapePost',
+        'XSquarePost',
+        'XPortraitPost'
+    ],
+    LINKEDIN: [
+        'LinkedInProfile',
+        'LinkedInPersonalCover',
+        'LinkedInLandscapePost',
+        'LinkedInSquarePost',
+        'LinkedInPortraitPost'
+    ],
+    YOUTUBE: [
+        'YouTubeChannelIcon',
+        'YouTubeBanner',
+        'YouTubeThumbnail'
+    ],
+    PINTEREST: [
+        'PinterestProfile',
+        'PinterestStandardPin',
+        'PinterestSquarePin',
+        'PinterestStoryPin'
+    ],
+    TIKTOK: [
+        'TikTokProfile',
+        'TikTokVideoCover'
+    ]
+};
+
+/**
+ * Template categories for organization
+ * @constant {Object}
+ */
+export const TEMPLATE_CATEGORIES = {
+    WEB: 'web',
+    LOGO: 'logo',
+    SOCIAL_MEDIA: 'social_media'
+};

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { LemGendaLogo } from './LemGendaLogo'; // Import the new component
+import LemGendaLogo from './LemGendaLogo';
 
 function Footer() {
     const { t } = useTranslation();

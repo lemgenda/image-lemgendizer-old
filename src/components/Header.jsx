@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from './LanguageSwitcher';
-import { LemGendaIcon } from './LemGendaIcon';
+import LemGendaIcon from './LemGendaIcon';
 
 function Header() {
     const { t } = useTranslation();

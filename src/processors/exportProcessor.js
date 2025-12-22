@@ -1,4 +1,11 @@
 import JSZip from 'jszip';
+import {
+    PROCESSING_MODES,
+    EXPORT_FOLDERS,
+    TEMPLATE_CATEGORIES,
+    PLATFORM_NAMES,
+    TEMPLATE_NAMES
+} from '../constants/sharedConstants';
 
 /**
  * Creates export settings based on processing mode.
@@ -16,13 +23,13 @@ export const generateExportSettings = (mode) => {
         createFolders: true
     };
 
-    if (mode === 'custom') {
+    if (mode === PROCESSING_MODES.CUSTOM) {
         return {
             ...baseSettings,
             includeOriginal: true,
             includeOptimized: true
         };
-    } else if (mode === 'templates') {
+    } else if (mode === PROCESSING_MODES.TEMPLATES) {
         return {
             ...baseSettings,
             includeWebImages: true,
@@ -41,10 +48,10 @@ export const generateExportSettings = (mode) => {
  * @returns {Array<string>} Array of folder paths
  */
 export const getExportFolderStructure = (mode) => {
-    if (mode === 'custom') {
-        return ['OriginalImages', 'OptimizedImages'];
-    } else if (mode === 'templates') {
-        return ['WebImages', 'LogoImages', 'SocialMediaImages'];
+    if (mode === PROCESSING_MODES.CUSTOM) {
+        return [EXPORT_FOLDERS.ORIGINAL_IMAGES, EXPORT_FOLDERS.OPTIMIZED_IMAGES];
+    } else if (mode === PROCESSING_MODES.TEMPLATES) {
+        return [EXPORT_FOLDERS.WEB_IMAGES, EXPORT_FOLDERS.LOGO_IMAGES, EXPORT_FOLDERS.SOCIAL_MEDIA_IMAGES];
     }
     return [];
 };
@@ -78,14 +85,15 @@ export const organizeImagesByFormat = (processedImages) => {
  * @returns {Object} Templates grouped by platform
  */
 export const organizeTemplatesByPlatform = (socialTemplates) => {
+    // Use imported constants instead of hardcoding
     const platforms = {
-        'Instagram': ['InstagramProfile', 'InstagramSquare', 'InstagramPortrait', 'InstagramLandscape', 'InstagramStoriesReels'],
-        'Facebook': ['FacebookProfile', 'FacebookCoverBanner', 'FacebookSharedImage', 'FacebookSquarePost', 'FacebookStories'],
-        'Twitter/X': ['XProfile', 'XHeaderBanner', 'XLandscapePost', 'XSquarePost', 'XPortraitPost'],
-        'LinkedIn': ['LinkedInProfile', 'LinkedInPersonalCover', 'LinkedInLandscapePost', 'LinkedInSquarePost', 'LinkedInPortraitPost'],
-        'YouTube': ['YouTubeChannelIcon', 'YouTubeBanner', 'YouTubeThumbnail'],
-        'Pinterest': ['PinterestProfile', 'PinterestStandardPin', 'PinterestSquarePin', 'PinterestStoryPin'],
-        'TikTok': ['TikTokProfile', 'TikTokVideoCover']
+        [PLATFORM_NAMES.INSTAGRAM]: TEMPLATE_NAMES.INSTAGRAM,
+        [PLATFORM_NAMES.FACEBOOK]: TEMPLATE_NAMES.FACEBOOK,
+        [PLATFORM_NAMES.TWITTER_X]: TEMPLATE_NAMES.TWITTER_X,
+        [PLATFORM_NAMES.LINKEDIN]: TEMPLATE_NAMES.LINKEDIN,
+        [PLATFORM_NAMES.YOUTUBE]: TEMPLATE_NAMES.YOUTUBE,
+        [PLATFORM_NAMES.PINTEREST]: TEMPLATE_NAMES.PINTEREST,
+        [PLATFORM_NAMES.TIKTOK]: TEMPLATE_NAMES.TIKTOK
     };
 
     const organized = {};
@@ -119,7 +127,7 @@ export const createExportZip = async (originalImages, processedImages, settings,
 
     // Add original images
     if (settings.includeOriginal && originalImages.length > 0 && originalImages.some(img => img.file)) {
-        const originalFolder = zip.folder('OriginalImages');
+        const originalFolder = zip.folder(EXPORT_FOLDERS.ORIGINAL_IMAGES);
         for (const image of originalImages) {
             if (image.file) {
                 originalFolder.file(image.name, image.file);
@@ -128,12 +136,12 @@ export const createExportZip = async (originalImages, processedImages, settings,
     }
 
     // For custom mode: organize by format
-    if (mode === 'custom' && settings.includeOptimized && processedImages.length > 0) {
+    if (mode === PROCESSING_MODES.CUSTOM && settings.includeOptimized && processedImages.length > 0) {
         const groupedByFormat = organizeImagesByFormat(processedImages);
 
         Object.keys(groupedByFormat).forEach(format => {
             if (groupedByFormat[format].length > 0) {
-                const formatFolder = zip.folder(`OptimizedImages/${format.toUpperCase()}`);
+                const formatFolder = zip.folder(`${EXPORT_FOLDERS.OPTIMIZED_IMAGES}/${format.toUpperCase()}`);
                 groupedByFormat[format].forEach(image => {
                     let fileName = image.name;
                     if (!fileName.includes('.')) {
@@ -146,13 +154,13 @@ export const createExportZip = async (originalImages, processedImages, settings,
     }
 
     // Add WebImages folder (for templates mode) - WebP + JPEG/PNG
-    if (mode === 'templates' && settings.includeWebImages && processedImages.length > 0) {
+    if (mode === PROCESSING_MODES.TEMPLATES && settings.includeWebImages && processedImages.length > 0) {
         const webTemplates = processedImages.filter(img =>
-            img.template?.category === 'web' && img.file
+            img.template?.category === TEMPLATE_CATEGORIES.WEB && img.file
         );
 
         if (webTemplates.length > 0) {
-            const webFolder = zip.folder('WebImages');
+            const webFolder = zip.folder(EXPORT_FOLDERS.WEB_IMAGES);
             const webpImages = webTemplates.filter(img => img.format === 'webp');
             const pngImages = webTemplates.filter(img => img.format === 'png');
             const jpgImages = webTemplates.filter(img => img.format === 'jpg');
@@ -164,13 +172,13 @@ export const createExportZip = async (originalImages, processedImages, settings,
     }
 
     // Add LogoImages folder (for templates mode) - JPEG/PNG(if transparent)
-    if (mode === 'templates' && settings.includeLogoImages && processedImages.length > 0) {
+    if (mode === PROCESSING_MODES.TEMPLATES && settings.includeLogoImages && processedImages.length > 0) {
         const logoTemplates = processedImages.filter(img =>
-            img.template?.category === 'logo' && img.file
+            img.template?.category === TEMPLATE_CATEGORIES.LOGO && img.file
         );
 
         if (logoTemplates.length > 0) {
-            const logoFolder = zip.folder('LogoImages');
+            const logoFolder = zip.folder(EXPORT_FOLDERS.LOGO_IMAGES);
             const pngImages = logoTemplates.filter(img => img.format === 'png');
             const jpgImages = logoTemplates.filter(img => img.format === 'jpg');
 
@@ -180,10 +188,10 @@ export const createExportZip = async (originalImages, processedImages, settings,
     }
 
     // Add SocialMediaImages folder with organized subfolders
-    if (mode === 'templates' && settings.includeSocialMedia && processedImages.length > 0) {
+    if (mode === PROCESSING_MODES.TEMPLATES && settings.includeSocialMedia && processedImages.length > 0) {
         const socialTemplates = processedImages.filter(img =>
-            img.template?.category !== 'web' &&
-            img.template?.category !== 'logo' &&
+            img.template?.category !== TEMPLATE_CATEGORIES.WEB &&
+            img.template?.category !== TEMPLATE_CATEGORIES.LOGO &&
             img.file
         );
 
@@ -191,7 +199,7 @@ export const createExportZip = async (originalImages, processedImages, settings,
             const organizedPlatforms = organizeTemplatesByPlatform(socialTemplates);
 
             Object.entries(organizedPlatforms).forEach(([platform, platformImages]) => {
-                const platformFolder = zip.folder(`SocialMediaImages/${platform}`);
+                const platformFolder = zip.folder(`${EXPORT_FOLDERS.SOCIAL_MEDIA_IMAGES}/${platform}`);
                 platformImages.forEach(image => {
                     platformFolder.file(image.name, image.file);
                 });

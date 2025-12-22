@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getLanguages, getCurrentLanguage } from '../utils/imageProcessor';
+import { getLanguages, getCurrentLanguage } from '../utils';
 
 /**
  * A dropdown component for switching between application languages.

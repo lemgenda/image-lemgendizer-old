@@ -1,7 +1,6 @@
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next';
-import { handleImageDrop, handleFileSelect } from '../utils/imageProcessor';
-import '../styles/App.css'
+import { handleImageDrop, handleFileSelect } from '../processors';
 
 /**
  * A drag-and-drop and file selection component for uploading images.

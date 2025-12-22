@@ -1,29 +1,37 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import ImageUploader from './components/ImageUploader';
-import Header from './components/Header';
-import Footer from './components/Footer';
-import Modal from './components/Modal';
-import RangeSlider from './components/RangeSlider';
-import { createExportZip, downloadZip, generateExportSettings } from './utils/exportUtils';
 import {
   orchestrateCustomProcessing,
   orchestrateTemplateProcessing,
   createImageObjects,
   loadAIModel,
-  validateProcessingOptions,
   getProcessingConfiguration,
   createProcessingSummary,
-  calculateTotalTemplateFiles,
-  formatFileSize,
   cleanupBlobUrls,
-  getAvailableFormats,
-  getTemplateById,
-  getTemplatesByCategory,
-  generateFileName,
+  createExportZip,
+  downloadZip,
+  generateExportSettings,
   loadUTIFLibrary
-} from './utils/imageProcessor';
+} from './processors';
+import {
+  validateProcessingOptions,
+  calculateTotalTemplateFiles,
+  formatFileSize
+} from './utils';
 import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './configs/templateConfigs';
+import {
+  PROCESSING_MODES,
+  DEFAULT_COMPRESSION_QUALITY,
+  DEFAULT_OUTPUT_FORMATS,
+  COMPRESSION_QUALITY_RANGE
+} from './constants/sharedConstants';
+import {
+  ImageUploader,
+  Header,
+  Footer,
+  Modal,
+  RangeSlider
+} from './components';
 import './styles/App.css';
 
 /**
@@ -47,11 +55,11 @@ function App() {
   const [processingSummary, setProcessingSummary] = useState(null);
   const [processingOptions, setProcessingOptions] = useState({
     compression: {
-      quality: 80,
+      quality: DEFAULT_COMPRESSION_QUALITY,  // Using constant
       fileSize: ''
     },
     output: {
-      formats: ['webp'],
+      formats: DEFAULT_OUTPUT_FORMATS,  // Using constant
       rename: false,
       newFileName: ''
     },
@@ -62,7 +70,7 @@ function App() {
     showCrop: false,
     showTemplates: false,
     selectedTemplates: [],
-    processingMode: 'custom',
+    processingMode: PROCESSING_MODES.CUSTOM,  // Using constant
     templateSelectedImage: null,
     smartCrop: false,
     cropMode: 'smart',
@@ -690,8 +698,8 @@ function App() {
                         <div className="range-wrapper">
                           <RangeSlider
                             label={t('compression.quality')}
-                            min={1}
-                            max={100}
+                            min={COMPRESSION_QUALITY_RANGE.MIN}  // Using constant
+                            max={COMPRESSION_QUALITY_RANGE.MAX}  // Using constant
                             value={processingOptions.compression.quality}
                             onChange={(val) =>
                               handleOptionChange('compression', 'quality', val)

@@ -1,5 +1,5 @@
 // src/components/LemGendaLogo.jsx
-export const LemGendaLogo = ({ className = "", ...props }) => (
+const LemGendaLogo = ({ className = "", ...props }) => (
     <svg
         className={`footer-logo ${className}`}
         width="180"
@@ -32,3 +32,5 @@ export const LemGendaLogo = ({ className = "", ...props }) => (
         <path d="M427.5,63.5l21-36h6l21,36h-5.3l-4.5-8.3h-28.5l-4.5,8.3H427.5z M439.5,51.5h24l-12-21L439.5,51.5z" />
     </svg>
 );
+
+export default LemGendaLogo;

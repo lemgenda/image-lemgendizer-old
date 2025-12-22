@@ -1,4 +1,4 @@
-export const LemGendaIcon = ({ className = "", ...props }) => (
+const LemGendaIcon = ({ className = "", ...props }) => (
     <svg
         className={`header-icon ${className}`}
         width="80"
@@ -16,3 +16,5 @@ export const LemGendaIcon = ({ className = "", ...props }) => (
       l78.4-8.3c2.2-0.2,3.4-2.7,2.2-4.6L158.4,98.5L158.4,98.5z M108.3,95.8H70.4l37.8,66.2l37.8-66.2H108.3z"/>
     </svg>
 );
+
+export default LemGendaIcon;

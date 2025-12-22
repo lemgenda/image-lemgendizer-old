@@ -1,200 +1,59 @@
 import UTIF from 'utif';
-// Make it globally available if needed
+import {
+    MEMORY_CLEANUP_INTERVAL,
+    UPSCALER_IDLE_TIMEOUT,
+    MIME_TYPE_MAP,
+    INVALID_FILENAME_CHARS,
+    CROP_POSITIONS,
+    MAX_TEXTURE_SIZE,
+    MAX_SAFE_DIMENSION,
+    MAX_TOTAL_PIXELS,
+    MAX_TOTAL_PIXELS_FOR_AI,
+    MAX_DIMENSION_FOR_AI,
+    SUPPORTED_INPUT_FORMATS,
+    LEGACY_FORMATS,
+    TIFF_FORMATS,
+    MAX_TEXTURE_FAILURES,
+    AVAILABLE_UPSCALE_FACTORS,
+    TILE_SIZE,
+    AI_SETTINGS,
+    IMAGE_LOAD_TIMEOUT,
+    UPSCALING_TIMEOUT,
+    DEFAULT_QUALITY,
+    DEFAULT_WEBP_QUALITY,
+    DEFAULT_PNG_QUALITY,
+    OUTPUT_FORMATS,
+    PROCESSING_MODES,
+    CROP_MODES,
+    CROP_MARGIN,
+    MAX_SCALE_FACTOR,
+    MAX_PIXELS_FOR_SMART_SHARPENING
+} from '../constants/sharedConstants';
+
+import {
+    cleanupGPUMemory,
+    initializeGPUMemoryMonitor,
+    ensureFileObject,
+    createTIFFPlaceholderFile,
+    checkAVIFSupport,
+    getTemplateById
+} from '../utils';
+
 if (!window.UTIF) {
     window.UTIF = UTIF;
 }
 
-/**
- * Main image processing module with AI capabilities, upscaling, memory management, and TIFF support.
- * Supports various image formats including JPEG, PNG, GIF, WebP, SVG, AVIF, TIFF, BMP, and ICO.
- * @module imageProcessor
- */
-
-// ================================
-// Constants and State Management
-// ================================
-
-/** Maximum texture size supported by GPU */
-const MAX_TEXTURE_SIZE = 16384;
-
-/** Maximum safe dimension for processing */
-const MAX_SAFE_DIMENSION = 4096;
-
-/** Maximum total pixels for safe processing */
-const MAX_TOTAL_PIXELS = 16000000;
-const MAX_TOTAL_PIXELS_FOR_AI = 8000000; // 8MP for AI processing
-const MAX_DIMENSION_FOR_AI = 3000; // Increased from 2000 to 3000
-
-
-/** Supported input image formats */
-const SUPPORTED_INPUT_FORMATS = [
-    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-    'image/svg+xml', 'image/avif', 'image/tiff', 'image/bmp',
-    'image/x-icon', 'image/vnd.microsoft.icon',
-    'image/tif', 'application/tif', 'application/tiff'
-];
-
-/** Legacy formats that need conversion */
-const LEGACY_FORMATS = ['image/tiff', 'image/bmp', 'image/x-icon', 'image/vnd.microsoft.icon'];
-
-/** TIFF format identifiers */
-const TIFF_FORMATS = ['image/tiff', 'image/tif', 'application/tif', 'application/tiff'];
-
-/** Maximum texture failures before disabling AI upscaling */
-const MAX_TEXTURE_FAILURES = 3;
-
-/** AI model instance */
 let aiModel = null;
-
-/** AI model loading state */
 let aiModelLoading = false;
-
-/** Upscaler instances by scale */
 let upscalerInstances = {};
-
-/** Upscaler usage count by scale */
 let upscalerUsageCount = {};
-
-/** Last used timestamps for upscalers */
 let upscalerLastUsed = {};
-
-/** Current GPU memory usage in MB */
 let currentMemoryUsage = 0;
-
-/** Memory cleanup interval reference */
 let memoryCleanupInterval = null;
-
-/** Whether AI upscaling is disabled */
 let aiUpscalingDisabled = false;
-
-/** Texture manager failure count */
 let textureManagerFailures = 0;
-
-/** Whether cleanup is in progress */
 let cleanupInProgress = false;
 
-// ================================
-// GPU Memory Management
-// ================================
-
-/**
- * Initializes GPU memory monitoring system.
- * @returns {void}
- */
-const initializeGPUMemoryMonitor = () => {
-    if (memoryCleanupInterval) clearInterval(memoryCleanupInterval);
-    memoryCleanupInterval = setInterval(monitorGPUMemory, 10000);
-};
-
-/**
- * Monitors GPU memory usage and triggers cleanup when necessary.
- * @returns {void}
- */
-const monitorGPUMemory = () => {
-    if (cleanupInProgress) return;
-
-    if (window.tf && tf.memory()) {
-        const memoryInfo = tf.memory();
-        currentMemoryUsage = (memoryInfo.numBytesInGPU || 0) / (1024 * 1024);
-
-        const upscalersInUse = Object.values(upscalerUsageCount).some(count => count > 0);
-        if (currentMemoryUsage > 3000 && !upscalersInUse) {
-            safeCleanupGPUMemory();
-        }
-    }
-};
-
-/**
- * Safely cleans up GPU memory without disposing models that are in use.
- * @returns {void}
- */
-const safeCleanupGPUMemory = () => {
-    if (cleanupInProgress) return;
-    cleanupInProgress = true;
-
-    try {
-        if (window.tf) {
-            const upscalersInUse = Object.values(upscalerUsageCount).some(count => count > 0);
-            if (!upscalersInUse) {
-                const now = Date.now();
-                Object.keys(upscalerInstances).forEach(key => {
-                    if (upscalerUsageCount[key] === 0 &&
-                        (!upscalerLastUsed[key] || (now - upscalerLastUsed[key] > 30000))) {
-                        const upscaler = upscalerInstances[key];
-                        if (upscaler && upscaler.dispose) {
-                            try { upscaler.dispose(); } catch (e) { }
-                        }
-                        delete upscalerInstances[key];
-                        delete upscalerUsageCount[key];
-                        delete upscalerLastUsed[key];
-                    }
-                });
-                window.tf.disposeVariables();
-                window.tf.engine().startScope();
-                window.tf.engine().endScope();
-            }
-        }
-        currentMemoryUsage = 0;
-    } catch (error) {
-    } finally {
-        cleanupInProgress = false;
-    }
-};
-
-/**
- * Aggressively cleans up all GPU memory resources.
- * @returns {void}
- */
-const cleanupGPUMemory = () => {
-    if (cleanupInProgress) return;
-    cleanupInProgress = true;
-
-    try {
-        if (window.tf) {
-            const upscalersInUse = Object.values(upscalerUsageCount).some(count => count > 0);
-            if (upscalersInUse) {
-                cleanupInProgress = false;
-                return;
-            }
-
-            if (aiModel && aiModel.dispose) {
-                aiModel.dispose();
-                aiModel = null;
-            }
-
-            Object.keys(upscalerInstances).forEach(key => {
-                const upscaler = upscalerInstances[key];
-                if (upscaler && upscaler.dispose) {
-                    try { upscaler.dispose(); } catch (e) { }
-                }
-            });
-
-            upscalerInstances = {};
-            upscalerUsageCount = {};
-            upscalerLastUsed = {};
-
-            window.tf.disposeVariables();
-            window.tf.engine().startScope();
-            window.tf.engine().endScope();
-
-            if (window.tf.ENV) window.tf.ENV.reset();
-        }
-
-        currentMemoryUsage = 0;
-        aiUpscalingDisabled = false;
-        textureManagerFailures = 0;
-    } catch (error) {
-    } finally {
-        cleanupInProgress = false;
-    }
-};
-
-// ================================
-// TIFF Processing Functions
-// ================================
-/**
- * Load UTIF.js library for TIFF decoding
- */
 export const loadUTIFLibrary = () => {
     return new Promise((resolve) => {
         if (window.UTIF) {
@@ -218,9 +77,6 @@ export const loadUTIFLibrary = () => {
     });
 };
 
-/**
- * Enhanced TIFF conversion with fallback methods
- */
 const convertTIFFWithUTIF = (tiffFile) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -228,8 +84,6 @@ const convertTIFFWithUTIF = (tiffFile) => {
         reader.onload = (e) => {
             try {
                 const arrayBuffer = e.target.result;
-
-                // Decode TIFF
                 const ifds = window.UTIF.decode(arrayBuffer);
 
                 if (!ifds || ifds.length === 0) {
@@ -237,10 +91,8 @@ const convertTIFFWithUTIF = (tiffFile) => {
                     return;
                 }
 
-                // Get first image
                 const firstIFD = ifds[0];
 
-                // Decode the image
                 try {
                     if (window.UTIF.decodeImage) {
                         window.UTIF.decodeImage(arrayBuffer, firstIFD);
@@ -252,13 +104,10 @@ const convertTIFFWithUTIF = (tiffFile) => {
                     return;
                 }
 
-                // Check if dimensions are available
                 if (!firstIFD.width || !firstIFD.height ||
                     typeof firstIFD.width !== 'number' || typeof firstIFD.height !== 'number' ||
                     firstIFD.width <= 0 || firstIFD.height <= 0) {
 
-
-                    // Try to get dimensions from other properties
                     const imageWidth = firstIFD['ImageWidth'] || firstIFD['t256'] || firstIFD[256];
                     const imageLength = firstIFD['ImageLength'] || firstIFD['t257'] || firstIFD[257];
 
@@ -266,48 +115,39 @@ const convertTIFFWithUTIF = (tiffFile) => {
                         firstIFD.width = imageWidth.value || imageWidth;
                         firstIFD.height = imageLength.value || imageLength;
                     } else {
-                        // Default to reasonable dimensions
                         firstIFD.width = 800;
                         firstIFD.height = 600;
                     }
                 }
 
-                // Try to convert to RGBA with error handling
                 let rgba;
                 try {
                     rgba = window.UTIF.toRGBA8(firstIFD);
 
-                    // Validate RGBA data
                     if (!rgba || !rgba.length) {
                         throw new Error('Empty RGBA data');
                     }
 
-                    // Check if data length matches expected size
                     const expectedLength = firstIFD.width * firstIFD.height * 4;
                     if (rgba.length !== expectedLength) {
-
-                        // Try to fix by creating new array with correct size
                         const fixedRgba = new Uint8ClampedArray(expectedLength);
                         const copyLength = Math.min(rgba.length, expectedLength);
                         fixedRgba.set(rgba.subarray(0, copyLength));
 
-                        // Fill remaining with transparent black
                         for (let i = copyLength; i < expectedLength; i += 4) {
-                            fixedRgba[i] = 0;     // R
-                            fixedRgba[i + 1] = 0; // G
-                            fixedRgba[i + 2] = 0; // B
-                            fixedRgba[i + 3] = 0; // A (transparent)
+                            fixedRgba[i] = 0;
+                            fixedRgba[i + 1] = 0;
+                            fixedRgba[i + 2] = 0;
+                            fixedRgba[i + 3] = 0;
                         }
                         rgba = fixedRgba;
                     }
                 } catch (rgbaError) {
-                    // Create a placeholder instead
                     const canvas = document.createElement('canvas');
                     canvas.width = firstIFD.width;
                     canvas.height = firstIFD.height;
                     const ctx = canvas.getContext('2d');
 
-                    // Draw placeholder
                     ctx.fillStyle = '#f8f9fa';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -332,18 +172,15 @@ const convertTIFFWithUTIF = (tiffFile) => {
                     return;
                 }
 
-                // Create canvas
                 const canvas = document.createElement('canvas');
                 canvas.width = firstIFD.width;
                 canvas.height = firstIFD.height;
                 const ctx = canvas.getContext('2d');
 
-                // Create image data
                 const imageData = ctx.createImageData(firstIFD.width, firstIFD.height);
                 imageData.data.set(rgba);
                 ctx.putImageData(imageData, 0, 0);
 
-                // Convert to PNG
                 canvas.toBlob((blob) => {
                     if (!blob) {
                         reject(new Error('Failed to create PNG'));
@@ -368,27 +205,13 @@ const convertTIFFWithUTIF = (tiffFile) => {
     });
 };
 
-// ================================
-// Core Image Processing Functions
-// ================================
-/**
- * Resizes images while maintaining aspect ratio with optional AI upscaling.
- * @async
- * @param {Array<Object>} images - Array of image objects to resize
- * @param {number} dimension - Target dimension (width or height)
- * @param {Object} options - Processing options including quality and format
- * @param {number} [options.quality=0.85] - Image quality (0-1)
- * @param {string} [options.format='webp'] - Output format
- * @returns {Promise<Array<Object>>} Array of resized image results
- */
-export const processLemGendaryResize = async (images, dimension, options = { quality: 0.85, format: 'webp' }) => {
+export const processLemGendaryResize = async (images, dimension, options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const results = [];
 
     for (const image of images) {
         try {
             const imageFile = await ensureFileObject(image);
 
-            // Check file types
             const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
             const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
@@ -397,9 +220,7 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                 fileName.endsWith('.tiff') || fileName.endsWith('.tif');
 
             if (isSVG) {
-                // Process SVG resize with aspect ratio preservation
                 try {
-                    // First get original SVG dimensions to preserve aspect ratio
                     const svgText = await new Promise((resolve, reject) => {
                         const reader = new FileReader();
                         reader.onload = (e) => resolve(e.target.result);
@@ -411,7 +232,6 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
                     const svgElement = svgDoc.documentElement;
 
-                    // Get original dimensions
                     let originalWidth = 100;
                     let originalHeight = 100;
 
@@ -425,7 +245,6 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                         originalHeight = parseFloat(heightAttr);
                     }
 
-                    // If no explicit dimensions, check viewBox
                     if ((!widthAttr || !heightAttr) && svgElement.hasAttribute('viewBox')) {
                         const viewBox = svgElement.getAttribute('viewBox');
                         const parts = viewBox.split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n));
@@ -435,53 +254,42 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                         }
                     }
 
-                    // Calculate new dimensions maintaining aspect ratio
                     let newWidth, newHeight;
                     const aspectRatio = originalWidth / originalHeight;
 
                     if (originalWidth >= originalHeight) {
-                        // Landscape or square - width is the larger dimension
                         newWidth = dimension;
                         newHeight = Math.round(dimension / aspectRatio);
                     } else {
-                        // Portrait - height is the larger dimension
                         newHeight = dimension;
                         newWidth = Math.round(dimension * aspectRatio);
                     }
 
-                    // Ensure minimum dimensions
                     newWidth = Math.max(1, newWidth);
                     newHeight = Math.max(1, newHeight);
 
-                    // Process SVG resize
                     const resizedSVG = await processSVGResize(imageFile, newWidth, newHeight);
 
-                    // Convert SVG to raster format with aspect ratio preservation
                     let rasterFile;
                     try {
                         rasterFile = await convertSVGToRaster(resizedSVG, newWidth, newHeight, options.format || 'webp');
                     } catch (svgConversionError) {
-                        // Create placeholder with correct aspect ratio
                         const canvas = document.createElement('canvas');
                         canvas.width = newWidth;
                         canvas.height = newHeight;
                         const ctx = canvas.getContext('2d');
 
-                        // Draw background matching aspect ratio
                         const bgColor = '#f8f9fa';
                         ctx.fillStyle = bgColor;
                         ctx.fillRect(0, 0, newWidth, newHeight);
 
-                        // Draw border
                         ctx.strokeStyle = '#dee2e6';
                         ctx.lineWidth = 2;
                         ctx.strokeRect(10, 10, newWidth - 20, newHeight - 20);
 
-                        // Calculate center
                         const centerX = newWidth / 2;
                         const centerY = newHeight / 2;
 
-                        // Draw icon
                         ctx.fillStyle = '#4a90e2';
                         const iconSize = Math.min(32, newHeight / 8);
                         ctx.font = `bold ${iconSize}px Arial`;
@@ -489,26 +297,22 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                         ctx.textBaseline = 'middle';
                         ctx.fillText('🖋️', centerX, centerY - iconSize);
 
-                        // Draw SVG text
                         ctx.fillStyle = '#495057';
                         const titleSize = Math.min(18, newHeight / 12);
                         ctx.font = `bold ${titleSize}px Arial`;
                         ctx.fillText('SVG', centerX, centerY);
 
-                        // Draw dimensions
                         ctx.fillStyle = '#6c757d';
                         const infoSize = Math.min(14, newHeight / 16);
                         ctx.font = `${infoSize}px Arial`;
                         ctx.fillText(`${newWidth}×${newHeight}`, centerX, centerY + iconSize);
 
-                        // Draw aspect ratio
                         ctx.fillStyle = '#28a745';
                         const ratio = Math.round((originalWidth / originalHeight) * 100) / 100;
                         ctx.fillText(`${ratio}:1`, centerX, centerY + iconSize * 2);
 
-                        // Convert to blob
                         const blob = await new Promise(resolve => {
-                            canvas.toBlob(resolve, 'image/webp', 0.85);
+                            canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
                         });
 
                         const baseName = image.name.replace(/\.svg$/i, '');
@@ -533,22 +337,18 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                         originalAspectRatio: originalWidth / originalHeight
                     });
                 } catch (svgError) {
-                    // Create error placeholder with target dimension (square fallback)
                     const canvas = document.createElement('canvas');
                     canvas.width = dimension;
                     canvas.height = dimension;
                     const ctx = canvas.getContext('2d');
 
-                    // Error background
                     ctx.fillStyle = '#f8d7da';
                     ctx.fillRect(0, 0, dimension, dimension);
 
-                    // Error border
                     ctx.strokeStyle = '#f5c6cb';
                     ctx.lineWidth = 3;
                     ctx.strokeRect(10, 10, dimension - 20, dimension - 20);
 
-                    // Error text
                     ctx.fillStyle = '#721c24';
                     const fontSize = Math.min(16, dimension / 10);
                     ctx.font = `bold ${fontSize}px Arial`;
@@ -567,7 +367,6 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     ctx.font = `${Math.min(12, dimension / 15)}px Arial`;
                     ctx.fillText(svgError.message.substring(0, 30) + '...', centerX, centerY + fontSize);
 
-                    // Convert to blob
                     const blob = await new Promise(resolve => {
                         canvas.toBlob(resolve, 'image/webp', 0.8);
                     });
@@ -588,18 +387,14 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                 }
 
             } else if (isTIFF) {
-                // For TIFF files
                 try {
-                    // First try to convert TIFF
                     let convertedFile;
                     try {
                         convertedFile = await convertLegacyFormat(imageFile);
                     } catch (convertError) {
-                        // Create a placeholder with the target dimensions
                         convertedFile = await createTIFFPlaceholderFile(imageFile, dimension, dimension);
                     }
 
-                    // Now resize the converted file
                     const img = new Image();
                     const objectUrl = URL.createObjectURL(convertedFile);
 
@@ -651,7 +446,7 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     ctx.drawImage(finalImg, 0, 0, newWidth, newHeight);
 
                     const resizedBlob = await new Promise(resolve => {
-                        canvas.toBlob(resolve, 'image/webp', 0.85);
+                        canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
                     });
 
                     URL.revokeObjectURL(finalObjectUrl);
@@ -672,7 +467,6 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     });
 
                 } catch (tiffError) {
-                    // Create error placeholder for TIFF
                     const placeholder = await createTIFFPlaceholderFile(imageFile, dimension, dimension);
                     const optimizedFile = await optimizeForWeb(placeholder, options.quality, options.format);
 
@@ -688,7 +482,6 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                 }
 
             } else {
-                // Regular image processing
                 const img = new Image();
                 const objectUrl = URL.createObjectURL(imageFile);
 
@@ -740,7 +533,7 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                 ctx.drawImage(finalImg, 0, 0, newWidth, newHeight);
 
                 const resizedBlob = await new Promise(resolve => {
-                    canvas.toBlob(resolve, 'image/webp', 0.85);
+                    canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
                 });
 
                 URL.revokeObjectURL(finalObjectUrl);
@@ -761,7 +554,6 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
             }
 
         } catch (error) {
-            // Create a generic error placeholder
             const canvas = document.createElement('canvas');
             canvas.width = dimension;
             canvas.height = dimension;
@@ -809,26 +601,13 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
     return results;
 };
 
-/**
- * Crops images to specified dimensions with position control.
- * @async
- * @param {Array<Object>} images - Array of image objects to crop
- * @param {number} width - Target width
- * @param {number} height - Target height
- * @param {string} cropPosition - Crop position (e.g., 'center', 'top-left')
- * @param {Object} options - Processing options including quality and format
- * @param {number} [options.quality=0.85] - Image quality (0-1)
- * @param {string} [options.format='webp'] - Output format
- * @returns {Promise<Array<Object>>} Array of cropped image results
- */
-export const processLemGendaryCrop = async (images, width, height, cropPosition = 'center', options = { quality: 0.85, format: 'webp' }) => {
+export const processLemGendaryCrop = async (images, width, height, cropPosition = 'center', options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const results = [];
 
     for (const image of images) {
         try {
             const imageFile = await ensureFileObject(image);
 
-            // Check file type
             const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
             const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
@@ -841,13 +620,11 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
             if (isSVG) {
                 croppedFile = await processSVGCrop(imageFile, width, height);
             } else {
-                // For TIFF files, convert first
                 let processableFile = imageFile;
                 if (isTIFF) {
                     try {
                         processableFile = await convertLegacyFormat(imageFile);
                     } catch (convertError) {
-                        // Create a placeholder instead
                         const placeholder = await createTIFFPlaceholderFile(imageFile, width, height);
                         const optimizedFile = await optimizeForWeb(placeholder, options.quality, options.format);
 
@@ -860,7 +637,7 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
                             optimized: false,
                             error: 'TIFF conversion failed'
                         });
-                        continue; // Skip to next image
+                        continue;
                     }
                 }
 
@@ -871,7 +648,7 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
                     const timeout = setTimeout(() => {
                         URL.revokeObjectURL(objectUrl);
                         reject(new Error('Image load timeout'));
-                    }, 30000);
+                    }, IMAGE_LOAD_TIMEOUT);
 
                     img.onload = () => {
                         clearTimeout(timeout);
@@ -894,7 +671,6 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
                     try {
                         sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, image.name);
                     } catch (upscaleError) {
-                        // Continue with original file
                     }
                 }
 
@@ -914,7 +690,6 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
             });
 
         } catch (error) {
-            // Create error placeholder
             const canvas = document.createElement('canvas');
             canvas.width = width;
             canvas.height = height;
@@ -963,16 +738,6 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
     return results;
 };
 
-// ================================
-// AI Processing Functions
-// ================================
-
-/**
- * Loads AI model for smart cropping with fallback.
- * @async
- * @returns {Promise<Object>} Loaded AI model
- * @throws {Error} If TensorFlow.js or COCO-SSD not available
- */
 export const loadAIModel = async () => {
     if (aiModel) return aiModel;
     if (aiModelLoading) {
@@ -1001,11 +766,6 @@ export const loadAIModel = async () => {
     }
 };
 
-/**
- * Loads TensorFlow.js from CDN.
- * @async
- * @returns {Promise<void>}
- */
 const loadTensorFlowFromCDN = () => {
     return new Promise((resolve) => {
         if (window.tf) {
@@ -1021,11 +781,6 @@ const loadTensorFlowFromCDN = () => {
     });
 };
 
-/**
- * Loads COCO-SSD from CDN.
- * @async
- * @returns {Promise<void>}
- */
 const loadCocoSsdFromCDN = () => {
     return new Promise((resolve) => {
         if (window.cocoSsd) {
@@ -1041,10 +796,6 @@ const loadCocoSsdFromCDN = () => {
     });
 };
 
-/**
- * Creates simple AI model fallback.
- * @returns {Object} Simple AI model with detect method
- */
 const createSimpleAIModel = () => {
     return {
         detect: async (imgElement) => {
@@ -1060,41 +811,34 @@ const createSimpleAIModel = () => {
     };
 };
 
-export const processSmartCrop = async (imageFile, targetWidth, targetHeight, options = { quality: 0.85, format: 'webp' }) => {
-    // Check file type first
+export const processSmartCrop = async (imageFile, targetWidth, targetHeight, options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
     const isSVG = mimeType === 'image/svg+xml' || fileName.endsWith('.svg');
 
-    // Handle SVG files specially - convert to raster first, then crop
     if (isSVG) {
         try {
             return await convertSVGToRasterAndCrop(imageFile, targetWidth, targetHeight, options.format || 'webp', 'center');
         } catch (svgError) {
-            // Fallback to simple crop
             return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
         }
     }
 
-    // Check if it's a TIFF file
     const isTIFF = mimeType === 'image/tiff' || mimeType === 'image/tif' ||
         fileName.endsWith('.tiff') || fileName.endsWith('.tif');
 
     try {
         let processableFile = imageFile;
 
-        // Handle TIFF files
         if (isTIFF) {
             try {
                 processableFile = await convertTIFFForProcessing(imageFile);
             } catch (convertError) {
-                // Fallback to simple crop
                 return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
             }
         }
 
-        // Load the image with optimized performance
         const img = new Image();
         const objectUrl = URL.createObjectURL(processableFile);
 
@@ -1102,13 +846,11 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
             const timeout = setTimeout(() => {
                 URL.revokeObjectURL(objectUrl);
                 reject(new Error('Image load timeout'));
-            }, 30000);
+            }, IMAGE_LOAD_TIMEOUT);
 
             img.onload = () => {
                 clearTimeout(timeout);
                 URL.revokeObjectURL(objectUrl);
-
-                // Use setTimeout to avoid blocking
                 setTimeout(resolve, 0);
             };
             img.onerror = () => {
@@ -1118,7 +860,6 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
             };
             img.src = objectUrl;
 
-            // Use decode() for large images
             if (processableFile.size > 1000000 && img.decode) {
                 img.decode().then(() => {
                     clearTimeout(timeout);
@@ -1132,18 +873,14 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
             }
         });
 
-        // Check image size constraints - adjust limits based on available memory
         const totalPixels = img.naturalWidth * img.naturalHeight;
-        const MAX_PIXELS_FOR_AI = 2000000; // Reduced from 4M to 2M for better performance
-        const MAX_DIMENSION = 2000; // Max dimension for AI processing
 
-        if (totalPixels > MAX_PIXELS_FOR_AI ||
-            img.naturalWidth > MAX_DIMENSION ||
-            img.naturalHeight > MAX_DIMENSION) {
+        if (totalPixels > MAX_TOTAL_PIXELS_FOR_AI ||
+            img.naturalWidth > MAX_DIMENSION_FOR_AI ||
+            img.naturalHeight > MAX_DIMENSION_FOR_AI) {
             return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
         }
 
-        // Check if upscaling is needed
         const needsUpscaling = targetWidth > img.naturalWidth || targetHeight > img.naturalHeight;
         let sourceFile = processableFile;
 
@@ -1154,19 +891,16 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
                 targetWidth,
                 targetHeight
             );
-            if (upscaleFactor > 1 && upscaleFactor <= 4) { // Limit upscale factor
+            if (upscaleFactor > 1 && upscaleFactor <= MAX_SCALE_FACTOR) {
                 try {
                     sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
                 } catch (upscaleError) {
-                    // Continue with original file
                 }
             }
         }
 
-        // Resize image for cropping (smaller step size for performance)
         const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight);
 
-        // Load AI model only if not already loaded and AI is not disabled
         let model;
         if (!aiUpscalingDisabled) {
             try {
@@ -1185,62 +919,41 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
                 const mainSubject = findMainSubject(predictions, loadedImg.width, loadedImg.height);
 
                 if (mainSubject) {
-                    // Crop based on detected subject
                     croppedFile = await cropFromResized(resized, targetWidth, targetHeight, mainSubject, imageFile);
                 } else {
-                    // No subject detected, use focal point detection
                     const focalPoint = await detectFocalPointSimple(loadedImg.element, loadedImg.width, loadedImg.height);
                     const adjustedPosition = adjustCropPositionForFocalPoint('center', focalPoint, loadedImg.width, loadedImg.height);
                     croppedFile = await cropFromResized(resized, targetWidth, targetHeight, adjustedPosition, imageFile);
                 }
             } catch (aiError) {
-                // Fallback to focal point detection
                 const focalPoint = await detectFocalPointSimple(loadedImg.element, loadedImg.width, loadedImg.height);
                 const adjustedPosition = adjustCropPositionForFocalPoint('center', focalPoint, loadedImg.width, loadedImg.height);
                 croppedFile = await cropFromResized(resized, targetWidth, targetHeight, adjustedPosition, imageFile);
             }
         } else {
-            // AI disabled or failed, use simple focal point detection
             const focalPoint = await detectFocalPointSimple(loadedImg.element, loadedImg.width, loadedImg.height);
             const adjustedPosition = adjustCropPositionForFocalPoint('center', focalPoint, loadedImg.width, loadedImg.height);
             croppedFile = await cropFromResized(resized, targetWidth, targetHeight, adjustedPosition, imageFile);
         }
 
-        // Optimize the final cropped image
         const optimizedFile = await optimizeForWeb(croppedFile, options.quality, options.format);
         return optimizedFile;
 
     } catch (error) {
-        // Fallback to simple smart crop
         return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
     }
 };
 
-/**
- * Performs simple smart cropping using basic edge detection.
- * @async
- * @param {File} imageFile - Image file to process
- * @param {number} targetWidth - Target crop width
- * @param {number} targetHeight - Target crop height
- * @param {string} cropPosition - Crop position
- * @param {Object} options - Processing options
- * @param {number} [options.quality=0.85] - Image quality (0-1)
- * @param {string} [options.format='webp'] - Output format
- * @returns {Promise<File>} Cropped image file
- */
-export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeight, cropPosition = 'center', options = { quality: 0.85, format: 'webp' }) => {
-    // Check file type first
+export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeight, cropPosition = 'center', options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
     const isSVG = mimeType === 'image/svg+xml' || fileName.endsWith('.svg');
 
-    // Handle SVG files specially - convert to raster first, then crop
     if (isSVG) {
         try {
             return await convertSVGToRasterAndCrop(imageFile, targetWidth, targetHeight, options.format || 'webp', cropPosition);
         } catch (svgError) {
-            // Fallback to regular crop
             const cropResults = await processLemGendaryCrop(
                 [{ file: imageFile, name: imageFile.name }],
                 targetWidth,
@@ -1252,19 +965,16 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
         }
     }
 
-    // Check if it's a TIFF file
     const isTIFF = mimeType === 'image/tiff' || mimeType === 'image/tif' ||
         fileName.endsWith('.tiff') || fileName.endsWith('.tif');
 
     try {
         let processableFile = imageFile;
 
-        // Handle TIFF files
         if (isTIFF) {
             try {
                 processableFile = await convertLegacyFormat(imageFile);
             } catch (convertError) {
-                // Fallback to regular crop
                 const cropResults = await processLemGendaryCrop(
                     [{ file: imageFile, name: imageFile.name }],
                     targetWidth,
@@ -1276,7 +986,6 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             }
         }
 
-        // Load the image with timeout protection
         const img = new Image();
         const objectUrl = URL.createObjectURL(processableFile);
 
@@ -1284,7 +993,7 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             const timeout = setTimeout(() => {
                 URL.revokeObjectURL(objectUrl);
                 reject(new Error('Image load timeout'));
-            }, 30000);
+            }, IMAGE_LOAD_TIMEOUT);
 
             img.onload = () => {
                 clearTimeout(timeout);
@@ -1299,7 +1008,6 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             img.src = objectUrl;
         });
 
-        // Check if upscaling is needed
         const needsUpscaling = targetWidth > img.naturalWidth || targetHeight > img.naturalHeight;
         let sourceFile = processableFile;
 
@@ -1312,38 +1020,29 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             );
             if (upscaleFactor > 1) {
                 try {
-                    // Try AI upscaling if not disabled
                     if (!aiUpscalingDisabled) {
                         sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
                     } else {
-                        // Use enhanced fallback upscaling
                         sourceFile = await upscaleImageEnhancedFallback(processableFile, upscaleFactor, imageFile.name);
                     }
                 } catch (upscaleError) {
-                    // Continue with original file
                 }
             }
         }
 
-        // Resize image for cropping
         const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight);
 
-        // Load image and detect focal point
         const loadedImg = await loadImage(resized.file);
         const focalPoint = await detectFocalPointSimple(loadedImg.element, loadedImg.width, loadedImg.height);
 
-        // Adjust crop position based on focal point
         const adjustedPosition = adjustCropPositionForFocalPoint(cropPosition, focalPoint, loadedImg.width, loadedImg.height);
 
-        // Perform the crop
         const croppedFile = await cropFromResized(resized, targetWidth, targetHeight, adjustedPosition, imageFile);
 
-        // Optimize the final cropped image
         const optimizedFile = await optimizeForWeb(croppedFile, options.quality, options.format);
         return optimizedFile;
 
     } catch (error) {
-        // Fallback to regular crop
         try {
             const cropResults = await processLemGendaryCrop(
                 [{ file: imageFile, name: imageFile.name }],
@@ -1354,13 +1053,11 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             );
             return cropResults[0]?.cropped || imageFile;
         } catch (cropError) {
-            // Last resort: create an error placeholder
             const canvas = document.createElement('canvas');
             canvas.width = targetWidth;
             canvas.height = targetHeight;
             const ctx = canvas.getContext('2d');
 
-            // Draw error placeholder
             ctx.fillStyle = '#f8d7da';
             ctx.fillRect(0, 0, targetWidth, targetHeight);
 
@@ -1383,7 +1080,6 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
                 error.message.substring(0, 27) + '...' : error.message;
             ctx.fillText(errorMsg, centerX, centerY + 25);
 
-            // Convert to blob
             const blob = await new Promise(resolve => {
                 canvas.toBlob(resolve, 'image/webp', 0.8);
             });
@@ -1395,412 +1091,6 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
     }
 };
 
-// ================================
-// Template Processing Functions
-// ================================
-
-/**
- * Processes images using social media templates.
- * @async
- * @param {Object} image - Image object to process
- * @param {Array<Object>} selectedTemplates - Array of template objects
- * @param {boolean} useSmartCrop - Whether to use AI smart cropping
- * @param {boolean} aiModelLoaded - Whether AI model is loaded
- * @returns {Promise<Array<Object>>} Array of processed template images
- */
-export const processTemplateImages = async (image, selectedTemplates, useSmartCrop = false, aiModelLoaded = false) => {
-    const processedImages = [];
-    const imageFile = await ensureFileObject(image);
-    const isSVG = imageFile.type === 'image/svg+xml';
-    const hasTransparency = isSVG ? false : await checkImageTransparency(imageFile);
-
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(imageFile);
-    await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-        img.src = objectUrl;
-    });
-    URL.revokeObjectURL(objectUrl);
-
-    const totalPixels = img.naturalWidth * img.naturalHeight;
-    const isLargeImage = totalPixels > 4000000;
-
-    const templatesByDimensions = {};
-    selectedTemplates.forEach(template => {
-        const key = template.height === 'auto' ?
-            `auto_${template.width}` :
-            `${template.width}x${template.height}`;
-        if (!templatesByDimensions[key]) templatesByDimensions[key] = [];
-        templatesByDimensions[key].push(template);
-    });
-
-    const wasCleanupInProgress = cleanupInProgress;
-    cleanupInProgress = true;
-
-    try {
-        for (const [dimKey, templates] of Object.entries(templatesByDimensions)) {
-            try {
-                let processedFile = imageFile;
-                const template = templates[0];
-
-                if (template.width && template.height) {
-                    if (template.height === 'auto') {
-                        const resizeResults = await processLemGendaryResize(
-                            [{ ...image, file: imageFile }],
-                            template.width
-                        );
-                        if (resizeResults.length > 0) {
-                            processedFile = resizeResults[0].resized;
-                        }
-                    } else {
-                        if (useSmartCrop && aiModelLoaded && !isLargeImage && !aiUpscalingDisabled) {
-                            try {
-                                processedFile = await processSmartCrop(
-                                    imageFile,
-                                    template.width,
-                                    template.height
-                                );
-                            } catch (error) {
-                                processedFile = await processSimpleSmartCrop(
-                                    imageFile,
-                                    template.width,
-                                    template.height,
-                                    'center'
-                                );
-                            }
-                        } else {
-                            try {
-                                processedFile = await processSimpleSmartCrop(
-                                    imageFile,
-                                    template.width,
-                                    template.height,
-                                    'center'
-                                );
-                            } catch (error) {
-                                const cropResults = await processLemGendaryCrop(
-                                    [{ ...image, file: imageFile }],
-                                    template.width,
-                                    template.height,
-                                    'center'
-                                );
-                                if (cropResults.length > 0) {
-                                    processedFile = cropResults[0].cropped;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                for (const template of templates) {
-                    const webpFile = await optimizeForWeb(processedFile, 0.8, 'webp');
-                    const jpgPngFile = await optimizeForWeb(processedFile, 0.85, hasTransparency ? 'png' : 'jpg');
-
-                    const baseName = `${template.platform}-${template.name}-${image.name.replace(/\.[^/.]+$/, '')}`;
-                    const webpName = `${baseName}.webp`;
-                    processedImages.push({
-                        ...image,
-                        file: webpFile,
-                        name: webpName,
-                        template: template,
-                        format: 'webp',
-                        processed: true,
-                        aiCropped: useSmartCrop && aiModelLoaded && !isLargeImage && !aiUpscalingDisabled
-                    });
-
-                    if (template.category === 'web' || template.category === 'logo') {
-                        const pngName = `${baseName}.${hasTransparency ? 'png' : 'jpg'}`;
-                        processedImages.push({
-                            ...image,
-                            file: jpgPngFile,
-                            name: pngName,
-                            template: template,
-                            format: hasTransparency ? 'png' : 'jpg',
-                            processed: true,
-                            aiCropped: useSmartCrop && aiModelLoaded && !isLargeImage && !aiUpscalingDisabled
-                        });
-                    } else {
-                        const jpgName = `${baseName}.jpg`;
-                        const socialJpgFile = await optimizeForWeb(processedFile, 0.85, 'jpg');
-                        processedImages.push({
-                            ...image,
-                            file: socialJpgFile,
-                            name: jpgName,
-                            template: template,
-                            format: 'jpg',
-                            processed: true,
-                            aiCropped: useSmartCrop && aiModelLoaded && !isLargeImage && !aiUpscalingDisabled
-                        });
-                    }
-                }
-
-                await new Promise(resolve => setTimeout(resolve, 50));
-            } catch (groupError) {
-            }
-        }
-    } finally {
-        cleanupInProgress = wasCleanupInProgress;
-        setTimeout(safeCleanupGPUMemory, 100);
-    }
-
-    return processedImages;
-};
-
-/**
- * Processes custom images with various operations.
- * @async
- * @param {Array<Object>} selectedImages - Array of images to process
- * @param {Object} processingOptions - Processing configuration options
- * @param {boolean} aiModelLoaded - Whether AI model is loaded
- * @returns {Promise<Array<Object>>} Array of processed images
- */
-export const processCustomImagesBatch = async (selectedImages, processingOptions, aiModelLoaded = false) => {
-    const processedImages = [];
-    const formats = processingOptions.output.formats || ['webp'];
-
-    safeCleanupGPUMemory();
-
-    for (let i = 0; i < selectedImages.length; i++) {
-        const image = selectedImages[i];
-
-        try {
-            // Get the original file from the image object
-            let baseProcessedFile = await ensureFileObject(image);
-
-            let resizeResult = null;
-            let cropResult = null;
-
-            // Only resize if resize is enabled AND dimension is provided
-            if (processingOptions.resize?.enabled && processingOptions.resize.dimension) {
-                const resizeDimension = parseInt(processingOptions.resize.dimension);
-                const safeDimension = Math.min(resizeDimension, MAX_SAFE_DIMENSION);
-
-                const resizeResults = await processLemGendaryResize(
-                    [{ ...image, file: baseProcessedFile }],
-                    safeDimension
-                );
-                if (resizeResults.length > 0 && resizeResults[0].resized) {
-                    resizeResult = resizeResults[0].resized;
-                    baseProcessedFile = resizeResult;
-                }
-                safeCleanupGPUMemory();
-            }
-
-            // Only crop if crop is enabled AND both dimensions are provided
-            if (processingOptions.crop?.enabled && processingOptions.crop.width && processingOptions.crop.height) {
-                const cropWidth = parseInt(processingOptions.crop.width);
-                const cropHeight = parseInt(processingOptions.crop.height);
-
-                const safeWidth = Math.min(cropWidth, MAX_SAFE_DIMENSION);
-                const safeHeight = Math.min(cropHeight, MAX_SAFE_DIMENSION);
-
-                if (processingOptions.crop.mode === 'smart' && aiModelLoaded && !aiUpscalingDisabled) {
-                    try {
-                        const smartCropFile = await processSmartCrop(
-                            baseProcessedFile,
-                            safeWidth,
-                            safeHeight,
-                            { quality: processingOptions.compression?.quality || 0.85, format: 'webp' }
-                        );
-                        cropResult = smartCropFile;
-                        baseProcessedFile = smartCropFile;
-                    } catch (aiError) {
-                        const cropResults = await processLemGendaryCrop(
-                            [{ ...image, file: baseProcessedFile }],
-                            safeWidth,
-                            safeHeight,
-                            processingOptions.crop.position || 'center',
-                            { quality: processingOptions.compression?.quality || 0.85, format: 'webp' }
-                        );
-                        if (cropResults.length > 0 && cropResults[0].cropped) {
-                            cropResult = cropResults[0].cropped;
-                            baseProcessedFile = cropResult;
-                        }
-                    }
-                } else {
-                    const cropResults = await processLemGendaryCrop(
-                        [{ ...image, file: baseProcessedFile }],
-                        safeWidth,
-                        safeHeight,
-                        processingOptions.crop.position || 'center',
-                        { quality: processingOptions.compression?.quality || 0.85, format: 'webp' }
-                    );
-                    if (cropResults.length > 0 && cropResults[0].cropped) {
-                        cropResult = cropResults[0].cropped;
-                        baseProcessedFile = cropResult;
-                    }
-                }
-                safeCleanupGPUMemory();
-            }
-
-            for (const format of formats) {
-                let processedFile = baseProcessedFile;
-                let finalName = image.name;
-                const baseName = image.name.replace(/\.[^/.]+$/, '');
-
-                if (processingOptions.output.rename && processingOptions.output.newFileName) {
-                    // Use new filename pattern with numbering
-                    const numberedName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}`;
-
-                    if (format === 'original') {
-                        finalName = `${numberedName}.${image.name.split('.').pop()}`;
-                        processedFile = new File([await ensureFileObject(image)], finalName, {
-                            type: image.type || processedFile.type
-                        });
-                    } else {
-                        finalName = `${numberedName}.${format}`;
-                    }
-                } else {
-                    // Keep original naming - NO operation suffixes
-                    if (format === 'original') {
-                        // For original format, keep exact original filename
-                        finalName = image.name;
-                        processedFile = new File([await ensureFileObject(image)], finalName, {
-                            type: image.type || processedFile.type
-                        });
-                    } else {
-                        // For converted formats: baseName.extension
-                        finalName = `${baseName}.${format}`;
-                    }
-                }
-
-                if (format !== 'original') {
-                    // Check transparency
-                    const hasTransparency = await checkImageTransparency(processedFile);
-                    let targetFormat = format;
-
-                    // Handle JPG format with transparency
-                    if ((targetFormat === 'jpg' || targetFormat === 'jpeg') && hasTransparency) {
-                        // Keep as JPG but add white background in optimizeForWeb
-                        // Don't switch to PNG
-                        targetFormat = 'jpg';
-                    }
-
-                    // Check AVIF support if needed
-                    if (targetFormat === 'avif') {
-                        const supportsAVIF = await checkAVIFSupport();
-                        if (!supportsAVIF) {
-                            targetFormat = 'webp';
-                        }
-                    }
-
-                    try {
-                        processedFile = await optimizeForWeb(
-                            processedFile,
-                            processingOptions.compression?.quality || 0.85,
-                            targetFormat
-                        );
-                    } catch (error) {
-
-                        // For TIFF files, try to create a simple conversion
-                        const isTIFF = image.isTIFF ||
-                            image.type === 'image/tiff' ||
-                            image.type === 'image/tif' ||
-                            image.name.toLowerCase().endsWith('.tiff') ||
-                            image.name.toLowerCase().endsWith('.tif');
-
-                        if (isTIFF) {
-                            try {
-                                processedFile = await createTIFFPlaceholderFile(image.file);
-                            } catch (fallbackError) {
-                                // Skip this format
-                                continue;
-                            }
-                        } else {
-                            // Skip this format for non-TIFF files
-                            continue;
-                        }
-                    }
-
-                    // Update filename extension if format changed
-                    if (targetFormat !== format) {
-                        if (processingOptions.output.rename && processingOptions.output.newFileName) {
-                            // For renamed files, replace the extension
-                            const numberedName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}`;
-                            finalName = `${numberedName}.${targetFormat}`;
-                        } else {
-                            // For original filenames, update with correct extension
-                            finalName = `${baseName}.${targetFormat}`;
-                        }
-                    }
-                }
-
-                // Ensure file has correct name
-                if (processedFile.name !== finalName) {
-                    processedFile = new File([processedFile], finalName, {
-                        type: processedFile.type
-                    });
-                }
-
-                processedImages.push({
-                    ...image,
-                    file: processedFile,
-                    name: finalName,
-                    url: URL.createObjectURL(processedFile),
-                    processed: true,
-                    format: format === 'original'
-                        ? image.type?.split('/')[1] || 'webp'
-                        : format,
-                    operations: {
-                        resized: !!resizeResult,
-                        cropped: !!cropResult,
-                        aiUsed: processingOptions.crop?.mode === 'smart' && aiModelLoaded && !aiUpscalingDisabled && !!cropResult
-                    }
-                });
-            }
-
-        } catch (error) {
-            // Create error entries for each format
-            for (const format of formats) {
-                const baseName = image.name.replace(/\.[^/.]+$/, '');
-                let finalName;
-
-                if (processingOptions.output.rename && processingOptions.output.newFileName) {
-                    const numberedName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}`;
-                    const extension = format === 'original' ? image.name.split('.').pop() : format;
-                    finalName = `${numberedName}.${extension}`;
-                } else {
-                    if (format === 'original') {
-                        finalName = image.name;
-                    } else {
-                        finalName = `${baseName}.${format}`;
-                    }
-                }
-
-                processedImages.push({
-                    ...image,
-                    file: null,
-                    name: finalName,
-                    processed: false,
-                    format: format === 'original' ? image.type?.split('/')[1] : format,
-                    error: error.message
-                });
-            }
-        }
-
-        // Add small delay between images for better UI responsiveness
-        if (i < selectedImages.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            safeCleanupGPUMemory();
-        }
-    }
-
-    safeCleanupGPUMemory();
-    return processedImages;
-};
-
-// ================================
-// SVG Processing Functions
-// ================================
-
-/**
- * Processes SVG image resizing.
- * @async
- * @param {File} svgFile - SVG file to resize
- * @param {number} width - Target width
- * @param {number} height - Target height
- * @returns {Promise<File>} Resized SVG file
- */
 export const processSVGResize = async (svgFile, width, height) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1811,22 +1101,18 @@ export const processSVGResize = async (svgFile, width, height) => {
                 const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
                 const svgElement = svgDoc.documentElement;
 
-                // Get original dimensions safely
                 let originalWidth, originalHeight;
 
-                // Try to get width from attributes
                 const widthAttr = svgElement.getAttribute('width');
                 if (widthAttr && !isNaN(parseFloat(widthAttr))) {
                     originalWidth = parseFloat(widthAttr);
                 }
 
-                // Try to get height from attributes
                 const heightAttr = svgElement.getAttribute('height');
                 if (heightAttr && !isNaN(parseFloat(heightAttr))) {
                     originalHeight = parseFloat(heightAttr);
                 }
 
-                // If not found in attributes, try viewBox
                 if (!originalWidth || !originalHeight) {
                     const viewBox = svgElement.getAttribute('viewBox');
                     if (viewBox) {
@@ -1838,7 +1124,6 @@ export const processSVGResize = async (svgFile, width, height) => {
                     }
                 }
 
-                // Default fallback values
                 if (!originalWidth) originalWidth = 100;
                 if (!originalHeight) originalHeight = 100;
 
@@ -1846,32 +1131,26 @@ export const processSVGResize = async (svgFile, width, height) => {
                 let finalWidth = width;
                 let finalHeight = height;
 
-                // If only width is provided, calculate height to maintain aspect ratio
                 if (width && !height) {
                     finalWidth = width;
                     finalHeight = Math.round(width / aspectRatio);
                 }
-                // If only height is provided, calculate width to maintain aspect ratio
                 else if (!width && height) {
                     finalHeight = height;
                     finalWidth = Math.round(height * aspectRatio);
                 }
-                // If both are provided, use them as-is
                 else if (width && height) {
                     finalWidth = width;
                     finalHeight = height;
                 }
-                // If neither is provided, use original dimensions
                 else {
                     finalWidth = originalWidth;
                     finalHeight = originalHeight;
                 }
 
-                // Set new dimensions
                 svgElement.setAttribute('width', finalWidth.toString());
                 svgElement.setAttribute('height', finalHeight.toString());
 
-                // Ensure viewBox exists
                 if (!svgElement.hasAttribute('viewBox')) {
                     svgElement.setAttribute('viewBox', `0 0 ${originalWidth} ${originalHeight}`);
                 }
@@ -1893,15 +1172,6 @@ export const processSVGResize = async (svgFile, width, height) => {
     });
 };
 
-/**
- * Converts SVG to raster format while preserving original aspect ratio.
- * @async
- * @param {File} svgFile - SVG file to convert
- * @param {number} targetWidth - Target width (if null/0, uses original SVG width)
- * @param {number} targetHeight - Target height (if null/0, uses original SVG height)
- * @param {string} format - Output format ('png', 'jpg', 'webp')
- * @returns {Promise<File>} Converted raster image file
- */
 export const convertSVGToRaster = async (svgFile, targetWidth, targetHeight, format = 'png') => {
     try {
         return await convertSVGToRasterWithAspectRatio(svgFile, targetWidth, targetHeight, format);
@@ -1910,9 +1180,6 @@ export const convertSVGToRaster = async (svgFile, targetWidth, targetHeight, for
     }
 };
 
-/**
- * Convert SVG to raster while preserving original aspect ratio
- */
 const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHeight, format) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1923,21 +1190,17 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
             try {
                 const svgText = e.target.result;
 
-                // Check if SVG content is valid
                 if (!svgText || typeof svgText !== 'string') {
                     throw new Error('Empty or invalid SVG content');
                 }
 
-                // Trim and check for SVG/XML declaration
                 const trimmedText = svgText.trim();
                 if (trimmedText.length === 0) {
                     throw new Error('Empty SVG content');
                 }
 
-                // If it doesn't look like XML/SVG, try to wrap it
                 let finalSvgText = trimmedText;
                 if (!trimmedText.startsWith('<')) {
-                    // Try to wrap in SVG tags
                     finalSvgText = `<?xml version="1.0" encoding="UTF-8"?>
                     <svg xmlns="http://www.w3.org/2000/svg"
                          width="${targetWidth || 100}"
@@ -1947,7 +1210,6 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                     </svg>`;
                 }
 
-                // Try to parse the SVG
                 let svgElement;
                 let originalWidth = targetWidth || 100;
                 let originalHeight = targetHeight || 100;
@@ -1957,7 +1219,6 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                     const svgDoc = parser.parseFromString(finalSvgText, 'image/svg+xml');
                     svgElement = svgDoc.documentElement;
 
-                    // Try to extract dimensions
                     try {
                         const widthAttr = svgElement.getAttribute('width');
                         const heightAttr = svgElement.getAttribute('height');
@@ -1971,7 +1232,6 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                             }
                         }
 
-                        // Try viewBox
                         const viewBox = svgElement.getAttribute('viewBox');
                         if (viewBox) {
                             const parts = viewBox.split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n));
@@ -1984,7 +1244,6 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                     }
 
                 } catch (parseError) {
-                    // Create a minimal valid SVG
                     finalSvgText = `<?xml version="1.0" encoding="UTF-8"?>
                     <svg xmlns="http://www.w3.org/2000/svg"
                          width="${originalWidth}"
@@ -1999,65 +1258,53 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                     </svg>`;
                 }
 
-                // Calculate dimensions preserving aspect ratio
                 let finalWidth, finalHeight;
                 const aspectRatio = originalWidth / originalHeight;
 
                 if (targetWidth && targetHeight) {
-                    // Fit within target while preserving aspect ratio
                     const targetAspectRatio = targetWidth / targetHeight;
 
                     if (aspectRatio > targetAspectRatio) {
-                        // SVG is wider than target - fit to width
                         finalWidth = targetWidth;
                         finalHeight = targetWidth / aspectRatio;
                     } else {
-                        // SVG is taller than target - fit to height
                         finalHeight = targetHeight;
                         finalWidth = targetHeight * aspectRatio;
                     }
                 } else if (targetWidth && !targetHeight) {
-                    // Only width specified
                     finalWidth = targetWidth;
                     finalHeight = targetWidth / aspectRatio;
                 } else if (!targetWidth && targetHeight) {
-                    // Only height specified
                     finalHeight = targetHeight;
                     finalWidth = targetHeight * aspectRatio;
                 } else {
-                    // No dimensions specified - use original
                     finalWidth = originalWidth;
                     finalHeight = originalHeight;
                 }
 
-                // Ensure integer dimensions and minimum size
                 finalWidth = Math.max(1, Math.round(finalWidth));
                 finalHeight = Math.max(1, Math.round(finalHeight));
 
-                // Create SVG blob
                 const svgBlob = new Blob([finalSvgText], { type: 'image/svg+xml' });
                 svgUrl = URL.createObjectURL(svgBlob);
 
-                // Create canvas
                 const canvas = document.createElement('canvas');
                 canvas.width = finalWidth;
                 canvas.height = finalHeight;
                 const ctx = canvas.getContext('2d');
 
-                // Add white background for JPG if needed
                 if (format === 'jpg' || format === 'jpeg') {
                     ctx.fillStyle = '#ffffff';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
 
-                // Load SVG as image
                 const img = new Image();
 
                 await new Promise((resolveLoad, rejectLoad) => {
                     const timeout = setTimeout(() => {
                         if (svgUrl) URL.revokeObjectURL(svgUrl);
                         rejectLoad(new Error('SVG load timeout'));
-                    }, 15000);
+                    }, IMAGE_LOAD_TIMEOUT);
 
                     img.onload = () => {
                         clearTimeout(timeout);
@@ -2072,10 +1319,8 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                     img.src = svgUrl;
                 });
 
-                // Draw SVG onto canvas
                 ctx.drawImage(img, 0, 0, finalWidth, finalHeight);
 
-                // Set output format
                 let mimeType, extension;
                 switch (format.toLowerCase()) {
                     case 'jpg':
@@ -2096,7 +1341,6 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                         extension = 'png';
                 }
 
-                // Convert to blob
                 canvas.toBlob(
                     (blob) => {
                         if (!blob) {
@@ -2109,7 +1353,7 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                         resolve(new File([blob], fileName, { type: mimeType }));
                     },
                     mimeType,
-                    format.toLowerCase() === 'png' ? 0.9 : 0.85
+                    format.toLowerCase() === 'png' ? DEFAULT_PNG_QUALITY : DEFAULT_QUALITY
                 );
 
             } catch (error) {
@@ -2123,15 +1367,10 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
     });
 };
 
-/**
- * Create SVG placeholder that respects aspect ratio
- */
 const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetHeight, format) => {
     return new Promise((resolve) => {
-        // Try to get aspect ratio from filename or use default
-        let aspectRatio = 1; // Default square
+        let aspectRatio = 1;
 
-        // Try to parse dimensions from filename (common pattern: image-16x9.svg)
         const fileName = svgFile.name || '';
         const dimensionMatch = fileName.match(/(\d+)[x×](\d+)/i);
         if (dimensionMatch) {
@@ -2142,37 +1381,29 @@ const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetH
             }
         }
 
-        // Calculate dimensions based on aspect ratio
         let finalWidth, finalHeight;
 
         if (targetWidth && targetHeight) {
-            // Use the larger dimension to maintain aspect ratio
             const targetAspectRatio = targetWidth / targetHeight;
 
             if (aspectRatio > targetAspectRatio) {
-                // SVG is wider than target - use target width
                 finalWidth = targetWidth;
                 finalHeight = targetWidth / aspectRatio;
             } else {
-                // SVG is taller than target - use target height
                 finalHeight = targetHeight;
                 finalWidth = targetHeight * aspectRatio;
             }
         } else if (targetWidth && !targetHeight) {
-            // Only width specified
             finalWidth = targetWidth;
             finalHeight = targetWidth / aspectRatio;
         } else if (!targetWidth && targetHeight) {
-            // Only height specified
             finalHeight = targetHeight;
             finalWidth = targetHeight * aspectRatio;
         } else {
-            // No dimensions specified - use reasonable defaults
             finalWidth = 400;
             finalHeight = 400 / aspectRatio;
         }
 
-        // Ensure integer dimensions
         finalWidth = Math.round(finalWidth);
         finalHeight = Math.round(finalHeight);
 
@@ -2181,42 +1412,34 @@ const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetH
         canvas.height = finalHeight;
         const ctx = canvas.getContext('2d');
 
-        // Draw background that matches aspect ratio
         ctx.fillStyle = '#f8f9fa';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Draw border
         ctx.strokeStyle = '#dee2e6';
         ctx.lineWidth = 2;
         ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
 
-        // Calculate center
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
 
-        // Draw icon
         ctx.fillStyle = '#4a90e2';
         ctx.font = `bold ${Math.min(32, canvas.height / 8)}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('🖋️', centerX, centerY - 30);
 
-        // Draw text
         ctx.fillStyle = '#495057';
         ctx.font = `bold ${Math.min(18, canvas.height / 12)}px Arial`;
         ctx.fillText('SVG', centerX, centerY);
 
-        // Aspect ratio info
         ctx.fillStyle = '#6c757d';
         ctx.font = `${Math.min(14, canvas.height / 16)}px Arial`;
         ctx.fillText(`${Math.round(aspectRatio * 100) / 100}:1`, centerX, centerY + 30);
 
-        // Dimensions
         ctx.fillStyle = '#28a745';
         ctx.font = `${Math.min(12, canvas.height / 20)}px Arial`;
         ctx.fillText(`${finalWidth}×${finalHeight}`, centerX, centerY + 60);
 
-        // Set output format
         let mimeType, extension;
         switch (format.toLowerCase()) {
             case 'jpg':
@@ -2245,29 +1468,17 @@ const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetH
     });
 };
 
-// ================================
-// Format Conversion Functions
-// ================================
-/**
- * Converts legacy formats (TIFF, BMP, ICO) to web-compatible PNG.
- * @async
- * @param {File} imageFile - Legacy format image file
- * @returns {Promise<File>} Converted PNG file
- */
 const convertLegacyFormat = async (imageFile) => {
-    // Safely get file properties
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
-    const legacyFormats = ['image/tiff', 'image/tif', 'image/bmp', 'image/x-icon', 'image/vnd.microsoft.icon'];
-    const isTIFF = mimeType === 'image/tiff' || mimeType === 'image/tif' ||
+    const isTIFF = TIFF_FORMATS.includes(mimeType) ||
         fileName.endsWith('.tiff') || fileName.endsWith('.tif');
 
-    if (!legacyFormats.includes(mimeType) && !isTIFF) {
+    if (!LEGACY_FORMATS.includes(mimeType) && !isTIFF) {
         return imageFile;
     }
 
-    // Try multiple conversion methods for TIFF
     if (isTIFF) {
         try {
             return await convertTIFFForProcessing(imageFile);
@@ -2276,7 +1487,6 @@ const convertLegacyFormat = async (imageFile) => {
         }
     }
 
-    // Standard conversion for other legacy formats (BMP, ICO)
     return new Promise((resolve, reject) => {
         const img = new Image();
         const objectUrl = URL.createObjectURL(imageFile);
@@ -2284,7 +1494,7 @@ const convertLegacyFormat = async (imageFile) => {
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(objectUrl);
             reject(new Error('Image load timeout'));
-        }, 30000);
+        }, IMAGE_LOAD_TIMEOUT);
 
         img.onload = () => {
             clearTimeout(timeout);
@@ -2294,7 +1504,6 @@ const convertLegacyFormat = async (imageFile) => {
                 canvas.height = img.naturalHeight;
                 const ctx = canvas.getContext('2d');
 
-                // Draw the image
                 ctx.drawImage(img, 0, 0);
 
                 canvas.toBlob((blob) => {
@@ -2323,7 +1532,6 @@ const convertLegacyFormat = async (imageFile) => {
             clearTimeout(timeout);
             URL.revokeObjectURL(objectUrl);
 
-            // For BMP/ICO files that fail to load, create a placeholder
             if (fileName.endsWith('.bmp') || fileName.endsWith('.ico')) {
                 createSimpleLegacyConversion(imageFile)
                     .then(resolve)
@@ -2337,9 +1545,6 @@ const convertLegacyFormat = async (imageFile) => {
     });
 };
 
-/**
- * Convert TIFF with browser's built-in support
- */
 const convertTIFFWithBrowser = (tiffFile) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -2348,7 +1553,7 @@ const convertTIFFWithBrowser = (tiffFile) => {
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(objectUrl);
             reject(new Error('TIFF load timeout'));
-        }, 30000);
+        }, IMAGE_LOAD_TIMEOUT);
 
         img.onload = () => {
             clearTimeout(timeout);
@@ -2391,117 +1596,7 @@ const convertTIFFWithBrowser = (tiffFile) => {
     });
 };
 
-
-
-/**
- * Create a placeholder file for TIFF when conversion fails
- */
-const createTIFFPlaceholderFile = async (tiffFile, targetWidth = null, targetHeight = null) => {
-    return new Promise((resolve) => {
-        const canvas = document.createElement('canvas');
-
-        // Try to get original dimensions from the file name or metadata
-        let originalWidth = 800;
-        let originalHeight = 600;
-
-        // Check if we have target dimensions
-        if (targetWidth && targetHeight) {
-            originalWidth = targetWidth;
-            originalHeight = targetHeight;
-        } else {
-            // Try to parse dimensions from filename (common pattern: image-1920x1080.tiff)
-            const fileName = tiffFile.name || '';
-            const dimensionMatch = fileName.match(/(\d+)x(\d+)/);
-            if (dimensionMatch) {
-                originalWidth = parseInt(dimensionMatch[1]);
-                originalHeight = parseInt(dimensionMatch[2]);
-            }
-        }
-
-        // Set canvas to original aspect ratio
-        const maxSize = 800;
-        let canvasWidth, canvasHeight;
-
-        if (originalWidth > originalHeight) {
-            canvasWidth = Math.min(maxSize, originalWidth);
-            canvasHeight = Math.round((originalHeight / originalWidth) * canvasWidth);
-        } else {
-            canvasHeight = Math.min(maxSize, originalHeight);
-            canvasWidth = Math.round((originalWidth / originalHeight) * canvasHeight);
-        }
-
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-        const ctx = canvas.getContext('2d');
-
-        // Draw background with gradient
-        const gradient = ctx.createLinearGradient(0, 0, canvasWidth, canvasHeight);
-        gradient.addColorStop(0, '#f8f9fa');
-        gradient.addColorStop(1, '#e9ecef');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-        // Draw border
-        ctx.strokeStyle = '#007bff';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(10, 10, canvasWidth - 20, canvasHeight - 20);
-
-        // Calculate text position based on canvas size
-        const centerX = canvasWidth / 2;
-        const centerY = canvasHeight / 2;
-
-        // Draw icon
-        ctx.fillStyle = '#6c757d';
-        ctx.font = `bold ${Math.min(48, canvasHeight / 8)}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🖼️', centerX, centerY - (canvasHeight / 10));
-
-        // Draw text
-        ctx.fillStyle = '#343a40';
-        ctx.font = `bold ${Math.min(24, canvasHeight / 12)}px Arial`;
-        ctx.fillText('TIFF Image', centerX, centerY);
-
-        ctx.fillStyle = '#6c757d';
-        ctx.font = `${Math.min(14, canvasHeight / 20)}px Arial`;
-        const fileName = tiffFile.name || 'TIFF File';
-        const displayName = fileName.length > 30 ? fileName.substring(0, 30) + '...' : fileName;
-        ctx.fillText(displayName, centerX, centerY + (canvasHeight / 10));
-
-        ctx.fillStyle = '#28a745';
-        ctx.font = `${Math.min(12, canvasHeight / 25)}px Arial`;
-        ctx.fillText(`Original: ${originalWidth}×${originalHeight}`, centerX, centerY + (canvasHeight / 5));
-
-        // Convert to PNG
-        canvas.toBlob((blob) => {
-            const newName = tiffFile.name ?
-                tiffFile.name.replace(/\.(tiff|tif)$/i, '.png') :
-                'converted-tiff.png';
-            resolve(new File([blob], newName, { type: 'image/png' }));
-        }, 'image/png', 0.9);
-    });
-};
-
-/**
- * Optimizes image for web with transparency handling and legacy format support.
- * @async
- * @param {File} imageFile - Image file to optimize
- * @param {number} quality - Compression quality (0-1)
- * @param {string} format - Output format ('webp', 'jpg', 'png')
- * @returns {Promise<File>} Optimized image file
- * @throws {Error} If invalid image file provided
- */
-/**
- * Optimizes image for web with transparency handling and legacy format support.
- * @async
- * @param {File} imageFile - Image file to optimize
- * @param {number} quality - Compression quality (0-1)
- * @param {string} format - Output format ('webp', 'jpg', 'png', 'avif', 'original')
- * @returns {Promise<File>} Optimized image file
- * @throws {Error} If invalid image file provided
- */
-export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') => {
-    // Safely check file properties
+export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, format = 'webp') => {
     if (!imageFile || typeof imageFile !== 'object') {
         throw new Error('Invalid image file provided to optimizeForWeb');
     }
@@ -2509,11 +1604,9 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
-    // Check if this is a TIFF file
-    const isTIFF = fileName.endsWith('.tiff') || fileName.endsWith('.tif') ||
-        mimeType === 'image/tiff' || mimeType === 'image/tif';
+    const isTIFF = TIFF_FORMATS.includes(mimeType) ||
+        fileName.endsWith('.tiff') || fileName.endsWith('.tif');
 
-    // Handle SVG files specially
     if (mimeType === 'image/svg+xml' || fileName.endsWith('.svg')) {
         try {
             return await convertSVGToRaster(imageFile, 1000, 1000, format);
@@ -2522,30 +1615,20 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
         }
     }
 
-    // Check for legacy formats
-    const legacyFormats = [
-        'image/tiff', 'image/tif', 'image/bmp',
-        'image/x-icon', 'image/vnd.microsoft.icon'
-    ];
-
-    const isLegacyFormat = legacyFormats.includes(mimeType) ||
+    const isLegacyFormat = LEGACY_FORMATS.includes(mimeType) ||
         fileName.endsWith('.tiff') || fileName.endsWith('.tif') ||
         fileName.endsWith('.bmp') || fileName.endsWith('.ico');
 
     let processedFile = imageFile;
 
-    // Convert legacy formats first
     if (isLegacyFormat) {
         try {
-            // For TIFF files, use the improved converter
             if (isTIFF) {
                 processedFile = await convertTIFFForProcessing(imageFile);
             } else {
-                // For other legacy formats
                 processedFile = await convertLegacyFormat(imageFile);
             }
         } catch (error) {
-            // Create appropriate placeholder
             if (isTIFF) {
                 processedFile = await createTIFFPlaceholderFile(imageFile);
             } else {
@@ -2554,22 +1637,16 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
         }
     }
 
-    // Check if user wants to keep original format
     if (format === 'original') {
-        // If we converted a legacy format, return the converted file
         if (isLegacyFormat) {
             return processedFile;
         }
-        // Otherwise return original file with original format
         return imageFile;
     }
 
-    // For TIFF files that were successfully converted, proceed with optimization
-    // [Rest of the optimizeForWeb function remains the same...]
     const supportsAVIF = await checkAVIFSupport();
     const hasTransparency = await checkImageTransparency(processedFile);
 
-    // For JPG format with transparency, we need to add white background
     const needsWhiteBackground = (format === 'jpg' || format === 'jpeg') && hasTransparency;
 
     return new Promise((resolve, reject) => {
@@ -2583,17 +1660,15 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
             return;
         }
 
-        // Set timeout for image loading
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(objectUrl);
             reject(new Error('Image load timeout'));
-        }, 30000);
+        }, IMAGE_LOAD_TIMEOUT);
 
         img.onload = () => {
             clearTimeout(timeout);
 
             try {
-                // Ensure natural dimensions are valid
                 if (img.naturalWidth === 0 || img.naturalHeight === 0) {
                     URL.revokeObjectURL(objectUrl);
                     reject(new Error('Image has invalid dimensions'));
@@ -2605,13 +1680,11 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
                 canvas.height = img.naturalHeight;
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-                // Add white background for JPG if image has transparency
                 if (needsWhiteBackground) {
                     ctx.fillStyle = '#ffffff';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
 
-                // Draw the image
                 ctx.drawImage(img, 0, 0);
 
                 let mimeType, extension;
@@ -2626,7 +1699,6 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
                     case 'png':
                         mimeType = 'image/png';
                         extension = 'png';
-                        // PNG uses undefined for lossless compression
                         targetQuality = undefined;
                         break;
                     case 'webp':
@@ -2647,7 +1719,6 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
                         extension = 'webp';
                 }
 
-                // Convert to blob
                 canvas.toBlob((blob) => {
                     URL.revokeObjectURL(objectUrl);
                     if (!blob) {
@@ -2670,15 +1741,12 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
             clearTimeout(timeout);
             URL.revokeObjectURL(objectUrl);
 
-            // For TIFF files that fail to load, create a placeholder
             if (isTIFF) {
                 createTIFFPlaceholderFile(imageFile)
                     .then((placeholderFile) => {
-                        // Try to optimize the placeholder
                         optimizeForWeb(placeholderFile, quality, format)
                             .then(resolve)
                             .catch(() => {
-                                // If optimization fails, return the placeholder as-is
                                 resolve(placeholderFile);
                             });
                     })
@@ -2694,32 +1762,20 @@ export const optimizeForWeb = async (imageFile, quality = 0.8, format = 'webp') 
     });
 };
 
-/**
- * Convert SVG to raster and then crop it (proper order: convert first, then crop)
- * @async
- * @param {File} svgFile - SVG file to process
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
- * @param {string} format - Output format
- * @param {string} cropPosition - Crop position
- * @returns {Promise<File>} Cropped raster image
- */
 export const convertSVGToRasterAndCrop = async (svgFile, targetWidth, targetHeight, format = 'webp', cropPosition = 'center') => {
     try {
-        // Step 1: Convert SVG to raster first (with larger size to preserve quality)
-        const scaleFactor = 2; // Convert at higher resolution for better quality
+        const scaleFactor = 2;
         const conversionWidth = Math.max(targetWidth, 500) * scaleFactor;
         const conversionHeight = Math.max(targetHeight, 500) * scaleFactor;
 
         const rasterFile = await convertSVGToRaster(svgFile, conversionWidth, conversionHeight, 'png');
 
-        // Step 2: Now crop the raster image to target dimensions
         const cropResults = await processLemGendaryCrop(
             [{ file: rasterFile, name: svgFile.name }],
             targetWidth,
             targetHeight,
             cropPosition,
-            { quality: 0.9, format: format }
+            { quality: DEFAULT_PNG_QUALITY, format: format }
         );
 
         if (cropResults.length > 0 && cropResults[0].cropped) {
@@ -2729,31 +1785,24 @@ export const convertSVGToRasterAndCrop = async (svgFile, targetWidth, targetHeig
         throw new Error('Crop operation failed');
 
     } catch (error) {
-        // Fallback: create a placeholder with the target dimensions
         return await createSVGPlaceholderWithAspectRatio(svgFile, targetWidth, targetHeight, format);
     }
 };
 
-/**
- * Simple conversion for legacy formats when main conversion fails
- */
 const createSimpleLegacyConversion = async (imageFile) => {
     return new Promise((resolve) => {
         const canvas = document.createElement('canvas');
         const fileName = imageFile.name.toLowerCase();
 
-        // Set canvas size based on file type
         let width = 800;
         let height = 600;
 
-        // Try to parse dimensions from filename
         const dimensionMatch = fileName.match(/(\d+)x(\d+)/);
         if (dimensionMatch) {
             width = parseInt(dimensionMatch[1]);
             height = parseInt(dimensionMatch[2]);
         }
 
-        // Limit size
         const maxSize = 1200;
         if (width > maxSize || height > maxSize) {
             const scale = Math.min(maxSize / width, maxSize / height);
@@ -2765,50 +1814,41 @@ const createSimpleLegacyConversion = async (imageFile) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
 
-        // Draw informative placeholder
         ctx.fillStyle = '#f8f9fa';
         ctx.fillRect(0, 0, width, height);
 
-        // Draw border
         ctx.strokeStyle = '#dee2e6';
         ctx.lineWidth = 2;
         ctx.strokeRect(10, 10, width - 20, height - 20);
 
-        // Determine file type for display
         let fileType = 'File';
         if (fileName.endsWith('.tiff') || fileName.endsWith('.tif')) fileType = 'TIFF';
         else if (fileName.endsWith('.bmp')) fileType = 'BMP';
         else if (fileName.endsWith('.ico')) fileType = 'ICO';
 
-        // Calculate center
         const centerX = width / 2;
         const centerY = height / 2;
 
-        // Draw icon
         ctx.fillStyle = '#6c757d';
         ctx.font = `bold ${Math.min(48, height / 8)}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('📄', centerX, centerY - 50);
 
-        // Draw file type
         ctx.fillStyle = '#343a40';
         ctx.font = `bold ${Math.min(24, height / 12)}px Arial`;
         ctx.fillText(fileType, centerX, centerY);
 
-        // Draw dimensions
         ctx.fillStyle = '#28a745';
         ctx.font = `${Math.min(16, height / 16)}px Arial`;
         ctx.fillText(`${width} × ${height}`, centerX, centerY + 40);
 
-        // Draw filename
         ctx.fillStyle = '#6c757d';
         ctx.font = `${Math.min(14, height / 20)}px Arial`;
         const displayName = imageFile.name.length > 30 ?
             imageFile.name.substring(0, 27) + '...' : imageFile.name;
         ctx.fillText(displayName, centerX, centerY + 80);
 
-        // Convert to PNG
         canvas.toBlob((blob) => {
             const newName = imageFile.name ?
                 imageFile.name.replace(/\.[^/.]+$/, '.png') : 'converted.png';
@@ -2817,24 +1857,14 @@ const createSimpleLegacyConversion = async (imageFile) => {
     });
 };
 
-// ================================
-// Utility Functions
-// ================================
-
-/**
- * Creates image objects from file arrays with TIFF preview support.
- * @param {Array<File>} files - Array of image files
- * @returns {Array<Object>} Array of image objects
- */
 export const createImageObjects = (files) => {
     return Promise.all(Array.from(files).map(async (file) => {
         const fileObj = file instanceof File ? file : new File([file], file.name || 'image', { type: file.type });
 
-        // Check file types
         const fileName = fileObj.name ? fileObj.name.toLowerCase() : '';
         const mimeType = fileObj.type ? fileObj.type.toLowerCase() : '';
 
-        const isTIFF = mimeType === 'image/tiff' || mimeType === 'image/tif' ||
+        const isTIFF = TIFF_FORMATS.includes(mimeType) ||
             fileName.endsWith('.tiff') || fileName.endsWith('.tif');
         const isSVG = mimeType === 'image/svg+xml' || fileName.endsWith('.svg');
 
@@ -2845,10 +1875,8 @@ export const createImageObjects = (files) => {
 
         if (isTIFF) {
             try {
-                // Try to convert TIFF to PNG for preview
                 const converted = await convertTIFFForProcessing(fileObj);
 
-                // Load the converted image to get dimensions
                 const img = new Image();
                 const objectUrl = URL.createObjectURL(converted);
 
@@ -2874,13 +1902,10 @@ export const createImageObjects = (files) => {
                 };
 
             } catch (error) {
-                // Create a simple placeholder
                 url = createTIFFPlaceholder();
             }
         } else if (isSVG) {
-            // For SVG files, create a raster preview
             try {
-                // First parse SVG to get dimensions
                 const svgText = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = (e) => resolve(e.target.result);
@@ -2892,7 +1917,6 @@ export const createImageObjects = (files) => {
                 const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
                 const svgElement = svgDoc.documentElement;
 
-                // Get dimensions
                 let width = 200;
                 let height = 200;
 
@@ -2912,14 +1936,13 @@ export const createImageObjects = (files) => {
                     }
                 }
 
-                // Create preview
                 const previewFile = await convertSVGToRaster(fileObj, Math.min(200, width), Math.min(200, height), 'png');
                 url = URL.createObjectURL(previewFile);
                 originalWidth = width;
                 originalHeight = height;
 
             } catch (error) {
-                url = createTIFFPlaceholder(); // Use same placeholder for SVG
+                url = createTIFFPlaceholder();
             }
         } else {
             url = URL.createObjectURL(fileObj);
@@ -2944,19 +1967,14 @@ export const createImageObjects = (files) => {
     }));
 };
 
-/**
- * Converts TIFF file to PNG for processing
- */
 const convertTIFFForProcessing = async (tiffFile) => {
     try {
-        // Method 1: Try simple browser loading first (fastest if it works)
         try {
             const result = await convertTIFFSimple(tiffFile);
             return result;
         } catch (simpleError) {
         }
 
-        // Method 2: Try UTIF.js with extensive error handling
         if (window.UTIF && typeof window.UTIF.decode === 'function') {
             try {
                 const result = await convertTIFFWithUTIFRobust(tiffFile);
@@ -2965,13 +1983,11 @@ const convertTIFFForProcessing = async (tiffFile) => {
             }
         }
 
-        // Method 3: Try to extract basic info and create placeholder
         try {
             return await createTIFFPlaceholderFromInfo(tiffFile);
         } catch (placeholderError) {
         }
 
-        // Method 4: Ultimate fallback - generic placeholder
         return await createTIFFPlaceholderFile(tiffFile);
 
     } catch (error) {
@@ -2979,14 +1995,10 @@ const convertTIFFForProcessing = async (tiffFile) => {
     }
 };
 
-/**
- * Create TIFF placeholder from file info when decoding fails
- */
 const createTIFFPlaceholderFromInfo = async (tiffFile) => {
     return new Promise((resolve) => {
         const canvas = document.createElement('canvas');
 
-        // Try to get dimensions from filename
         const fileName = tiffFile.name || '';
         let width = 800;
         let height = 600;
@@ -2997,7 +2009,6 @@ const createTIFFPlaceholderFromInfo = async (tiffFile) => {
             height = parseInt(dimensionMatch[2]);
         }
 
-        // Limit size
         const maxSize = 1200;
         if (width > maxSize || height > maxSize) {
             const scale = Math.min(maxSize / width, maxSize / height);
@@ -3009,7 +2020,6 @@ const createTIFFPlaceholderFromInfo = async (tiffFile) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
 
-        // Draw placeholder
         const gradient = ctx.createLinearGradient(0, 0, width, height);
         gradient.addColorStop(0, '#4a90e2');
         gradient.addColorStop(0.5, '#5cb85c');
@@ -3017,14 +2027,12 @@ const createTIFFPlaceholderFromInfo = async (tiffFile) => {
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
-        // Draw camera icon
         ctx.fillStyle = '#ffffff';
         ctx.font = `bold ${Math.min(60, width / 10)}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('📷', width / 2, height / 2 - 40);
 
-        // Draw text
         ctx.fillStyle = '#ffffff';
         ctx.font = `bold ${Math.min(24, width / 20)}px Arial`;
         ctx.fillText('TIFF Image', width / 2, height / 2 + 20);
@@ -3032,7 +2040,6 @@ const createTIFFPlaceholderFromInfo = async (tiffFile) => {
         ctx.font = `${Math.min(16, width / 30)}px Arial`;
         ctx.fillText(`${width} × ${height}`, width / 2, height / 2 + 60);
 
-        // Convert to PNG
         canvas.toBlob((blob) => {
             const newName = fileName ?
                 fileName.replace(/\.(tiff|tif)$/i, '.png') :
@@ -3042,9 +2049,6 @@ const createTIFFPlaceholderFromInfo = async (tiffFile) => {
     });
 };
 
-/**
- * Robust UTIF.js conversion with comprehensive error handling
- */
 const convertTIFFWithUTIFRobust = (tiffFile) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -3053,7 +2057,6 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
             try {
                 const arrayBuffer = e.target.result;
 
-                // Decode TIFF
                 let ifds;
                 try {
                     ifds = window.UTIF.decode(arrayBuffer);
@@ -3065,10 +2068,8 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                     return;
                 }
 
-                // Get first image
                 const firstIFD = ifds[0];
 
-                // Try to decode image
                 let decodeSuccess = false;
                 try {
                     if (window.UTIF.decodeImage) {
@@ -3081,11 +2082,9 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                 } catch (imageDecodeError) {
                 }
 
-                // Extract dimensions with multiple fallbacks
                 let width = 800;
                 let height = 600;
 
-                // Try multiple possible dimension properties
                 const widthSources = [
                     firstIFD.width,
                     firstIFD['ImageWidth'],
@@ -3106,7 +2105,6 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                     firstIFD[257]?.value
                 ];
 
-                // Find width
                 for (const source of widthSources) {
                     if (source && typeof source === 'number' && source > 0 && source < 100000) {
                         width = Math.round(source);
@@ -3114,7 +2112,6 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                     }
                 }
 
-                // Find height
                 for (const source of heightSources) {
                     if (source && typeof source === 'number' && source > 0 && source < 100000) {
                         height = Math.round(source);
@@ -3122,7 +2119,6 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                     }
                 }
 
-                // Try to get RGBA data, but handle failures gracefully
                 let rgba;
                 let rgbaSuccess = false;
 
@@ -3130,7 +2126,6 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                     try {
                         rgba = window.UTIF.toRGBA8(firstIFD);
                         if (rgba && rgba.length > 0 && rgba.length >= (width * height * 2)) {
-                            // Basic validation: ensure we have at least some pixel data
                             rgbaSuccess = true;
                         } else {
                         }
@@ -3139,7 +2134,6 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                 }
 
                 if (rgbaSuccess) {
-                    // Create canvas with the RGBA data
                     const canvas = document.createElement('canvas');
                     canvas.width = width;
                     canvas.height = height;
@@ -3147,27 +2141,23 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
 
                     const imageData = ctx.createImageData(width, height);
 
-                    // Validate and copy RGBA data
                     const expectedLength = width * height * 4;
                     if (rgba.length === expectedLength) {
                         imageData.data.set(rgba);
                     } else {
-                        // Handle length mismatch
                         const copyLength = Math.min(rgba.length, expectedLength);
                         imageData.data.set(rgba.subarray(0, copyLength));
 
-                        // Fill remaining with white
                         for (let i = copyLength; i < expectedLength; i += 4) {
-                            imageData.data[i] = 255;     // R
-                            imageData.data[i + 1] = 255; // G
-                            imageData.data[i + 2] = 255; // B
-                            imageData.data[i + 3] = 255; // A
+                            imageData.data[i] = 255;
+                            imageData.data[i + 1] = 255;
+                            imageData.data[i + 2] = 255;
+                            imageData.data[i + 3] = 255;
                         }
                     }
 
                     ctx.putImageData(imageData, 0, 0);
 
-                    // Convert to PNG
                     canvas.toBlob((blob) => {
                         if (!blob) {
                             reject(new Error('Failed to create PNG'));
@@ -3182,10 +2172,8 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
 
                     }, 'image/png', 1.0);
                 } else {
-                    // Create placeholder canvas with extracted dimensions
                     const canvas = document.createElement('canvas');
 
-                    // Limit size for placeholder
                     const maxSize = 1200;
                     if (width > maxSize || height > maxSize) {
                         const scale = Math.min(maxSize / width, maxSize / height);
@@ -3197,7 +2185,6 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
 
-                    // Draw gradient background
                     const gradient = ctx.createLinearGradient(0, 0, width, height);
                     gradient.addColorStop(0, '#4a90e2');
                     gradient.addColorStop(0.5, '#5cb85c');
@@ -3205,16 +2192,13 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                     ctx.fillStyle = gradient;
                     ctx.fillRect(0, 0, width, height);
 
-                    // Draw border
                     ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
                     ctx.lineWidth = 4;
                     ctx.strokeRect(20, 20, width - 40, height - 40);
 
-                    // Calculate center
                     const centerX = width / 2;
                     const centerY = height / 2;
 
-                    // Draw camera icon
                     ctx.fillStyle = '#ffffff';
                     const iconSize = Math.min(60, width / 8);
                     ctx.font = `bold ${iconSize}px Arial`;
@@ -3222,23 +2206,19 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                     ctx.textBaseline = 'middle';
                     ctx.fillText('📷', centerX, centerY - 50);
 
-                    // Draw file type
                     ctx.fillStyle = '#ffffff';
                     const titleSize = Math.min(28, width / 15);
                     ctx.font = `bold ${titleSize}px Arial`;
                     ctx.fillText('TIFF Image', centerX, centerY);
 
-                    // Draw dimensions
                     const infoSize = Math.min(18, width / 25);
                     ctx.font = `${infoSize}px Arial`;
                     ctx.fillText(`${width} × ${height}`, centerX, centerY + 40);
 
-                    // Draw status
                     ctx.fillStyle = '#ff6b6b';
                     ctx.font = `${Math.min(14, width / 30)}px Arial`;
                     ctx.fillText('Preview Not Available', centerX, centerY + 80);
 
-                    // Convert to PNG
                     canvas.toBlob((blob) => {
                         if (!blob) {
                             reject(new Error('Failed to create placeholder'));
@@ -3262,12 +2242,8 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
     });
 };
 
-/**
- * Simple TIFF conversion using browser's image capabilities
- */
 const convertTIFFSimple = (tiffFile) => {
     return new Promise((resolve, reject) => {
-        // Create object URL
         const objectUrl = URL.createObjectURL(tiffFile);
         const img = new Image();
 
@@ -3285,10 +2261,8 @@ const convertTIFFSimple = (tiffFile) => {
                 canvas.height = img.naturalHeight;
                 const ctx = canvas.getContext('2d');
 
-                // Draw the image
                 ctx.drawImage(img, 0, 0);
 
-                // Convert to PNG
                 canvas.toBlob((blob) => {
                     URL.revokeObjectURL(objectUrl);
 
@@ -3321,9 +2295,6 @@ const convertTIFFSimple = (tiffFile) => {
     });
 };
 
-/**
- * Creates a placeholder SVG for TIFF files when conversion fails
- */
 const createTIFFPlaceholder = () => {
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(`
         <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
@@ -3336,88 +2307,34 @@ const createTIFFPlaceholder = () => {
     `);
 };
 
-/**
- * Cleans up blob URLs from image objects.
- * @param {Array<Object>} imageObjects - Array of image objects with URLs
- * @returns {void}
- */
 export const cleanupBlobUrls = (imageObjects) => {
     imageObjects?.forEach(image => {
-        // Clean up main URL
         if (image.url && image.url.startsWith('blob:')) {
             try {
                 URL.revokeObjectURL(image.url);
             } catch (e) {
-                // Ignore errors
             }
         }
 
-        // Clean up TIFF preview data
         if (image.previewData && image.previewData.url) {
             try {
                 URL.revokeObjectURL(image.previewData.url);
             } catch (e) {
-                // Ignore errors
             }
         }
 
-        // Clean up any canvas references
         if (image.previewData && image.previewData.canvas) {
             try {
-                // Clear canvas to free memory
                 const ctx = image.previewData.canvas.getContext('2d');
                 ctx.clearRect(0, 0, image.previewData.canvas.width, image.previewData.canvas.height);
             } catch (e) {
-                // Ignore errors
             }
         }
     });
 };
 
-/**
- * Ensures an image object has a valid File object.
- * @async
- * @param {Object} image - Image object
- * @returns {Promise<File>} Valid file object
- * @throws {Error} If no valid file data found
- */
-export const ensureFileObject = async (image) => {
-    if (image.file instanceof File || image.file instanceof Blob) {
-        return image.file;
-    }
-
-    if (image.url && image.url.startsWith('blob:')) {
-        try {
-            const response = await fetch(image.url);
-            const blob = await response.blob();
-            return new File([blob], image.name || 'image', { type: blob.type });
-        } catch (error) {
-            throw new Error('Invalid image file');
-        }
-    }
-
-    if (image.url && image.url.startsWith('data:')) {
-        try {
-            const response = await fetch(image.url);
-            const blob = await response.blob();
-            return new File([blob], image.name || 'image', { type: blob.type });
-        } catch (error) {
-            throw new Error('Invalid image file');
-        }
-    }
-
-    throw new Error('No valid file data found');
-};
-
-/**
- * Checks if an image has transparency.
- * @async
- * @param {File} file - Image file to check
- * @returns {Promise<boolean>} True if image has transparency
- */
 export const checkImageTransparency = async (file) => {
     return new Promise((resolve) => {
-        // Safely handle file object
         if (!file || typeof file !== 'object') {
             resolve(false);
             return;
@@ -3426,14 +2343,12 @@ export const checkImageTransparency = async (file) => {
         const fileName = file.name ? file.name.toLowerCase() : '';
         const mimeType = file.type ? file.type.toLowerCase() : '';
 
-        // Early returns for non-transparent formats
         const nonTransparentFormats = [
             'image/jpeg', 'image/jpg', 'image/bmp',
             'image/tiff', 'image/tif', 'image/x-icon',
             'image/vnd.microsoft.icon', 'image/heic', 'image/heif'
         ];
 
-        // Check file extension
         if (fileName.endsWith('.jpeg') || fileName.endsWith('.jpg') ||
             fileName.endsWith('.bmp') || fileName.endsWith('.tiff') ||
             fileName.endsWith('.tif') || fileName.endsWith('.ico') ||
@@ -3442,30 +2357,24 @@ export const checkImageTransparency = async (file) => {
             return;
         }
 
-        // Check MIME type
         if (mimeType && nonTransparentFormats.includes(mimeType)) {
             resolve(false);
             return;
         }
 
-        // SVG handling
         if (mimeType === 'image/svg+xml' || fileName.endsWith('.svg')) {
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
                     const svgText = e.target.result;
 
-                    // Quick regex checks for common transparency indicators
                     const hasTransparency =
-                        // Opacity attributes
                         svgText.includes('opacity=') ||
                         svgText.includes('opacity:') ||
                         svgText.includes('fill-opacity=') ||
                         svgText.includes('stroke-opacity=') ||
-                        // RGBA colors
                         svgText.match(/rgba\([^)]+\)/i) ||
                         svgText.match(/hsla\([^)]+\)/i) ||
-                        // Transparent fill/stroke
                         svgText.includes('fill="none"') ||
                         svgText.includes('stroke="none"') ||
                         svgText.includes('fill: none') ||
@@ -3474,9 +2383,7 @@ export const checkImageTransparency = async (file) => {
                         svgText.includes('fill:#fff0') ||
                         svgText.includes('fill: transparent') ||
                         svgText.includes('stroke: transparent') ||
-                        // CSS class with opacity
                         svgText.match(/\.\w+\s*{[^}]*opacity:/i) ||
-                        // CSS style with rgba
                         svgText.match(/style="[^"]*rgba\([^)]+\)[^"]*"/i);
 
                     resolve(hasTransparency);
@@ -3489,7 +2396,6 @@ export const checkImageTransparency = async (file) => {
             return;
         }
 
-        // GIF handling (indexed transparency)
         if (mimeType === 'image/gif' || fileName.endsWith('.gif')) {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -3497,26 +2403,17 @@ export const checkImageTransparency = async (file) => {
                     const arrayBuffer = e.target.result;
                     const bytes = new Uint8Array(arrayBuffer);
 
-                    // GIF format has transparency flag in byte 11
-                    // Check for GIF89a with transparency
                     if (bytes.length >= 13) {
-                        // Check GIF signature (GIF89a)
                         const signature = String.fromCharCode(...bytes.slice(0, 6));
                         if (signature === 'GIF89a') {
-                            // Byte 10 contains packed fields
                             const packedFields = bytes[10];
-                            // Check if transparency flag is set (bit 0 of byte 10)
                             const hasColorTable = (packedFields & 0x80) !== 0;
                             const colorTableSize = packedFields & 0x07;
 
                             if (hasColorTable && bytes.length >= 14 + (3 * (1 << (colorTableSize + 1)))) {
-                                // Check if transparency is enabled (byte 11 is present if flag is set)
-                                // Actually, transparency is indicated by the presence of a Graphic Control Extension
-                                // Look for Graphic Control Extension (0x21 0xF9)
                                 for (let i = 13; i < bytes.length - 1; i++) {
                                     if (bytes[i] === 0x21 && bytes[i + 1] === 0xF9) {
                                         if (i + 4 < bytes.length) {
-                                            // Byte at i+4 contains transparency flag (bit 0)
                                             const transparencyFlag = (bytes[i + 4] & 0x01) !== 0;
                                             resolve(transparencyFlag);
                                             return;
@@ -3536,7 +2433,6 @@ export const checkImageTransparency = async (file) => {
             return;
         }
 
-        // For PNG, WebP, AVIF, APNG - need to load the image
         const transparentFormats = [
             'image/png', 'image/webp', 'image/avif', 'image/apng',
             'image/x-png', 'image/x-webp'
@@ -3553,11 +2449,9 @@ export const checkImageTransparency = async (file) => {
             return;
         }
 
-        // Create image element to check pixel data
         const img = new Image();
         const objectUrl = URL.createObjectURL(file);
 
-        // Set timeout for safety
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(objectUrl);
             resolve(false);
@@ -3572,21 +2466,16 @@ export const checkImageTransparency = async (file) => {
                 canvas.width = img.naturalWidth;
                 canvas.height = img.naturalHeight;
 
-                // Clear canvas first
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                // Draw image
                 ctx.drawImage(img, 0, 0);
 
                 const totalPixels = canvas.width * canvas.height;
 
-                // For very large images, use sampling
                 if (totalPixels > 1000000) {
-                    // Create a smaller version for checking
                     const sampleCanvas = document.createElement('canvas');
                     const sampleCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
 
-                    // Calculate sample size (max 1000x1000 pixels)
                     const maxSampleSize = 1000;
                     let sampleWidth, sampleHeight;
 
@@ -3601,14 +2490,11 @@ export const checkImageTransparency = async (file) => {
                     sampleCanvas.width = sampleWidth;
                     sampleCanvas.height = sampleHeight;
 
-                    // Draw scaled version
                     sampleCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height,
                         0, 0, sampleWidth, sampleHeight);
 
-                    // Check sample
                     const sampleData = sampleCtx.getImageData(0, 0, sampleWidth, sampleHeight).data;
 
-                    // Check every pixel in sample
                     for (let i = 3; i < sampleData.length; i += 4) {
                         if (sampleData[i] < 255) {
                             URL.revokeObjectURL(objectUrl);
@@ -3617,16 +2503,12 @@ export const checkImageTransparency = async (file) => {
                         }
                     }
 
-                    // Also check key areas in original (corners and center)
                     const keyAreas = [
-                        // Corners
                         { x: 0, y: 0, width: 1, height: 1 },
                         { x: canvas.width - 1, y: 0, width: 1, height: 1 },
                         { x: 0, y: canvas.height - 1, width: 1, height: 1 },
                         { x: canvas.width - 1, y: canvas.height - 1, width: 1, height: 1 },
-                        // Center
                         { x: Math.floor(canvas.width / 2), y: Math.floor(canvas.height / 2), width: 1, height: 1 },
-                        // Edges
                         { x: Math.floor(canvas.width / 2), y: 0, width: 1, height: 1 },
                         { x: 0, y: Math.floor(canvas.height / 2), width: 1, height: 1 },
                         { x: canvas.width - 1, y: Math.floor(canvas.height / 2), width: 1, height: 1 },
@@ -3642,19 +2524,16 @@ export const checkImageTransparency = async (file) => {
                                 return;
                             }
                         } catch (error) {
-                            // Skip if we can't access this area
                         }
                     }
 
                     URL.revokeObjectURL(objectUrl);
                     resolve(false);
                 } else {
-                    // For smaller images, check all pixels
                     try {
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const data = imageData.data;
 
-                        // Check every 4th pixel (alpha channel) with stride for performance
                         let stride = 1;
                         if (totalPixels > 250000) stride = 4;
                         else if (totalPixels > 100000) stride = 2;
@@ -3667,7 +2546,6 @@ export const checkImageTransparency = async (file) => {
                             }
                         }
 
-                        // If no transparent pixels found with stride, check corners and center
                         if (stride > 1) {
                             const checkPixels = [
                                 { x: 0, y: 0 },
@@ -3690,7 +2568,6 @@ export const checkImageTransparency = async (file) => {
                         URL.revokeObjectURL(objectUrl);
                         resolve(false);
                     } catch (error) {
-                        // Fallback to sampling method
                         try {
                             const hasTransparency = checkTransparencyBySampling(ctx, canvas.width, canvas.height);
                             URL.revokeObjectURL(objectUrl);
@@ -3717,17 +2594,8 @@ export const checkImageTransparency = async (file) => {
     });
 };
 
-
-/**
- * Helper function to check transparency by sampling when full pixel access is restricted.
- * @param {CanvasRenderingContext2D} ctx - Canvas context
- * @param {number} width - Image width
- * @param {number} height - Image height
- * @returns {boolean} True if transparency detected
- */
 const checkTransparencyBySampling = (ctx, width, height) => {
     try {
-        // Create a smaller version for sampling
         const sampleWidth = Math.min(100, width);
         const sampleHeight = Math.min(100, height);
         const sampleCanvas = document.createElement('canvas');
@@ -3735,13 +2603,10 @@ const checkTransparencyBySampling = (ctx, width, height) => {
         sampleCanvas.height = sampleHeight;
         const sampleCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
 
-        // Draw scaled version
         sampleCtx.drawImage(ctx.canvas, 0, 0, width, height, 0, 0, sampleWidth, sampleHeight);
 
-        // Check sample
         const sampleData = sampleCtx.getImageData(0, 0, sampleWidth, sampleHeight).data;
 
-        // Check every pixel
         for (let i = 3; i < sampleData.length; i += 4) {
             if (sampleData[i] < 255) {
                 return true;
@@ -3753,15 +2618,9 @@ const checkTransparencyBySampling = (ctx, width, height) => {
         return false;
     }
 };
-/**
- * Enhanced version that also returns transparency type for better format selection.
- * @async
- * @param {File} file - Image file to check
- * @returns {Promise<Object>} Transparency details object
- */
+
 export const checkImageTransparencyDetailed = async (file) => {
     return new Promise((resolve) => {
-        // Quick format checks
         const nonTransparentFormats = [
             'image/jpeg', 'image/jpg', 'image/bmp',
             'image/tiff', 'image/tif', 'image/x-icon',
@@ -3771,7 +2630,6 @@ export const checkImageTransparencyDetailed = async (file) => {
         const fileName = file.name.toLowerCase();
         const mimeType = file.type.toLowerCase();
 
-        // Check if it's definitely non-transparent
         if (nonTransparentFormats.includes(mimeType) ||
             fileName.endsWith('.jpeg') || fileName.endsWith('.jpg') ||
             fileName.endsWith('.bmp') || fileName.endsWith('.tiff') ||
@@ -3786,7 +2644,6 @@ export const checkImageTransparencyDetailed = async (file) => {
             return;
         }
 
-        // SVG special handling
         if (mimeType === 'image/svg+xml' || fileName.endsWith('.svg')) {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -3810,7 +2667,7 @@ export const checkImageTransparencyDetailed = async (file) => {
                     resolve({
                         hasTransparency,
                         type: hasTransparency ? 'svg-transparency' : 'opaque',
-                        alphaChannel: false, // SVG doesn't have alpha channel in the same way
+                        alphaChannel: false,
                         format: 'svg'
                     });
                 } catch (error) {
@@ -3832,7 +2689,6 @@ export const checkImageTransparencyDetailed = async (file) => {
             return;
         }
 
-        // GIF special handling
         if (mimeType === 'image/gif' || fileName.endsWith('.gif')) {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -3844,7 +2700,6 @@ export const checkImageTransparencyDetailed = async (file) => {
                     if (bytes.length >= 13) {
                         const signature = String.fromCharCode(...bytes.slice(0, 6));
                         if (signature === 'GIF89a') {
-                            // Look for Graphic Control Extension (0x21 0xF9)
                             for (let i = 13; i < bytes.length - 1; i++) {
                                 if (bytes[i] === 0x21 && bytes[i + 1] === 0xF9) {
                                     if (i + 4 < bytes.length) {
@@ -3859,7 +2714,7 @@ export const checkImageTransparencyDetailed = async (file) => {
                     resolve({
                         hasTransparency,
                         type: hasTransparency ? 'gif-transparency' : 'opaque',
-                        alphaChannel: false, // GIF uses indexed transparency
+                        alphaChannel: false,
                         format: 'gif'
                     });
                 } catch (error) {
@@ -3881,9 +2736,7 @@ export const checkImageTransparencyDetailed = async (file) => {
             return;
         }
 
-        // For other formats, use the standard check
         checkImageTransparency(file).then((hasTransparency) => {
-            // Determine format
             let format = 'unknown';
             if (mimeType.includes('png')) format = 'png';
             else if (mimeType.includes('webp')) format = 'webp';
@@ -3894,16 +2747,15 @@ export const checkImageTransparencyDetailed = async (file) => {
             else if (fileName.endsWith('.avif')) format = 'avif';
             else if (fileName.endsWith('.apng')) format = 'apng';
 
-            // Determine transparency type
             let type = 'opaque';
             let alphaChannel = false;
 
             if (hasTransparency) {
                 if (format === 'gif') {
-                    type = 'gif-transparency'; // Indexed transparency
+                    type = 'gif-transparency';
                     alphaChannel = false;
                 } else if (['png', 'webp', 'avif', 'apng'].includes(format)) {
-                    type = 'alpha-channel'; // True alpha channel
+                    type = 'alpha-channel';
                     alphaChannel = true;
                 } else {
                     type = 'unknown-transparency';
@@ -3928,15 +2780,7 @@ export const checkImageTransparencyDetailed = async (file) => {
     });
 };
 
-/**
- * Quick check that avoids loading the entire image when possible.
- * Useful for format selection decisions.
- * @async
- * @param {File} file - Image file to check
- * @returns {Promise<boolean>} True if image has transparency
- */
 export const checkImageTransparencyQuick = async (file) => {
-    // Quick checks based on file type and extension
     const nonTransparentFormats = [
         'image/jpeg', 'image/jpg', 'image/bmp',
         'image/tiff', 'image/tif', 'image/x-icon',
@@ -3946,7 +2790,6 @@ export const checkImageTransparencyQuick = async (file) => {
     const fileName = file.name.toLowerCase();
     const mimeType = file.type.toLowerCase();
 
-    // Check extensions first
     if (fileName.endsWith('.jpeg') || fileName.endsWith('.jpg') ||
         fileName.endsWith('.bmp') || fileName.endsWith('.tiff') ||
         fileName.endsWith('.tif') || fileName.endsWith('.ico') ||
@@ -3954,17 +2797,15 @@ export const checkImageTransparencyQuick = async (file) => {
         return false;
     }
 
-    // Check MIME types
     if (nonTransparentFormats.includes(mimeType)) {
         return false;
     }
 
-    // For SVG, check file content quickly
     if (mimeType === 'image/svg+xml' || fileName.endsWith('.svg')) {
         return new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = (e) => {
-                const text = e.target.result.substring(0, 5000); // Check first 5KB
+                const text = e.target.result.substring(0, 5000);
                 const hasTransparency =
                     text.includes('opacity=') ||
                     text.includes('opacity:') ||
@@ -3976,11 +2817,10 @@ export const checkImageTransparencyQuick = async (file) => {
                 resolve(hasTransparency);
             };
             reader.onerror = () => resolve(false);
-            reader.readAsText(file.slice(0, 5000)); // Only read first 5KB
+            reader.readAsText(file.slice(0, 5000));
         });
     }
 
-    // For GIF, check quickly using binary
     if (mimeType === 'image/gif' || fileName.endsWith('.gif')) {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -3989,11 +2829,9 @@ export const checkImageTransparencyQuick = async (file) => {
                     const arrayBuffer = e.target.result;
                     const bytes = new Uint8Array(arrayBuffer);
 
-                    // Quick GIF89a transparency check
                     if (bytes.length >= 14) {
                         const signature = String.fromCharCode(...bytes.slice(0, 6));
                         if (signature === 'GIF89a') {
-                            // Look for Graphic Control Extension near the beginning
                             for (let i = 13; i < Math.min(1000, bytes.length - 1); i++) {
                                 if (bytes[i] === 0x21 && bytes[i + 1] === 0xF9) {
                                     if (i + 4 < bytes.length) {
@@ -4011,46 +2849,13 @@ export const checkImageTransparencyQuick = async (file) => {
                 }
             };
             reader.onerror = () => resolve(false);
-            reader.readAsArrayBuffer(file.slice(0, 1024)); // Only read first 1KB
+            reader.readAsArrayBuffer(file.slice(0, 1024));
         });
     }
 
-    // For other formats, need to load the image
     return checkImageTransparency(file);
 };
 
-/**
- * Calculates total files generated from selected templates.
- * @param {Array<string>} selectedTemplates - Array of selected template IDs
- * @param {Array<Object>} SOCIAL_MEDIA_TEMPLATES - All available templates
- * @returns {number} Total number of files to generate
- */
-export const calculateTotalTemplateFiles = (selectedTemplates, SOCIAL_MEDIA_TEMPLATES) => {
-    if (!selectedTemplates || selectedTemplates.length === 0) return 0;
-
-    let totalFiles = 0;
-    const templateIds = selectedTemplates;
-    const templates = SOCIAL_MEDIA_TEMPLATES.filter(t => templateIds.includes(t.id));
-
-    templates.forEach(template => {
-        if (template.category === 'web') {
-            totalFiles += 2;
-        } else if (template.category === 'logo') {
-            totalFiles += 1;
-        } else {
-            totalFiles += 1;
-        }
-    });
-
-    return totalFiles;
-};
-
-/**
- * Generates processing summary object.
- * @param {Object} summaryData - Summary data
- * @param {Function} t - Translation function
- * @returns {Object} Processing summary
- */
 export const generateProcessingSummary = (summaryData, t) => {
     const summary = {
         mode: summaryData.mode,
@@ -4067,7 +2872,7 @@ export const generateProcessingSummary = (summaryData, t) => {
         summary.upscalingUsed = true;
     }
     if (summaryData.cropWidth && summaryData.cropHeight) {
-        const cropType = summaryData.cropMode === 'smart' ? t('operations.aiCrop') : t('operations.standardCrop');
+        const cropType = summaryData.cropMode === CROP_MODES.SMART ? t('operations.aiCrop') : t('operations.standardCrop');
         summary.operations.push(`${cropType} ${summaryData.cropWidth}x${summaryData.cropHeight}`);
         summary.upscalingUsed = true;
     }
@@ -4082,7 +2887,7 @@ export const generateProcessingSummary = (summaryData, t) => {
         summary.operations.push(t('operations.autoUpscaling'));
     }
 
-    if (summaryData.mode === 'templates') {
+    if (summaryData.mode === PROCESSING_MODES.TEMPLATES) {
         summary.templatesApplied = summaryData.templatesApplied;
         summary.categoriesApplied = summaryData.categoriesApplied;
         summary.operations = [
@@ -4095,11 +2900,6 @@ export const generateProcessingSummary = (summaryData, t) => {
     return summary;
 };
 
-/**
- * Validates image files.
- * @param {Array<File>} files - Array of files to validate
- * @returns {Array<File>} Array of valid image files
- */
 export const validateImageFiles = (files) => {
     return Array.from(files).filter(file => {
         const mimeType = file.type.toLowerCase();
@@ -4109,257 +2909,6 @@ export const validateImageFiles = (files) => {
     });
 };
 
-/**
- * Formats file size for display.
- * @param {number} bytes - File size in bytes
- * @returns {string} Formatted file size string
- */
-export const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-};
-
-// ================================
-// Orchestration Functions
-// ================================
-
-/**
- * Orchestrates custom image processing workflow.
- * @async
- * @param {Array<Object>} selectedImages - Selected image objects
- * @param {Object} processingOptions - Processing configuration
- * @param {boolean} aiModelLoaded - Whether AI model is loaded
- * @param {Function} onProgress - Progress callback
- * @returns {Promise<Array<Object>>} Processed images
- * @throws {Error} If no images selected or no output formats
- */
-export const orchestrateCustomProcessing = async (selectedImages, processingOptions, aiModelLoaded = false, onProgress = null) => {
-    try {
-        if (!selectedImages || selectedImages.length === 0) {
-            throw new Error('No images selected for processing');
-        }
-
-        if (!processingOptions.output.formats || processingOptions.output.formats.length === 0) {
-            throw new Error('No output formats selected');
-        }
-
-        if (onProgress) onProgress('preparing', 10);
-
-        const processedImages = await processCustomImagesBatch(
-            selectedImages,
-            processingOptions,
-            aiModelLoaded
-        );
-
-        if (onProgress) onProgress('completed', 100);
-
-        return processedImages;
-
-    } catch (error) {
-        throw error;
-    }
-};
-
-/**
- * Orchestrates template image processing workflow.
- * @async
- * @param {Object} selectedImage - Selected image object
- * @param {Array<string>} selectedTemplateIds - Selected template IDs
- * @param {Array<Object>} templateConfigs - Template configurations
- * @param {boolean} useSmartCrop - Whether to use AI smart cropping
- * @param {boolean} aiModelLoaded - Whether AI model is loaded
- * @param {Function} onProgress - Progress callback
- * @returns {Promise<Array<Object>>} Processed template images
- * @throws {Error} If no image or templates selected
- */
-export const orchestrateTemplateProcessing = async (selectedImage, selectedTemplateIds, templateConfigs, useSmartCrop = false, aiModelLoaded = false, onProgress = null) => {
-    try {
-        if (!selectedImage) {
-            throw new Error('No image selected for template processing');
-        }
-
-        if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
-            throw new Error('No templates selected');
-        }
-
-        if (onProgress) onProgress('preparing', 10);
-
-        const selectedTemplates = templateConfigs.filter(template =>
-            selectedTemplateIds.includes(template.id)
-        );
-
-        if (onProgress) onProgress('processing', 30);
-
-        const processedImages = await processTemplateImages(
-            selectedImage,
-            selectedTemplates,
-            useSmartCrop,
-            aiModelLoaded
-        );
-
-        if (onProgress) onProgress('completed', 100);
-
-        return processedImages;
-
-    } catch (error) {
-        throw error;
-    }
-};
-
-/**
- * Validates processing options before starting.
- * @param {Object} processingOptions - Processing options to validate
- * @returns {Object} Validation result with isValid flag and errors array
- */
-export const validateProcessingOptions = (processingOptions) => {
-    const errors = [];
-
-    // Validate compression quality
-    if (processingOptions.compression?.quality) {
-        const quality = parseInt(processingOptions.compression.quality);
-        if (isNaN(quality) || quality < 1 || quality > 100) {
-            errors.push('Compression quality must be between 1 and 100');
-        }
-    }
-
-    // Validate file size target if provided (optional field)
-    if (processingOptions.compression?.fileSize && processingOptions.compression.fileSize !== '') {
-        const fileSize = parseInt(processingOptions.compression.fileSize);
-        if (isNaN(fileSize) || fileSize < 1) {
-            errors.push('Target file size must be a positive number in KB');
-        } else if (fileSize > 100000) { // 100MB limit
-            errors.push('Target file size cannot exceed 100,000 KB (100MB)');
-        }
-    }
-
-    // Validate resize dimension if provided (optional field)
-    if (processingOptions.resizeDimension && processingOptions.resizeDimension !== '') {
-        const dimension = parseInt(processingOptions.resizeDimension);
-        if (isNaN(dimension) || dimension < 1) {
-            errors.push('Resize dimension must be a positive number');
-        } else if (dimension > 10000) {
-            errors.push('Resize dimension cannot exceed 10000 pixels');
-        }
-    }
-    // If resize is enabled but dimension is empty, that's OK - resize will be skipped
-
-    // Validate crop dimensions if provided (optional fields)
-    if (processingOptions.cropWidth && processingOptions.cropWidth !== '') {
-        const width = parseInt(processingOptions.cropWidth);
-        if (isNaN(width) || width < 1) {
-            errors.push('Crop width must be a positive number');
-        } else if (width > 10000) {
-            errors.push('Crop width cannot exceed 10000 pixels');
-        }
-    }
-
-    if (processingOptions.cropHeight && processingOptions.cropHeight !== '') {
-        const height = parseInt(processingOptions.cropHeight);
-        if (isNaN(height) || height < 1) {
-            errors.push('Crop height must be a positive number');
-        } else if (height > 10000) {
-            errors.push('Crop height cannot exceed 10000 pixels');
-        }
-    }
-
-    // Validate that if one crop dimension is provided, both should be provided
-    if ((processingOptions.cropWidth && processingOptions.cropWidth !== '') !==
-        (processingOptions.cropHeight && processingOptions.cropHeight !== '')) {
-        errors.push('Both crop width and height must be provided together, or leave both empty to skip cropping');
-    }
-
-    // Validate crop aspect ratio when both dimensions are provided
-    if (processingOptions.cropWidth && processingOptions.cropWidth !== '' &&
-        processingOptions.cropHeight && processingOptions.cropHeight !== '') {
-        const width = parseInt(processingOptions.cropWidth);
-        const height = parseInt(processingOptions.cropHeight);
-
-        if (width > 0 && height > 0) {
-            const aspectRatio = width / height;
-            if (aspectRatio > 100 || aspectRatio < 0.01) {
-                errors.push('Crop dimensions have extreme aspect ratio. Please use reasonable values.');
-            }
-        }
-    }
-
-    // Validate output formats
-    if (processingOptions.output?.formats) {
-        const validFormats = ['webp', 'avif', 'jpg', 'jpeg', 'png', 'original'];
-        const invalidFormats = processingOptions.output.formats.filter(f => !validFormats.includes(f));
-
-        if (invalidFormats.length > 0) {
-            errors.push(`Invalid output formats: ${invalidFormats.join(', ')}`);
-        }
-
-        if (processingOptions.output.formats.length === 0) {
-            errors.push('At least one output format must be selected');
-        }
-    }
-
-    // Validate rename options only if rename is enabled
-    if (processingOptions.output?.rename) {
-        const newFileName = processingOptions.output?.newFileName || '';
-
-        if (!newFileName.trim()) {
-            errors.push('New file name cannot be empty when rename is enabled');
-        } else {
-            // Check for invalid characters
-            const invalidChars = /[<>:"/\\|?*\x00-\x1F]/g;
-            if (invalidChars.test(newFileName)) {
-                errors.push('New file name contains invalid characters');
-            }
-
-            // Check length
-            if (newFileName.length > 100) {
-                errors.push('New file name cannot exceed 100 characters');
-            }
-        }
-    }
-
-    // Validate crop mode if provided
-    if (processingOptions.cropMode && !['smart', 'standard'].includes(processingOptions.cropMode)) {
-        errors.push('Crop mode must be either "smart" or "standard"');
-    }
-
-    // Validate crop position if provided
-    if (processingOptions.cropPosition) {
-        const validPositions = ['center', 'top-left', 'top', 'top-right', 'left',
-            'right', 'bottom-left', 'bottom', 'bottom-right'];
-        if (!validPositions.includes(processingOptions.cropPosition)) {
-            errors.push('Invalid crop position');
-        }
-    }
-
-    // Validate template mode specific options
-    if (processingOptions.processingMode === 'templates') {
-        if (!processingOptions.templateSelectedImage) {
-            errors.push('No image selected for template processing');
-        }
-
-        if (!processingOptions.selectedTemplates || processingOptions.selectedTemplates.length === 0) {
-            errors.push('No templates selected for processing');
-        }
-    }
-
-    // Validate processing mode
-    if (processingOptions.processingMode && !['custom', 'templates'].includes(processingOptions.processingMode)) {
-        errors.push('Invalid processing mode');
-    }
-
-    return {
-        isValid: errors.length === 0,
-        errors
-    };
-};
-
-/**
- * Gets processing configuration based on options.
- * @param {Object} processingOptions - User processing options
- * @returns {Object} Formatted processing configuration
- */
 export const getProcessingConfiguration = (processingOptions) => {
     const config = {
         compression: {
@@ -4371,72 +2920,33 @@ export const getProcessingConfiguration = (processingOptions) => {
             rename: processingOptions.output?.rename || false,
             newFileName: processingOptions.output?.newFileName || ''
         },
-        // Only enable resize if dimension is provided and not empty
         resize: (processingOptions.showResize && processingOptions.resizeDimension &&
             processingOptions.resizeDimension.trim() !== '') ? {
             enabled: true,
             dimension: parseInt(processingOptions.resizeDimension)
         } : { enabled: false },
-        // Only enable crop if both dimensions are provided and not empty
         crop: (processingOptions.showCrop && processingOptions.cropWidth &&
             processingOptions.cropWidth.trim() !== '' && processingOptions.cropHeight &&
             processingOptions.cropHeight.trim() !== '') ? {
             enabled: true,
             width: parseInt(processingOptions.cropWidth),
             height: parseInt(processingOptions.cropHeight),
-            mode: processingOptions.cropMode || 'standard',
+            mode: processingOptions.cropMode || CROP_MODES.STANDARD,
             position: processingOptions.cropPosition || 'center'
         } : { enabled: false },
         templates: {
             selected: processingOptions.selectedTemplates || [],
-            mode: processingOptions.processingMode || 'custom'
+            mode: processingOptions.processingMode || PROCESSING_MODES.CUSTOM
         }
     };
 
     return config;
 };
 
-/**
- * Gets available output formats.
- * @returns {Array<Object>} Array of format objects with id, name, and description
- */
 export const getAvailableFormats = () => {
-    return [
-        { id: 'webp', name: 'WebP', description: 'Modern format with excellent compression' },
-        { id: 'avif', name: 'AVIF', description: 'Next-gen format with superior compression' },
-        { id: 'jpg', name: 'JPEG', description: 'Standard format with good compression' },
-        { id: 'png', name: 'PNG', description: 'Lossless format with transparency support' },
-        { id: 'original', name: 'Original', description: 'Keep original format' }
-    ];
+    return OUTPUT_FORMATS;
 };
 
-/**
- * Gets template by ID.
- * @param {string} templateId - Template ID
- * @param {Array<Object>} templateConfigs - Template configurations
- * @returns {Object|null} Template object or null if not found
- */
-export const getTemplateById = (templateId, templateConfigs) => {
-    return templateConfigs.find(t => t.id === templateId) || null;
-};
-
-/**
- * Gets templates by category.
- * @param {string} category - Template category
- * @param {Array<Object>} templateConfigs - Template configurations
- * @returns {Array<Object>} Array of templates in the category
- */
-export const getTemplatesByCategory = (category, templateConfigs) => {
-    return templateConfigs.filter(t => t.category === category);
-};
-
-/**
- * Generates file name based on processing options.
- * @param {string} originalName - Original file name
- * @param {Object} options - Processing options
- * @param {number} index - File index (for batch processing)
- * @returns {string} Generated file name
- */
 export const generateFileName = (originalName, options, index = 0) => {
     const baseName = originalName.replace(/\.[^/.]+$/, '');
     const originalExtension = originalName.split('.').pop();
@@ -4457,10 +2967,10 @@ export const generateFileName = (originalName, options, index = 0) => {
         }
 
         if (options.crop && options.crop.enabled) {
-            const cropType = options.crop.mode === 'smart' ? 'smart-crop' : 'crop';
+            const cropType = options.crop.mode === CROP_MODES.SMART ? 'smart-crop' : 'crop';
             suffixParts.push(`${cropType}-${options.crop.width}x${options.crop.height}`);
 
-            if (options.crop.mode === 'standard' && options.crop.position !== 'center') {
+            if (options.crop.mode === CROP_MODES.STANDARD && options.crop.position !== 'center') {
                 suffixParts.push(options.crop.position);
             }
         }
@@ -4480,16 +2990,9 @@ export const generateFileName = (originalName, options, index = 0) => {
     }
 };
 
-/**
- * Creates processing summary for display.
- * @param {Object} result - Processing result
- * @param {Object} options - Processing options
- * @param {Function} t - Translation function
- * @returns {Object} Processing summary
- */
 export const createProcessingSummary = (result, options, t) => {
     const summary = {
-        mode: options.templates?.mode || 'custom',
+        mode: options.templates?.mode || PROCESSING_MODES.CUSTOM,
         imagesProcessed: result.imagesProcessed || 0,
         operations: [],
         aiUsed: false,
@@ -4505,11 +3008,11 @@ export const createProcessingSummary = (result, options, t) => {
     }
 
     if (options.crop && options.crop.enabled) {
-        const cropType = options.crop.mode === 'smart' ? t('operations.aiCrop') : t('operations.standardCrop');
+        const cropType = options.crop.mode === CROP_MODES.SMART ? t('operations.aiCrop') : t('operations.standardCrop');
         summary.operations.push(`${cropType} ${options.crop.width}x${options.crop.height}`);
         summary.upscalingUsed = true;
 
-        if (options.crop.mode === 'smart') {
+        if (options.crop.mode === CROP_MODES.SMART) {
             summary.aiUsed = true;
         }
     }
@@ -4544,13 +3047,6 @@ export const createProcessingSummary = (result, options, t) => {
     return summary;
 };
 
-/**
- * Handles image file selection with validation.
- * @param {Event} e - File input event
- * @param {Function} onUpload - Upload callback
- * @param {Object} options - Validation options
- * @returns {void}
- */
 export const handleFileSelect = (e, onUpload, options = {}) => {
     const files = Array.from(e.target.files).filter(file => {
         const mimeType = file.type.toLowerCase();
@@ -4570,13 +3066,6 @@ export const handleFileSelect = (e, onUpload, options = {}) => {
     if (files.length > 0) onUpload(files);
 };
 
-/**
- * Handles image drop with validation.
- * @param {Event} e - Drag and drop event
- * @param {Function} onUpload - Upload callback
- * @param {Object} options - Validation options
- * @returns {void}
- */
 export const handleImageDrop = (e, onUpload, options = {}) => {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files).filter(file => {
@@ -4597,24 +3086,12 @@ export const handleImageDrop = (e, onUpload, options = {}) => {
     if (files.length > 0) onUpload(files);
 };
 
-// ================================
-// Internal Helper Functions
-// ================================
-
-/**
- * Calculates upscale factor needed for target dimensions.
- * @param {number} originalWidth - Original image width
- * @param {number} originalHeight - Original image height
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
- * @returns {number} Required upscale factor
- */
 const calculateUpscaleFactor = (originalWidth, originalHeight, targetWidth, targetHeight) => {
     const widthScale = targetWidth / originalWidth;
     const heightScale = targetHeight / originalHeight;
     const requiredScale = Math.max(widthScale, heightScale);
 
-    const availableScales = [2, 3, 4];
+    const availableScales = AVAILABLE_UPSCALE_FACTORS;
 
     for (const scale of availableScales) {
         if (scale >= requiredScale) {
@@ -4627,13 +3104,6 @@ const calculateUpscaleFactor = (originalWidth, originalHeight, targetWidth, targ
     return 1;
 };
 
-/**
- * Calculates safe dimensions for upscaling.
- * @param {number} originalWidth - Original image width
- * @param {number} originalHeight - Original image height
- * @param {number} scale - Upscale factor
- * @returns {Object} Safe dimensions and adjustment status
- */
 const calculateSafeDimensions = (originalWidth, originalHeight, scale) => {
     let targetWidth = Math.round(originalWidth * scale);
     let targetHeight = Math.round(originalHeight * scale);
@@ -4661,14 +3131,6 @@ const calculateSafeDimensions = (originalWidth, originalHeight, scale) => {
     return { width: targetWidth, height: targetHeight, scale: scale, wasAdjusted: false };
 };
 
-/**
- * Upscales image using AI with fallback.
- * @async
- * @param {File} imageFile - Image file to upscale
- * @param {number} scale - Upscale factor
- * @param {string} originalName - Original file name
- * @returns {Promise<File>} Upscaled image file
- */
 const upscaleImageWithAI = async (imageFile, scale, originalName) => {
     if (aiUpscalingDisabled) {
         return upscaleImageEnhancedFallback(imageFile, scale, originalName);
@@ -4695,8 +3157,9 @@ const upscaleImageWithAI = async (imageFile, scale, originalName) => {
             return upscaleImageEnhancedFallback(imageFile, safeDimensions.scale, originalName);
         }
 
-        const availableScales = [2, 3, 4];
-        if (!availableScales.includes(scale) || scale > 4) {
+        const availableScales = AVAILABLE_UPSCALE_FACTORS;
+        const maxScaleFactor = Math.max(...AVAILABLE_UPSCALE_FACTORS);
+        if (!availableScales.includes(scale) || scale > maxScaleFactor) {
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
             return upscaleImageEnhancedFallback(imageFile, Math.min(scale, 2), originalName);
@@ -4742,7 +3205,7 @@ const upscaleImageWithAI = async (imageFile, scale, originalName) => {
         URL.revokeObjectURL(objectUrl);
 
         const blob = await new Promise(resolve => {
-            canvas.toBlob(resolve, 'image/webp', 0.9);
+            canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
         });
 
         if (!blob) throw new Error('Failed to create blob from upscaled canvas');
@@ -4782,12 +3245,6 @@ const upscaleImageWithAI = async (imageFile, scale, originalName) => {
     }
 };
 
-/**
- * Loads upscaler for specific scale.
- * @async
- * @param {number} scale - Upscale factor
- * @returns {Promise<Object>} Upscaler instance
- */
 const loadUpscalerForScale = async (scale) => {
     if (upscalerInstances[scale] && upscalerUsageCount[scale] !== undefined) {
         upscalerUsageCount[scale]++;
@@ -4854,11 +3311,6 @@ const loadUpscalerForScale = async (scale) => {
     }
 };
 
-/**
- * Loads upscaler library from CDN.
- * @async
- * @returns {Promise<void>}
- */
 const loadUpscalerFromCDN = () => {
     return new Promise((resolve) => {
         if (window.Upscaler) {
@@ -4874,12 +3326,6 @@ const loadUpscalerFromCDN = () => {
     });
 };
 
-/**
- * Loads upscaler model script from CDN.
- * @async
- * @param {string} src - Script source URL
- * @returns {Promise<void>}
- */
 const loadUpscalerModelScript = (src) => {
     return new Promise((resolve, reject) => {
         const scriptId = `upscaler-model-${src.split('/').pop()}`;
@@ -4897,11 +3343,6 @@ const loadUpscalerModelScript = (src) => {
     });
 };
 
-/**
- * Releases upscaler for specific scale.
- * @param {number} scale - Upscale factor
- * @returns {void}
- */
 const releaseUpscalerForScale = (scale) => {
     if (upscalerUsageCount[scale]) {
         upscalerUsageCount[scale]--;
@@ -4923,14 +3364,6 @@ const releaseUpscalerForScale = (scale) => {
     }
 };
 
-/**
- * Safely upscales image with timeout protection.
- * @async
- * @param {Object} upscaler - Upscaler instance
- * @param {HTMLImageElement} img - Image element
- * @param {number} scale - Upscale factor
- * @returns {Promise<any>} Upscaling result
- */
 const safeUpscale = async (upscaler, img, scale) => {
     if (upscalerUsageCount[scale]) upscalerUsageCount[scale]++;
 
@@ -4938,7 +3371,7 @@ const safeUpscale = async (upscaler, img, scale) => {
         const timeoutId = setTimeout(() => {
             releaseUpscalerForScale(scale);
             reject(new Error('Upscaling timeout'));
-        }, 45000);
+        }, UPSCALING_TIMEOUT);
 
         try {
             upscaler.upscale(img, {
@@ -4962,11 +3395,6 @@ const safeUpscale = async (upscaler, img, scale) => {
     });
 };
 
-/**
- * Creates enhanced fallback upscaler.
- * @param {number} scale - Upscale factor
- * @returns {Object} Fallback upscaler object
- */
 const createEnhancedFallbackUpscaler = (scale) => {
     return {
         scale,
@@ -4995,19 +3423,12 @@ const createEnhancedFallbackUpscaler = (scale) => {
     };
 };
 
-/**
- * Applies smart sharpening to canvas.
- * @param {HTMLCanvasElement} canvas - Canvas element
- * @param {CanvasRenderingContext2D} ctx - Canvas context
- * @param {number} scale - Upscale factor
- * @returns {void}
- */
 const applySmartSharpening = (canvas, ctx, scale) => {
     try {
         const width = canvas.width;
         const height = canvas.height;
 
-        if (width * height > 4000000) return;
+        if (width * height > MAX_PIXELS_FOR_SMART_SHARPENING) return;
 
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
@@ -5037,18 +3458,9 @@ const applySmartSharpening = (canvas, ctx, scale) => {
 
         ctx.putImageData(imageData, 0, 0);
     } catch (error) {
-        // Silent fail
     }
 };
 
-/**
- * Upscales image using enhanced fallback method.
- * @async
- * @param {File} imageFile - Image file to upscale
- * @param {number} scale - Upscale factor
- * @param {string} originalName - Original file name
- * @returns {Promise<File>} Upscaled image file
- */
 const upscaleImageEnhancedFallback = async (imageFile, scale, originalName) => {
     const img = document.createElement('img');
     const objectUrl = URL.createObjectURL(imageFile);
@@ -5064,7 +3476,7 @@ const upscaleImageEnhancedFallback = async (imageFile, scale, originalName) => {
     const targetWidth = Math.round(originalWidth * scale);
     const targetHeight = Math.round(originalHeight * scale);
 
-    if (targetWidth * targetHeight > 4000000) {
+    if (targetWidth * targetHeight > MAX_PIXELS_FOR_SMART_SHARPENING) {
         URL.revokeObjectURL(objectUrl);
         return upscaleImageTiled(img, scale, originalName);
     }
@@ -5083,7 +3495,7 @@ const upscaleImageEnhancedFallback = async (imageFile, scale, originalName) => {
     URL.revokeObjectURL(objectUrl);
 
     const blob = await new Promise(resolve => {
-        canvas.toBlob(resolve, 'image/webp', 0.85);
+        canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
     });
 
     const extension = originalName.split('.').pop();
@@ -5095,36 +3507,27 @@ const upscaleImageEnhancedFallback = async (imageFile, scale, originalName) => {
     return new File([blob], newName, { type: 'image/webp' });
 };
 
-/**
- * Upscales large images using tiled approach.
- * @async
- * @param {HTMLImageElement} img - Image element
- * @param {number} scale - Upscale factor
- * @param {string} originalName - Original file name
- * @param {string} objectUrl - Object URL (optional)
- * @returns {Promise<File>} Tiled upscaled image file
- */
 const upscaleImageTiled = async (img, scale, originalName, objectUrl) => {
     const originalWidth = img.naturalWidth;
     const originalHeight = img.naturalHeight;
     const targetWidth = Math.round(originalWidth * scale);
     const targetHeight = Math.round(originalHeight * scale);
 
-    const TILE_SIZE = 2048;
+    const tileSize = TILE_SIZE;
     const canvas = document.createElement('canvas');
     canvas.width = targetWidth;
     canvas.height = targetHeight;
     const ctx = canvas.getContext('2d');
 
-    const xTiles = Math.ceil(targetWidth / TILE_SIZE);
-    const yTiles = Math.ceil(targetHeight / TILE_SIZE);
+    const xTiles = Math.ceil(targetWidth / tileSize);
+    const yTiles = Math.ceil(targetHeight / tileSize);
 
     for (let y = 0; y < yTiles; y++) {
         for (let x = 0; x < xTiles; x++) {
-            const tileX = x * TILE_SIZE;
-            const tileY = y * TILE_SIZE;
-            const tileWidth = Math.min(TILE_SIZE, targetWidth - tileX);
-            const tileHeight = Math.min(TILE_SIZE, targetHeight - tileY);
+            const tileX = x * tileSize;
+            const tileY = y * tileSize;
+            const tileWidth = Math.min(tileSize, targetWidth - tileX);
+            const tileHeight = Math.min(tileSize, targetHeight - tileY);
 
             const srcX = tileX / scale;
             const srcY = tileY / scale;
@@ -5148,7 +3551,7 @@ const upscaleImageTiled = async (img, scale, originalName, objectUrl) => {
     if (objectUrl) URL.revokeObjectURL(objectUrl);
 
     const blob = await new Promise(resolve => {
-        canvas.toBlob(resolve, 'image/webp', 0.85);
+        canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
     });
 
     const extension = originalName.split('.').pop();
@@ -5160,14 +3563,6 @@ const upscaleImageTiled = async (img, scale, originalName, objectUrl) => {
     return new File([blob], newName, { type: 'image/webp' });
 };
 
-/**
- * Processes SVG crop.
- * @async
- * @param {File} svgFile - SVG file to crop
- * @param {number} width - Target width
- * @param {number} height - Target height
- * @returns {Promise<File>} Cropped SVG file
- */
 const processSVGCrop = async (svgFile, width, height) => {
     const img = new Image();
     const svgUrl = URL.createObjectURL(svgFile);
@@ -5204,7 +3599,7 @@ const processSVGCrop = async (svgFile, width, height) => {
     cropCtx.drawImage(tempCanvas, offsetX, offsetY, width, height, 0, 0, width, height);
 
     const croppedBlob = await new Promise(resolve => {
-        cropCanvas.toBlob(resolve, 'image/png', 0.85);
+        cropCanvas.toBlob(resolve, 'image/png', DEFAULT_PNG_QUALITY);
     });
 
     const croppedFile = new File([croppedBlob], svgFile.name.replace(/\.svg$/i, '.png'), {
@@ -5215,14 +3610,6 @@ const processSVGCrop = async (svgFile, width, height) => {
     return croppedFile;
 };
 
-/**
- * Resizes image for cropping.
- * @async
- * @param {File} imageFile - Image file to resize
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
- * @returns {Promise<Object>} Resized image data
- */
 const resizeImageForCrop = async (imageFile, targetWidth, targetHeight) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -5256,7 +3643,7 @@ const resizeImageForCrop = async (imageFile, targetWidth, targetHeight) => {
                     });
                 },
                 'image/webp',
-                0.85
+                DEFAULT_WEBP_QUALITY
             );
         };
 
@@ -5269,12 +3656,6 @@ const resizeImageForCrop = async (imageFile, targetWidth, targetHeight) => {
     });
 };
 
-/**
- * Load image from file with timeout protection
- * @async
- * @param {File} file - Image file
- * @returns {Promise<Object>} Loaded image data
- */
 const loadImage = (file) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -5283,7 +3664,7 @@ const loadImage = (file) => {
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(url);
             reject(new Error('Image load timeout'));
-        }, 30000);
+        }, IMAGE_LOAD_TIMEOUT);
 
         img.onload = () => {
             clearTimeout(timeout);
@@ -5305,30 +3686,24 @@ const loadImage = (file) => {
     });
 };
 
-/**
- * Optimized image loader with performance improvements
- */
 const loadImageWithPerformance = (file) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
         const url = URL.createObjectURL(file);
 
-        // Performance tracking
         const startTime = performance.now();
 
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(url);
             reject(new Error('Image load timeout'));
-        }, 45000); // Increased timeout for large images
+        }, UPSCALING_TIMEOUT);
 
-        // Optimized load handler
         const onLoad = () => {
             const loadTime = performance.now() - startTime;
 
             clearTimeout(timeout);
             URL.revokeObjectURL(url);
 
-            // Use microtask for resolution
             Promise.resolve().then(() => {
                 resolve({
                     element: img,
@@ -5339,12 +3714,10 @@ const loadImageWithPerformance = (file) => {
             });
         };
 
-        // Optimized error handler
         const onError = () => {
             clearTimeout(timeout);
             URL.revokeObjectURL(url);
 
-            // Use microtask for rejection
             Promise.resolve().then(() => {
                 reject(new Error(`Failed to load image: ${file.name}`));
             });
@@ -5354,22 +3727,12 @@ const loadImageWithPerformance = (file) => {
         img.onerror = onError;
         img.src = url;
 
-        // Use decode API for better performance with large images
-        if (file.size > 2000000 && img.decode) { // 2MB+
+        if (file.size > 2000000 && img.decode) {
             img.decode().then(onLoad).catch(onError);
         }
     });
 };
 
-/**
- * Calculates crop offset based on position.
- * @param {number} srcWidth - Source width
- * @param {number} srcHeight - Source height
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
- * @param {string} position - Crop position
- * @returns {Object} Crop offset coordinates
- */
 const calculateCropOffset = (srcWidth, srcHeight, targetWidth, targetHeight, position) => {
     let offsetX, offsetY;
 
@@ -5418,16 +3781,6 @@ const calculateCropOffset = (srcWidth, srcHeight, targetWidth, targetHeight, pos
     return { offsetX, offsetY };
 };
 
-/**
- * Crops image from resized version.
- * @async
- * @param {Object} resized - Resized image data
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
- * @param {string|Object} position - Crop position or subject data
- * @param {File} originalFile - Original file
- * @returns {Promise<File>} Cropped image file
- */
 const cropFromResized = async (resized, targetWidth, targetHeight, position, originalFile) => {
     const img = await loadImage(resized.file);
 
@@ -5447,7 +3800,7 @@ const cropFromResized = async (resized, targetWidth, targetHeight, position, ori
         offsetX = subjectCenterX - targetWidth / 2;
         offsetY = subjectCenterY - targetHeight / 2;
 
-        const margin = Math.min(50, width * 0.1, height * 0.1);
+        const margin = Math.min(CROP_MARGIN, width * 0.1, height * 0.1);
 
         if (x < margin) offsetX = Math.max(0, offsetX - (margin - x));
         if (x + width > resized.width - margin) offsetX = Math.min(offsetX, resized.width - targetWidth);
@@ -5477,7 +3830,7 @@ const cropFromResized = async (resized, targetWidth, targetHeight, position, ori
     );
 
     const blob = await new Promise(resolve => {
-        canvas.toBlob(resolve, 'image/webp', 0.85);
+        canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
     });
 
     const extension = originalFile.name.split('.').pop();
@@ -5499,29 +3852,16 @@ const cropFromResized = async (resized, targetWidth, targetHeight, position, ori
     return new File([blob], newName, { type: 'image/webp' });
 };
 
-/**
- * Gets luminance value from pixel data.
- * @param {Uint8ClampedArray} data - Image data
- * @param {number} idx - Pixel index
- * @returns {number} Luminance value
- */
 const getLuminance = (data, idx) => {
     if (idx < 0 || idx >= data.length) return 0;
     return 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
 };
 
-/**
- * Finds main subject from AI predictions.
- * @param {Array<Object>} predictions - AI predictions
- * @param {number} imgWidth - Image width
- * @param {number} imgHeight - Image height
- * @returns {Object|null} Main subject data
- */
 const findMainSubject = (predictions, imgWidth, imgHeight) => {
     if (!predictions || predictions.length === 0) return null;
 
     const validPredictions = predictions.filter(pred =>
-        pred.score > 0.3 &&
+        pred.score > AI_SETTINGS.MIN_CONFIDENCE &&
         !['book', 'cell phone', 'remote', 'keyboard', 'mouse'].includes(pred.class)
     );
 
@@ -5564,14 +3904,6 @@ const findMainSubject = (predictions, imgWidth, imgHeight) => {
     return scoredPredictions[0];
 };
 
-/**
- * Detects focal point using simple edge detection.
- * @async
- * @param {HTMLImageElement} imgElement - Image element
- * @param {number} width - Image width
- * @param {number} height - Image height
- * @returns {Promise<Object>} Focal point coordinates
- */
 const detectFocalPointSimple = async (imgElement, width, height) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -5616,14 +3948,6 @@ const detectFocalPointSimple = async (imgElement, width, height) => {
     };
 };
 
-/**
- * Adjusts crop position based on focal point.
- * @param {string} position - Original crop position
- * @param {Object} focalPoint - Focal point coordinates
- * @param {number} width - Image width
- * @param {number} height - Image height
- * @returns {string} Adjusted crop position
- */
 const adjustCropPositionForFocalPoint = (position, focalPoint, width, height) => {
     const THRESHOLD = 0.3;
 
@@ -5652,12 +3976,6 @@ const adjustCropPositionForFocalPoint = (position, focalPoint, width, height) =>
     return position;
 };
 
-/**
- * Converts tensor to canvas.
- * @async
- * @param {Object} tensor - TensorFlow tensor
- * @returns {Promise<HTMLCanvasElement>} Canvas element
- */
 const tensorToCanvas = async (tensor) => {
     return new Promise((resolve) => {
         const [height, width, channels] = tensor.shape;
@@ -5688,12 +4006,6 @@ const tensorToCanvas = async (tensor) => {
     });
 };
 
-/**
- * Converts data URL to canvas.
- * @async
- * @param {string} dataURL - Data URL
- * @returns {Promise<HTMLCanvasElement>} Canvas element
- */
 const dataURLToCanvas = (dataURL) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -5710,10 +4022,6 @@ const dataURLToCanvas = (dataURL) => {
     });
 };
 
-/**
- * Cleans up all resources when page unloads.
- * @returns {void}
- */
 export const cleanupAllResources = () => {
     if (memoryCleanupInterval) {
         clearInterval(memoryCleanupInterval);
@@ -5731,96 +4039,8 @@ export const cleanupAllResources = () => {
     textureManagerFailures = 0;
 };
 
-// Initialize memory monitoring
 if (typeof window !== 'undefined') {
     window.addEventListener('load', initializeGPUMemoryMonitor);
     window.addEventListener('beforeunload', cleanupAllResources);
     window.addEventListener('pagehide', cleanupAllResources);
 }
-
-// ============================================
-// Component Logic Functions
-// ============================================
-
-/**
- * Gets available languages.
- * @returns {Array<Object>} Array of language objects
- */
-export const getLanguages = () => {
-    return [
-        { code: 'en', name: 'English', flag: '🇺🇸' },
-        { code: 'hr', name: 'Hrvatski', flag: '🇭🇷' }
-    ];
-};
-
-/**
- * Gets current language object.
- * @param {string} currentLangCode - Current language code
- * @returns {Object} Current language object
- */
-export const getCurrentLanguage = (currentLangCode) => {
-    const languages = getLanguages();
-    return languages.find(lang => lang.code === currentLangCode) || languages[0];
-};
-
-/**
- * Calculates percentage value.
- * @param {number} min - Minimum value
- * @param {number} max - Maximum value
- * @param {number} value - Current value
- * @returns {number} Percentage
- */
-export const calculatePercentage = (min, max, value) => {
-    return ((value - min) / (max - min)) * 100;
-};
-
-/**
- * Generates tick values for range sliders.
- * @param {number} min - Minimum value
- * @param {number} max - Maximum value
- * @returns {Array<number>} Array of tick values
- */
-export const generateTicks = (min, max) => {
-    return [min, 25, 50, 75, max];
-};
-
-/**
- * Gets file extension from filename.
- * @param {string} filename - Filename
- * @returns {string} File extension
- */
-export const getFileExtension = (filename) => {
-    return filename.split('.').pop().toLowerCase();
-};
-
-/**
- * Sanitizes filename by removing invalid characters.
- * @param {string} filename - Original filename
- * @returns {string} Sanitized filename
- */
-export const sanitizeFilename = (filename) => {
-    return filename.replace(/[^a-zA-Z0-9-_.]/g, '_');
-};
-
-/**
- * Checks if browser supports AVIF encoding
- * @async
- * @returns {Promise<boolean>} True if AVIF is supported
- */
-const checkAVIFSupport = async () => {
-    return new Promise((resolve) => {
-        // Create test image to check AVIF decoding support
-        const avif = new Image();
-
-        const timeout = setTimeout(() => {
-            resolve(false);
-        }, 2000);
-
-        avif.onload = avif.onerror = () => {
-            clearTimeout(timeout);
-            resolve(avif.height === 2);
-        };
-
-        avif.src = 'data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADybWV0YQAAAAAAAAAoaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAGxpYmF2aWYAAAAADnBpdG0AAAAAAAEAAAAeaWxvYwAAAABEAAABAAEAAAABAAABGgAAAB0AAAAoaWluZgAAAAAAAQAAABppbmZlAgAAAAABAABhdjAxQ29sb3IAAAAAamlwcnAAAABLaXBjbwAAABRpc3BlAAAAAAAAAAIAAAACAAAAEHBpeGkAAAAAAwgICAAAAAxhdjFDgQ0MAAAAABNjb2xybmNseAACAAIAAYAAAAAXaXBtYQAAAAAAAAABAAEEAQKDBAAAACVtZGF0EgAKCBgANogQEAwgMg8f8D///8WfhwB8+ErK42A=';
-    });
-};

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { calculatePercentage } from '../utils/imageProcessor';
+import { calculatePercentage, generateTicks } from '../utils';
 
 /**
  * A customizable range slider component with visual feedback and tick marks.
@@ -16,6 +16,7 @@ function RangeSlider({
 }) {
   const { t } = useTranslation();
   const percentage = calculatePercentage(min, max, value);
+  const ticks = generateTicks(min, max);
 
   return (
     <>
@@ -139,7 +140,7 @@ function RangeSlider({
 
         {showTicks && (
           <div className="range-ticks">
-            {[min, 25, 50, 75, max].map(tick => (
+            {ticks.map(tick => (
               <span key={tick}>{tick}</span>
             ))}
           </div>
