@@ -1,46 +1,65 @@
-import { useState, useRef, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import ImageUploader from './components/ImageUploader'
-import LanguageSwitcher from './components/LanguageSwitcher'
-import Modal from './components/Modal'
-import { createExportZip } from './utils/exportUtils'
+import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
-  processLemGendaryResize,
-  processLemGendaryCrop,
-  processLemGendaryRename,
-  optimizeForWeb,
-  checkImageTransparency,
-  processSmartCrop
-} from './utils/imageProcessor'
-import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES, getTemplatesByCategory } from './utils/templateConfigs'
-import RangeSlider from './components/RangeSlider'
-import './styles/App.css'
-
-// Import logos (assuming they're in src/assets/)
-import lemGendaIcon from '../src/assets/lemgenda-icon.svg'
-import lemGendaLogo from '../src/assets/lemgenda-logo.svg'
+  orchestrateCustomProcessing,
+  orchestrateTemplateProcessing,
+  createImageObjects,
+  loadAIModel,
+  getProcessingConfiguration,
+  createProcessingSummary,
+  cleanupBlobUrls,
+  createExportZip,
+  downloadZip,
+  generateExportSettings,
+  loadUTIFLibrary
+} from './processors';
+import {
+  validateProcessingOptions,
+  calculateTotalTemplateFiles,
+  formatFileSize
+} from './utils';
+import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './configs/templateConfigs';
+import {
+  PROCESSING_MODES,
+  DEFAULT_COMPRESSION_QUALITY,
+  DEFAULT_OUTPUT_FORMATS,
+  COMPRESSION_QUALITY_RANGE
+} from './constants/sharedConstants';
+import {
+  ImageUploader,
+  Header,
+  Footer,
+  Modal,
+  RangeSlider
+} from './components';
+import './styles/App.css';
 
 /**
- * Main App Component - Image LemGendizer
- * @component
- * @description Main application component for batch image processing and optimization
+ * Main application component for image processing and optimization.
+ *
  * @returns {JSX.Element} Rendered application
  */
 function App() {
-  const { t, i18n } = useTranslation()
-  const [images, setImages] = useState([])
-  const [selectedImages, setSelectedImages] = useState([])
-  const [modal, setModal] = useState({ isOpen: false, title: '', message: '' })
-  const [isLoading, setIsLoading] = useState(false)
-  const [aiModelLoaded, setAiModelLoaded] = useState(false)
-  const [aiLoading, setAiLoading] = useState(false)
+  const { t, i18n } = useTranslation();
+  const [images, setImages] = useState([]);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [modal, setModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [aiModelLoaded, setAiModelLoaded] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [processingSummary, setProcessingSummary] = useState(null);
   const [processingOptions, setProcessingOptions] = useState({
     compression: {
-      quality: 80,
+      quality: DEFAULT_COMPRESSION_QUALITY,  // Using constant
       fileSize: ''
     },
     output: {
-      format: 'webp',
+      formats: DEFAULT_OUTPUT_FORMATS,  // Using constant
       rename: false,
       newFileName: ''
     },
@@ -51,313 +70,369 @@ function App() {
     showCrop: false,
     showTemplates: false,
     selectedTemplates: [],
-    processingMode: 'custom',
+    processingMode: PROCESSING_MODES.CUSTOM,  // Using constant
     templateSelectedImage: null,
     smartCrop: false,
     cropMode: 'smart',
     cropPosition: 'center'
-  })
+  });
 
-  const fileInputRef = useRef(null)
-
-  /**
-   * Get plural suffix for current language
-   * @function
-   * @param {number} count - Count for pluralization
-   * @returns {string} Plural suffix
-   */
-  const getPluralSuffix = (count) => {
-    const language = i18n.language
-    if (language === 'hr') {
-      // Croatian plural rules
-      const lastDigit = count % 10
-      const lastTwoDigits = count % 100
-
-      if (lastDigit === 1 && lastTwoDigits !== 11) return 'a'
-      if (lastDigit >= 2 && lastDigit <= 4 &&
-        (lastTwoDigits < 10 || lastTwoDigits >= 20)) return 'e'
-      return 'a'
-    }
-
-    // English plural rules
-    return count === 1 ? '' : 's'
-  }
+  const fileInputRef = useRef(null);
 
   /**
-   * Load AI model on component mount
-   * @effect
-   * @description Loads TensorFlow.js AI model for smart cropping functionality
+   * Preload UTIF.js library for TIFF support
    */
   useEffect(() => {
-    const loadAIModel = async () => {
-      if (processingOptions.cropMode === 'smart' && !aiModelLoaded) {
+    const preloadLibraries = async () => {
+      try {
+        await loadUTIFLibrary();
+      } catch (error) {
+      }
+    };
+
+    preloadLibraries();
+  }, []);
+
+  /**
+   * Loads AI model when needed for smart cropping or templates.
+   */
+  useEffect(() => {
+    const loadAIModelAsync = async () => {
+      const needsAI = (processingOptions.cropMode === 'smart' && !aiModelLoaded) ||
+        (processingOptions.processingMode === 'templates' && !aiModelLoaded);
+
+      if (needsAI) {
         try {
-          setAiLoading(true)
-          const { loadAIModel } = await import('./utils/imageProcessor')
-          await loadAIModel()
-          setAiModelLoaded(true)
-          setAiLoading(false)
+          setAiLoading(true);
+          await loadAIModel();
+          setAiModelLoaded(true);
+          setAiLoading(false);
         } catch (error) {
-          console.error('Failed to load AI model:', error)
-          setAiLoading(false)
-          showModal(t('message.error'), t('message.aiFailed'))
-          setProcessingOptions(prev => ({ ...prev, cropMode: 'standard' }))
+          setAiLoading(false);
+          showModal(t('message.error'), t('message.aiFailed'), 'error');
+
+          if (processingOptions.cropMode === 'smart') {
+            setProcessingOptions(prev => ({ ...prev, cropMode: 'standard' }));
+          }
         }
       }
-    }
-    loadAIModel()
-  }, [processingOptions.cropMode, t])
+    };
+    loadAIModelAsync();
+  }, [processingOptions.cropMode, processingOptions.processingMode, t]);
 
   /**
-   * Handle image upload from file input or drag-and-drop
-   * @function
-   * @param {File[]} files - Array of uploaded image files
-   * @description Processes uploaded files and adds them to the image list
+   * Cleans up blob URLs when component unmounts.
    */
-  const handleImageUpload = (files) => {
-    const newImages = Array.from(files).map(file => ({
-      id: Date.now() + Math.random(),
-      file,
-      name: file.name,
-      url: URL.createObjectURL(file),
-      size: file.size,
-      type: file.type,
-      optimized: false
-    }))
-    setImages([...images, ...newImages])
-
-    // Auto-select all new images (for custom mode)
-    if (processingOptions.processingMode === 'custom') {
-      setSelectedImages([...selectedImages, ...newImages.map(img => img.id)])
-    }
-
-    if (processingOptions.processingMode === 'templates' && !processingOptions.templateSelectedImage && newImages.length > 0) {
-      setProcessingOptions(prev => ({
-        ...prev,
-        templateSelectedImage: newImages[0].id
-      }))
-    }
-
-    const suffix = getPluralSuffix(files.length)
-    const message = t('message.successUpload', {
-      count: files.length,
-      s: i18n.language === 'en' ? (files.length === 1 ? '' : 's') : '',
-      a: i18n.language === 'hr' ? suffix : '',
-      e: i18n.language === 'hr' ? suffix : ''
-    })
-    showModal(t('message.success'), message)
-  }
+  useEffect(() => {
+    return () => {
+      cleanupBlobUrls(images);
+    };
+  }, []);
 
   /**
-   * Handle image selection in gallery
-   * @function
+   * Handles image upload from file input or drag-and-drop.
+   *
+   * @param {File[]} files - Array of uploaded image files
+   */
+  const handleImageUpload = async (files) => {
+    try {
+      setIsLoading(true);
+      const newImages = await createImageObjects(files);
+
+      setImages(prev => {
+        cleanupBlobUrls(prev);
+        return [...prev, ...newImages];
+      });
+
+      if (processingOptions.processingMode === 'custom') {
+        if (selectedImages.length === 0) {
+          setSelectedImages(newImages.map(img => img.id));
+        } else {
+          setSelectedImages(prev => [...prev, ...newImages.map(img => img.id)]);
+        }
+      }
+
+      if ((processingOptions.processingMode === 'templates' || processingOptions.showTemplates) &&
+        !processingOptions.templateSelectedImage &&
+        newImages.length > 0) {
+        setProcessingOptions(prev => ({
+          ...prev,
+          templateSelectedImage: newImages[0].id
+        }));
+      }
+
+      showModal(t('message.success'), t('message.successUpload', { count: files.length }), 'success');
+
+    } catch (error) {
+      showModal(t('message.error'), t('message.errorUpload'), 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Handles image selection in gallery.
+   *
    * @param {string} imageId - Unique identifier of the image
-   * @description Toggles image selection based on current processing mode
    */
   const handleImageSelect = (imageId) => {
     if (processingOptions.processingMode === 'templates') {
       setProcessingOptions(prev => ({
         ...prev,
         templateSelectedImage: imageId
-      }))
-      setSelectedImages([imageId])
+      }));
+      setSelectedImages([imageId]);
     } else {
       setSelectedImages(prev =>
         prev.includes(imageId)
           ? prev.filter(id => id !== imageId)
           : [...prev, imageId]
-      )
+      );
     }
-  }
+  };
 
   /**
-   * Select or deselect all images
-   * @function
-   * @description Toggles selection state of all uploaded images
+   * Selects or deselects all images.
    */
   const handleSelectAll = () => {
-    if (processingOptions.processingMode === 'templates') {
-      return
-    }
+    if (processingOptions.processingMode === 'templates') return;
 
     if (selectedImages.length === images.length) {
-      setSelectedImages([])
+      setSelectedImages([]);
     } else {
-      setSelectedImages(images.map(img => img.id))
+      setSelectedImages(images.map(img => img.id));
     }
-  }
+  };
 
   /**
-   * Remove selected images from the gallery
-   * @function
-   * @description Removes selected images based on current processing mode
+   * Removes selected images from the gallery.
    */
   const handleRemoveSelected = () => {
     const imagesToRemove = processingOptions.processingMode === 'templates'
       ? [processingOptions.templateSelectedImage].filter(Boolean)
-      : selectedImages
+      : selectedImages;
 
-    setImages(images.filter(img => !imagesToRemove.includes(img.id)))
-    setSelectedImages([])
+    const imagesToRemoveObjects = images.filter(img => imagesToRemove.includes(img.id));
+    cleanupBlobUrls(imagesToRemoveObjects);
+
+    setImages(images.filter(img => !imagesToRemove.includes(img.id)));
+    setSelectedImages([]);
 
     if (processingOptions.processingMode === 'templates') {
       setProcessingOptions(prev => ({
         ...prev,
         templateSelectedImage: null
-      }))
+      }));
     }
 
-    showModal(t('message.removed'), t('message.removedImages'))
-  }
+    showModal(t('message.removed'), t('message.removedImages'), 'success');
+  };
 
   /**
-   * Display modal dialog
-   * @function
+   * Displays modal dialog.
+   *
    * @param {string} title - Modal title
    * @param {string} message - Modal message content
-   * @description Shows a modal dialog with specified title and message
+   * @param {string} type - Modal type ('info', 'success', 'error', 'summary')
    */
-  const showModal = (title, message) => {
-    setModal({ isOpen: true, title, message })
-  }
+  const showModal = (title, message, type = 'info') => {
+    setModal({ isOpen: true, title, message, type });
+  };
 
   /**
-   * Close modal dialog
-   * @function
-   * @description Closes the currently open modal
+   * Shows summary modal with processing details.
+   *
+   * @param {Object} summary - Processing summary object
+   */
+  const showSummaryModal = (summary) => {
+    setProcessingSummary(summary);
+    setModal({
+      isOpen: true,
+      title: t('summary.title'),
+      message: '',
+      type: 'summary'
+    });
+  };
+
+  /**
+   * Closes modal dialog.
    */
   const closeModal = () => {
-    setModal({ isOpen: false, title: '', message: '' })
-  }
+    setModal({ isOpen: false, title: '', message: '', type: 'info' });
+    setProcessingSummary(null);
+  };
 
   /**
-   * Toggle between resize and crop modes
-   * @function
-   * @description Switches UI between resize and crop configuration sections
+   * Toggles between resize and crop modes.
    */
   const toggleResizeCrop = () => {
     setProcessingOptions(prev => ({
       ...prev,
       showResize: !prev.showResize,
       showCrop: !prev.showCrop
-    }))
-  }
+    }));
+  };
 
   /**
-   * Toggle crop mode between standard and smart
-   * @function
-   * @description Switches between standard cropping and AI-powered smart cropping
+   * Toggles crop mode between standard and smart.
    */
   const toggleCropMode = () => {
     setProcessingOptions(prev => ({
       ...prev,
       cropMode: prev.cropMode === 'smart' ? 'standard' : 'smart'
-    }))
-  }
+    }));
+  };
 
   /**
-   * Switch between custom processing and templates mode
-   * @function
-   * @param {string} mode - 'custom' or 'templates'
-   * @description Changes the main processing mode of the application
+   * Toggles format selection.
+   *
+   * @param {string} format - Format to toggle
+   */
+  const handleFormatToggle = (format) => {
+    setProcessingOptions(prev => {
+      const currentFormats = prev.output.formats || [];
+      const newFormats = currentFormats.includes(format)
+        ? currentFormats.filter(f => f !== format)
+        : [...currentFormats, format];
+
+      if (newFormats.length === 0) return prev;
+
+      return {
+        ...prev,
+        output: {
+          ...prev.output,
+          formats: newFormats
+        }
+      };
+    });
+  };
+
+  /**
+   * Selects all output formats.
+   */
+  const handleSelectAllFormats = () => {
+    const allFormats = ['webp', 'avif', 'jpg', 'png'];
+    setProcessingOptions(prev => ({
+      ...prev,
+      output: {
+        ...prev.output,
+        formats: allFormats
+      }
+    }));
+  };
+
+  /**
+   * Clears all output formats.
+   */
+  const handleClearAllFormats = () => {
+    setProcessingOptions(prev => ({
+      ...prev,
+      output: {
+        ...prev.output,
+        formats: ['original']
+      }
+    }));
+  };
+
+  /**
+   * Switches between custom processing and templates mode.
+   *
+   * @param {'custom'|'templates'} mode - Processing mode
    */
   const toggleProcessingMode = (mode) => {
-    const newMode = mode === 'templates' ? 'templates' : 'custom'
+    const newMode = mode === 'templates' ? 'templates' : 'custom';
 
-    if (newMode === 'templates' && selectedImages.length > 1) {
-      const firstSelected = selectedImages[0]
+    if (newMode === 'templates') {
+      let firstImageId = null;
+
+      if (selectedImages.length > 0) {
+        firstImageId = selectedImages[0];
+      } else if (images.length > 0) {
+        firstImageId = images[0].id;
+      }
+
       setProcessingOptions(prev => ({
         ...prev,
         processingMode: newMode,
-        templateSelectedImage: firstSelected,
+        templateSelectedImage: firstImageId,
         showTemplates: true
-      }))
+      }));
+
+      if (firstImageId) setSelectedImages([firstImageId]);
     } else {
       setProcessingOptions(prev => ({
         ...prev,
         processingMode: newMode,
-        showTemplates: newMode === 'templates'
-      }))
-    }
-
-    if (newMode !== 'templates') {
-      setProcessingOptions(prev => ({
-        ...prev,
+        showTemplates: newMode === 'templates',
         templateSelectedImage: null
-      }))
+      }));
     }
-  }
+  };
 
   /**
-   * Toggle selection of a specific template
-   * @function
+   * Toggles selection of a specific template.
+   *
    * @param {string} templateId - Unique identifier of the template
-   * @description Adds or removes a template from the selected templates list
    */
   const handleTemplateToggle = (templateId) => {
     setProcessingOptions(prev => {
       const newSelected = prev.selectedTemplates.includes(templateId)
         ? prev.selectedTemplates.filter(id => id !== templateId)
-        : [...prev.selectedTemplates, templateId]
+        : [...prev.selectedTemplates, templateId];
 
-      return { ...prev, selectedTemplates: newSelected }
-    })
-  }
+      return { ...prev, selectedTemplates: newSelected };
+    });
+  };
 
   /**
-   * Select all available templates
-   * @function
-   * @description Selects every template in the template library
+   * Selects all available templates.
    */
   const handleSelectAllTemplates = () => {
-    const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id)
+    const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id);
     setProcessingOptions(prev => ({
       ...prev,
       selectedTemplates: allTemplateIds
-    }))
-  }
+    }));
+  };
 
   /**
-   * Select all templates in a specific category
-   * @function
+   * Selects all templates in a specific category.
+   *
    * @param {string} category - Template category identifier
-   * @description Selects all templates belonging to the specified category
    */
   const handleSelectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
-      .map(template => template.id)
+      .map(template => template.id);
 
     setProcessingOptions(prev => ({
       ...prev,
       selectedTemplates: [...new Set([...prev.selectedTemplates, ...categoryTemplates])]
-    }))
-  }
+    }));
+  };
 
   /**
-   * Deselect all templates in a specific category
-   * @function
+   * Deselects all templates in a specific category.
+   *
    * @param {string} category - Template category identifier
-   * @description Deselects all templates belonging to the specified category
    */
   const handleDeselectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
-      .map(template => template.id)
+      .map(template => template.id);
 
     setProcessingOptions(prev => ({
       ...prev,
       selectedTemplates: prev.selectedTemplates.filter(id => !categoryTemplates.includes(id))
-    }))
-  }
+    }));
+  };
 
   /**
-   * Update processing options
-   * @function
-   * @param {string} category - Option category ('compression', 'output', etc.)
+   * Updates processing options.
+   *
+   * @param {string} category - Option category
    * @param {string} key - Option key within the category
    * @param {any} value - New option value
-   * @description Updates a specific processing option value
    */
   const handleOptionChange = (category, key, value) => {
     setProcessingOptions(prev => ({
@@ -366,416 +441,191 @@ function App() {
         ...prev[category],
         [key]: value
       }
-    }))
-  }
+    }));
+  };
 
   /**
-   * Update single processing option
-   * @function
+   * Updates single processing option.
+   *
    * @param {string} key - Option key to update
    * @param {any} value - New option value
-   * @description Updates a top-level processing option
    */
   const handleSingleOptionChange = (key, value) => {
     setProcessingOptions(prev => ({
       ...prev,
       [key]: value
-    }))
-  }
+    }));
+  };
 
   /**
-   * Get currently selected images for processing
-   * @function
-   * @returns {Array} Array of selected image objects
-   * @description Returns images selected based on current processing mode
+   * Gets currently selected images for processing.
+   *
+   * @returns {Array<Object>} Array of selected image objects
    */
   const getSelectedImagesForProcessing = () => {
     if (processingOptions.processingMode === 'templates') {
       return processingOptions.templateSelectedImage
         ? images.filter(img => img.id === processingOptions.templateSelectedImage)
-        : []
+        : [];
     } else {
-      return images.filter(img => selectedImages.includes(img.id))
+      return images.filter(img => selectedImages.includes(img.id));
     }
-  }
+  };
 
   /**
-   * Process images using custom settings
-   * @async
-   * @function
-   * @description Applies custom processing options to selected images
+   * Processes images using custom settings.
    */
   const processCustomImages = async () => {
-    const selectedImagesForProcessing = getSelectedImagesForProcessing()
+    const selectedImagesForProcessing = getSelectedImagesForProcessing();
     if (selectedImagesForProcessing.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectImages'))
-      return
+      showModal(t('message.error'), t('message.errorSelectImages'), 'error');
+      return;
     }
 
-    setIsLoading(true)
-    showModal(t('message.processingImages'), t('message.processingImages', { count: selectedImagesForProcessing.length }))
+    const validation = validateProcessingOptions(processingOptions);
+    if (!validation.isValid) {
+      showModal(t('message.error'), validation.errors.join('\n'), 'error');
+      return;
+    }
+
+    setIsLoading(true);
+    showModal(t('message.processingImages', { count: selectedImagesForProcessing.length }), t('message.processingImages', { count: selectedImagesForProcessing.length }), 'info');
 
     try {
-      const processedImages = []
+      const processingConfig = getProcessingConfiguration(processingOptions);
+      const processedImages = await orchestrateCustomProcessing(
+        selectedImagesForProcessing,
+        processingConfig,
+        aiModelLoaded,
+      );
 
-      for (let i = 0; i < selectedImagesForProcessing.length; i++) {
-        const image = selectedImagesForProcessing[i]
-        let processedFile = image.file
+      const settings = generateExportSettings('custom');
+      const zipBlob = await createExportZip(
+        selectedImagesForProcessing,
+        processedImages,
+        settings,
+        'custom',
+        processingOptions.output.formats
+      );
 
-        // Apply resize if dimension is set
-        if (processingOptions.showResize && processingOptions.resizeDimension) {
-          const resizeResults = await processLemGendaryResize(
-            [image],
-            parseInt(processingOptions.resizeDimension)
-          )
-          if (resizeResults.length > 0) {
-            processedFile = resizeResults[0].resized
-          }
-        }
+      downloadZip(zipBlob, 'custom-processed-images');
 
-        // Apply crop if dimensions are set
-        if (processingOptions.showCrop && processingOptions.cropWidth && processingOptions.cropHeight) {
-          let cropResults
+      const summary = createProcessingSummary({
+        imagesProcessed: selectedImagesForProcessing.length,
+        totalFiles: processedImages.length,
+        success: true
+      }, processingConfig, t);
 
-          if (processingOptions.cropMode === 'smart') {
-            // Use AI smart crop
-            if (aiLoading) {
-              showModal(t('message.aiLoading'), t('message.aiLoading'))
-              await new Promise(resolve => setTimeout(resolve, 1000))
-            }
-
-            if (aiModelLoaded) {
-              processedFile = await processSmartCrop(
-                processedFile,
-                parseInt(processingOptions.cropWidth),
-                parseInt(processingOptions.cropHeight)
-              )
-            } else {
-              // Fallback to standard crop if AI not loaded
-              cropResults = await processLemGendaryCrop(
-                [{ ...image, file: processedFile }],
-                parseInt(processingOptions.cropWidth),
-                parseInt(processingOptions.cropHeight),
-                processingOptions.cropPosition
-              )
-              if (cropResults.length > 0) {
-                processedFile = cropResults[0].cropped
-              }
-            }
-          } else {
-            // Use standard crop with position
-            cropResults = await processLemGendaryCrop(
-              [{ ...image, file: processedFile }],
-              parseInt(processingOptions.cropWidth),
-              parseInt(processingOptions.cropHeight),
-              processingOptions.cropPosition
-            )
-            if (cropResults.length > 0) {
-              processedFile = cropResults[0].cropped
-            }
-          }
-        }
-
-        // Apply rename if enabled
-        let finalName = image.name
-        if (processingOptions.output.rename && processingOptions.output.newFileName) {
-          const renameResults = await processLemGendaryRename(
-            [{ ...image, file: processedFile }],
-            processingOptions.output.newFileName
-          )
-          if (renameResults.length > 0) {
-            processedFile = renameResults[0].renamed
-            const extension = image.name.split('.').pop()
-            finalName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}.${extension}`
-          }
-        }
-
-        // Convert to output format if not 'original'
-        if (processingOptions.output.format !== 'original') {
-          const hasTransparency = await checkImageTransparency(processedFile)
-          const targetFormat = processingOptions.output.format
-
-          let finalFormat
-          if (targetFormat === 'jpg' && hasTransparency) {
-            finalFormat = 'png'
-          } else {
-            finalFormat = targetFormat
-          }
-
-          processedFile = await optimizeForWeb(
-            processedFile,
-            processingOptions.compression.quality / 100,
-            finalFormat
-          )
-
-          finalName = finalName.replace(/\.[^/.]+$/, '') + '.' + finalFormat
-        }
-
-        processedImages.push({
-          ...image,
-          file: processedFile,
-          name: finalName,
-          processed: true,
-          format: processingOptions.output.format === 'original'
-            ? image.type.split('/')[1]
-            : processingOptions.output.format
-        })
-      }
-
-      // Create ZIP with custom processed images
-      const settings = {
-        includeOriginal: true,
-        includeOptimized: true,
-        includeWebImages: false,
-        includeLogoImages: false,
-        includeSocialMedia: false,
-        createFolders: true
-      }
-
-      const zipBlob = await createExportZip(selectedImagesForProcessing, processedImages, settings, 'custom')
-      downloadZip(zipBlob, 'custom-processed-images')
-
-      closeModal()
+      closeModal();
+      showSummaryModal(summary);
 
     } catch (error) {
-      console.error('Custom processing error:', error)
-      showModal(t('message.error'), t('message.errorProcessing'))
+      showModal(t('message.error'), t('message.errorProcessing'), 'error');
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   /**
-   * Process images using social media templates
-   * @async
-   * @function
-   * @description Applies selected social media templates to an image
+   * Processes images using social media templates.
    */
   const processTemplates = async () => {
-    const selectedImagesForProcessing = getSelectedImagesForProcessing()
+    const selectedImagesForProcessing = getSelectedImagesForProcessing();
     if (selectedImagesForProcessing.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectImage'))
-      return
+      showModal(t('message.error'), t('message.errorSelectImage'), 'error');
+      return;
     }
 
     if (processingOptions.selectedTemplates.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectTemplate'))
-      return
+      showModal(t('message.error'), t('message.errorSelectTemplate'), 'error');
+      return;
     }
 
-    setIsLoading(true)
-    showModal(t('message.processingImages'), t('message.processingImages', { count: processingOptions.selectedTemplates.length }))
+    setIsLoading(true);
+    showModal(t('message.processingImages', { count: processingOptions.selectedTemplates.length }), t('message.processingImages', { count: processingOptions.selectedTemplates.length }), 'info');
 
     try {
-      const selectedTemplates = SOCIAL_MEDIA_TEMPLATES.filter(template =>
-        processingOptions.selectedTemplates.includes(template.id)
-      )
+      const processingConfig = getProcessingConfiguration(processingOptions);
+      const processedImages = await orchestrateTemplateProcessing(
+        selectedImagesForProcessing[0],
+        processingOptions.selectedTemplates,
+        SOCIAL_MEDIA_TEMPLATES,
+        true,
+        aiModelLoaded,
+      );
 
-      const processedImages = []
-      const image = selectedImagesForProcessing[0]
+      const settings = generateExportSettings('templates');
+      const zipBlob = await createExportZip([selectedImagesForProcessing[0]], processedImages, settings, 'templates');
+      downloadZip(zipBlob, 'template-images');
 
-      const isSVG = image.file.type === 'image/svg+xml'
-      const hasTransparency = isSVG ? false : await checkImageTransparency(image.file)
+      const summary = createProcessingSummary({
+        imagesProcessed: 1,
+        totalFiles: processedImages.length,
+        success: true
+      }, processingConfig, t);
 
-      for (const template of selectedTemplates) {
-        let processedFile = image.file
-
-        // Apply template dimensions
-        if (template.width && template.height) {
-          if (template.height === 'auto') {
-            const resizeResults = await processLemGendaryResize(
-              [image],
-              template.width
-            )
-            if (resizeResults.length > 0) {
-              processedFile = resizeResults[0].resized
-            }
-          } else {
-            // For templates, always use standard crop (not smart crop)
-            const cropResults = await processLemGendaryCrop(
-              [image],
-              template.width,
-              template.height,
-              'center' // Templates use center crop
-            )
-            if (cropResults.length > 0) {
-              processedFile = cropResults[0].cropped
-            }
-          }
-        }
-
-        if (isSVG) {
-          const webpFile = await optimizeForWeb(processedFile, 0.8, 'webp')
-          const jpgPngFile = await optimizeForWeb(processedFile, 0.85, 'png')
-
-          const baseName = `${template.platform}-${template.name}-${image.name.replace(/\.[^/.]+$/, '')}`
-
-          const webpName = `${baseName}.webp`
-          processedImages.push({
-            ...image,
-            file: webpFile,
-            name: webpName,
-            template: template,
-            format: 'webp',
-            processed: true
-          })
-
-          if (template.category === 'web' || template.category === 'logo') {
-            const pngName = `${baseName}.png`
-            processedImages.push({
-              ...image,
-              file: jpgPngFile,
-              name: pngName,
-              template: template,
-              format: 'png',
-              processed: true
-            })
-          } else {
-            const jpgName = `${baseName}.jpg`
-            const socialJpgFile = await optimizeForWeb(processedFile, 0.85, 'jpg')
-            processedImages.push({
-              ...image,
-              file: socialJpgFile,
-              name: jpgName,
-              template: template,
-              format: 'jpg',
-              processed: true
-            })
-          }
-        } else {
-          const webpFile = await optimizeForWeb(processedFile, 0.8, 'webp')
-          const jpgPngFile = await optimizeForWeb(processedFile, 0.85, hasTransparency ? 'png' : 'jpg')
-
-          const baseName = `${template.platform}-${template.name}-${image.name.replace(/\.[^/.]+$/, '')}`
-
-          const webpName = `${baseName}.webp`
-          processedImages.push({
-            ...image,
-            file: webpFile,
-            name: webpName,
-            template: template,
-            format: 'webp',
-            processed: true
-          })
-
-          if (template.category === 'web' || template.category === 'logo') {
-            const jpgPngName = `${baseName}.${hasTransparency ? 'png' : 'jpg'}`
-            processedImages.push({
-              ...image,
-              file: jpgPngFile,
-              name: jpgPngName,
-              template: template,
-              format: hasTransparency ? 'png' : 'jpg',
-              processed: true
-            })
-          } else {
-            const jpgName = `${baseName}.jpg`
-            const socialJpgFile = await optimizeForWeb(processedFile, 0.85, 'jpg')
-            processedImages.push({
-              ...image,
-              file: socialJpgFile,
-              name: jpgName,
-              template: template,
-              format: 'jpg',
-              processed: true
-            })
-          }
-        }
-      }
-
-      const settings = {
-        includeOriginal: false,
-        includeOptimized: false,
-        includeWebImages: true,
-        includeLogoImages: true,
-        includeSocialMedia: true,
-        createFolders: true
-      }
-
-      const zipBlob = await createExportZip([image], processedImages, settings, 'templates')
-      downloadZip(zipBlob, 'template-images')
-
-      closeModal()
+      closeModal();
+      showSummaryModal(summary);
 
     } catch (error) {
-      console.error('Template processing error:', error)
-      showModal(t('message.error'), t('message.errorApplying'))
+      showModal(t('message.error'), t('message.errorApplying'), 'error');
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   /**
-   * Download processed images as ZIP file
-   * @function
-   * @param {Blob} zipBlob - ZIP file blob
-   * @param {string} prefix - File name prefix
-   * @description Creates and triggers download of ZIP file containing processed images
-   */
-  const downloadZip = (zipBlob, prefix) => {
-    const url = URL.createObjectURL(zipBlob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${prefix}-${Date.now()}.zip`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-
-    showModal(t('message.success'), t('message.successDownload'))
-  }
-
-  /**
-   * Format template names for display using translations
-   * @function
+   * Formats template names for display using translations.
+   *
    * @param {string} name - Original template name
    * @returns {string} Formatted display name
-   * @description Converts internal template names to user-friendly display names
    */
   const formatTemplateName = (name) => {
-    return t(`template.${name}`) || name
-  }
+    return t(`template.${name}`) || name;
+  };
 
   /**
-   * Increment number value
-   * @function
+   * Increments number value.
+   *
    * @param {string} key - State key to update
    * @param {number} increment - Amount to increment by
-   * @description Increases a numeric value by the specified increment
    */
   const incrementValue = (key, increment = 1) => {
-    const currentValue = parseInt(processingOptions[key] || '0')
-    const newValue = Math.max(1, currentValue + increment)
-    handleSingleOptionChange(key, String(newValue))
-  }
+    const currentValue = parseInt(processingOptions[key] || '0');
+    const newValue = Math.max(1, currentValue + increment);
+    handleSingleOptionChange(key, String(newValue));
+  };
 
   /**
-   * Decrement number value
-   * @function
+   * Decrements number value.
+   *
    * @param {string} key - State key to update
    * @param {number} decrement - Amount to decrement by
-   * @description Decreases a numeric value by the specified decrement
    */
   const decrementValue = (key, decrement = 1) => {
-    const currentValue = parseInt(processingOptions[key] || '1')
-    const newValue = Math.max(1, currentValue - decrement)
-    handleSingleOptionChange(key, String(newValue))
-  }
+    const currentValue = parseInt(processingOptions[key] || '1');
+    const newValue = Math.max(1, currentValue - decrement);
+    handleSingleOptionChange(key, String(newValue));
+  };
 
-  const selectedImagesForProcessing = getSelectedImagesForProcessing()
-  const templateCategories = getTemplateCategories()
+  // UI state
+  const selectedImagesForProcessing = getSelectedImagesForProcessing();
+  const templateCategories = getTemplateCategories();
+  const templateSelectedImageObj = images.find(img => img.id === processingOptions.templateSelectedImage);
 
   return (
     <div className="app">
-      {/* Language Switcher */}
-      <LanguageSwitcher />
-
       {/* Loading Overlay */}
       {isLoading && (
         <div className="loading-overlay">
           <div className="loading-spinner">
             <i className="fas fa-spinner fa-spin fa-3x"></i>
             <p>{t('loading.preparing')}</p>
+            <p className="text-muted text-sm mt-2">
+              {processingOptions.processingMode === 'templates' && aiModelLoaded
+                ? t('loading.aiCropping')
+                : t('loading.upscalingWhenNeeded')}
+            </p>
           </div>
         </div>
       )}
@@ -787,32 +637,22 @@ function App() {
             <i className="fas fa-brain fa-spin fa-3x"></i>
             <p>{t('loading.aiModel')}</p>
             <p className="text-muted">{t('loading.oncePerSession')}</p>
+            <p className="text-sm mt-2">
+              {processingOptions.processingMode === 'templates'
+                ? t('loading.aiForTemplates')
+                : t('loading.aiForSmartCrop')}
+            </p>
           </div>
         </div>
       )}
 
-      <header className="app-header">
-        <div className="app-header-logo">
-          <img
-            src={lemGendaIcon}
-            alt="LemGenda Icon"
-            className="header-icon"
-          />
-          <div className="header-title">
-            <h1>{t('app.title')}</h1>
-            <p className="app-subtitle">{t('app.subtitle')}</p>
-          </div>
-        </div>
-        <LanguageSwitcher />
-      </header>
+      <Header />
 
       <main className="main-content">
-        <div className="upload-section">
-          <ImageUploader
-            onUpload={handleImageUpload}
-            fileInputRef={fileInputRef}
-          />
-        </div>
+        <ImageUploader
+          onUpload={handleImageUpload}
+          fileInputRef={fileInputRef}
+        />
 
         {images.length > 0 && (
           <>
@@ -849,17 +689,17 @@ function App() {
               {processingOptions.processingMode === 'custom' ? (
                 <>
                   <div className="grid grid-cols-auto gap-lg mb-lg">
+                    {/* Compression Card */}
                     <div className="card">
                       <h3 className="card-title">
                         <i className="fas fa-compress"></i> {t('compression.title')}
                       </h3>
                       <div className="form-group">
-                        <label className="form-label">{t('compression.quality')}</label>
                         <div className="range-wrapper">
                           <RangeSlider
                             label={t('compression.quality')}
-                            min={1}
-                            max={100}
+                            min={COMPRESSION_QUALITY_RANGE.MIN}  // Using constant
+                            max={COMPRESSION_QUALITY_RANGE.MAX}  // Using constant
                             value={processingOptions.compression.quality}
                             onChange={(val) =>
                               handleOptionChange('compression', 'quality', val)
@@ -889,8 +729,7 @@ function App() {
                             <button
                               type="button"
                               className="number-input-button"
-                              onClick={() => handleOptionChange('compression', 'fileSize', String(Math.max(1, parseInt(processingOptions.compression.fileSize || 10) - 10)))}
-                            >
+                              onClick={() => handleOptionChange('compression', 'fileSize', String(Math.max(1, parseInt(processingOptions.compression.fileSize || 10) - 10)))}>
                               <i className="fas fa-chevron-down"></i>
                             </button>
                           </div>
@@ -898,23 +737,92 @@ function App() {
                       </div>
                     </div>
 
+                    {/* Output Card */}
                     <div className="card">
                       <h3 className="card-title">
                         <i className="fas fa-file-export"></i> {t('output.title')}
                       </h3>
+
+                      {/* Format Selection */}
                       <div className="form-group">
                         <label className="form-label">{t('output.format')}</label>
-                        <select
-                          className="select-field"
-                          value={processingOptions.output.format}
-                          onChange={(e) => handleOptionChange('output', 'format', e.target.value)}
-                        >
-                          <option value="webp">{t('output.format.webp')}</option>
-                          <option value="jpg">{t('output.format.jpg')}</option>
-                          <option value="png">{t('output.format.png')}</option>
-                          <option value="original">{t('output.format.original')}</option>
-                        </select>
+                        <div className="space-y-sm mb-md">
+                          {/* Format checkboxes */}
+                          <div className="grid grid-cols-2 gap-sm">
+                            <label className="checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                className="checkbox-input"
+                                checked={processingOptions.output.formats.includes('webp')}
+                                onChange={() => handleFormatToggle('webp')}
+                              />
+                              <span className="checkbox-custom"></span>
+                              <span className="checkbox-label">
+                                {t('output.format.webp')}
+                              </span>
+                            </label>
+                            <label className="checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                className="checkbox-input"
+                                checked={processingOptions.output.formats.includes('avif')}
+                                onChange={() => handleFormatToggle('avif')}
+                              />
+                              <span className="checkbox-custom"></span>
+                              <span className="checkbox-label">
+                                {t('output.format.avif')}
+                              </span>
+                            </label>
+                            <label className="checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                className="checkbox-input"
+                                checked={processingOptions.output.formats.includes('jpg')}
+                                onChange={() => handleFormatToggle('jpg')}
+                              />
+                              <span className="checkbox-custom"></span>
+                              <span className="checkbox-label">{t('output.format.jpg')}</span>
+                            </label>
+                            <label className="checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                className="checkbox-input"
+                                checked={processingOptions.output.formats.includes('png')}
+                                onChange={() => handleFormatToggle('png')}
+                              />
+                              <span className="checkbox-custom"></span>
+                              <span className="checkbox-label">{t('output.format.png')}</span>
+                            </label>
+                            <label className="checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                className="checkbox-input"
+                                checked={processingOptions.output.formats.includes('original')}
+                                onChange={() => handleFormatToggle('original')}
+                              />
+                              <span className="checkbox-custom"></span>
+                              <span className="checkbox-label">{t('output.format.original')}</span>
+                            </label>
+                          </div>
+
+                          {/* Quick selection buttons */}
+                          <div className="flex flex-col gap-xs mt-sm">
+                            <button
+                              className="btn btn-secondary btn-xs"
+                              onClick={handleSelectAllFormats}
+                            >
+                              <i className="fas fa-check-square"></i> {t('output.selectAll')}
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-xs"
+                              onClick={handleClearAllFormats}
+                            >
+                              <i className="fas fa-times-circle"></i> {t('output.clearAll')}
+                            </button>
+                          </div>
+                        </div>
                       </div>
+
                       <div className="form-group">
                         <label className="checkbox-wrapper">
                           <input
@@ -941,6 +849,7 @@ function App() {
                       )}
                     </div>
 
+                    {/* Resize/Crop Card */}
                     <div className="card">
                       <h3 className="card-title">
                         {processingOptions.showResize ? (
@@ -949,7 +858,7 @@ function App() {
                           </>
                         ) : (
                           <>
-                            <i className="fas fa-crop-alt"></i> {t('crop.title')}
+                            <i className="fas fa-crop-alt"></i> {processingOptions.cropMode === 'smart' ? t('crop.switchToSmart') : t('crop.switchToStandard')}
                           </>
                         )}
                       </h3>
@@ -1015,23 +924,22 @@ function App() {
                               >
                                 {processingOptions.cropMode === 'smart' ? (
                                   <>
-                                    <i className="fas fa-brain"></i> {t('crop.switchToStandard')}
+                                    <i className="fas fa-crop-alt"></i> {t('crop.switchToStandard')}
                                     {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
                                   </>
                                 ) : (
                                   <>
-                                    <i className="fas fa-crop-alt"></i> {t('crop.switchToSmart')}
+                                    <i className="fas fa-brain"></i> {t('crop.switchToSmart')}
+                                    {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
                                   </>
                                 )}
                               </button>
                             </div>
-
                             {processingOptions.cropMode === 'smart' && (
-                              <div className="alert alert-info mt-sm">
-                                <i className="fas fa-info-circle"></i>
-                                {t('crop.aiPowered')}
-                                {!aiModelLoaded && !aiLoading && <span className="font-semibold">{t('crop.aiNeedsLoad')}</span>}
-                              </div>
+                              <p className="text-sm text-muted mt-1">
+                                <i className="fas fa-info-circle mr-1"></i>
+                                {t('crop.smartBest')}
+                              </p>
                             )}
                           </div>
 
@@ -1126,13 +1034,6 @@ function App() {
                               </p>
                             </div>
                           )}
-
-                          {processingOptions.cropMode === 'smart' && (
-                            <div className="alert alert-info">
-                              <i className="fas fa-lightbulb"></i>
-                              <span>{t('crop.smartBest')}</span>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
@@ -1141,7 +1042,7 @@ function App() {
                   <div className="text-center">
                     <button
                       className="btn btn-primary btn-lg"
-                      disabled={selectedImagesForProcessing.length === 0 || isLoading || (processingOptions.cropMode === 'smart' && aiLoading)}
+                      disabled={selectedImagesForProcessing.length === 0 || isLoading || (processingOptions.cropMode === 'smart' && aiLoading) || !processingOptions.output.formats || processingOptions.output.formats.length === 0}
                       onClick={processCustomImages}
                     >
                       {isLoading ? (
@@ -1154,7 +1055,10 @@ function App() {
                         </>
                       ) : (
                         <>
-                          <i className="fas fa-download"></i> {t('button.process')} ({selectedImagesForProcessing.length})
+                          <i className="fas fa-download"></i> {t('button.process')}
+                          <span className="ml-1">
+                            ({t('button.imageCount', { count: selectedImagesForProcessing.length })} × {t('button.formatCount', { count: processingOptions.output.formats.length })})
+                          </span>
                         </>
                       )}
                     </button>
@@ -1196,7 +1100,7 @@ function App() {
                       {templateCategories.map((category) => {
                         const categoryTemplates = SOCIAL_MEDIA_TEMPLATES.filter(template =>
                           template.category === category.id
-                        )
+                        );
 
                         return (
                           <div key={category.id} className="card">
@@ -1244,43 +1148,122 @@ function App() {
                               ))}
                             </div>
                           </div>
-                        )
+                        );
                       })}
                     </div>
 
                     {/* Template Action Section */}
                     <div className="card">
                       <div className="card-header">
-                        <div className="flex items-center gap-md">
-                          <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
-                            <i className="fas fa-image text-white text-xl"></i>
-                          </div>
-                          <div>
+                        <div className="flex justify-between items-start w-full">
+                          <div className="flex-1">
                             <h4 className="card-title mb-xs">{t('templates.imageForTemplates')}</h4>
-                            <p className="text-muted">
-                              {processingOptions.templateSelectedImage
-                                ? images.find(img => img.id === processingOptions.templateSelectedImage)?.name
-                                : t('templates.noImageSelected')
-                              }
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-muted mb-xs">
-                            <i className="fas fa-layer-group mr-xs"></i>
-                            {processingOptions.selectedTemplates.length} {t('templates.selected')}
-                          </div>
-                          <div className="text-muted">
-                            <i className="fas fa-file-export mr-xs"></i>
-                            {processingOptions.selectedTemplates.length > 0
-                              ? `${processingOptions.selectedTemplates.length * 2} ${t('templates.filesToGenerate')}`
-                              : t('templates.selectTemplates')
-                            }
+                            <div className="flex items-center gap-4 text-sm text-muted">
+                              <span className="truncate max-w-xs">
+                                {templateSelectedImageObj
+                                  ? templateSelectedImageObj.name
+                                  : t('templates.noImageSelected')
+                                }
+                              </span>
+                              {templateSelectedImageObj && (
+                                <>
+                                  <span className="flex-shrink-0">&nbsp;•&nbsp;</span>
+                                  <span className="flex-shrink-0">
+                                    {formatFileSize(templateSelectedImageObj.size)}
+                                  </span>
+                                  <span className="flex-shrink-0">&nbsp;•&nbsp;</span>
+                                  <span className="flex-shrink-0">
+                                    {templateSelectedImageObj.originalFormat?.toUpperCase() || templateSelectedImageObj.type.split('/')[1].toUpperCase()}
+                                    {templateSelectedImageObj.isTIFF && <span className="ml-1 px-1 py-0.5 bg-orange-100 text-orange-800 text-xs rounded">TIFF</span>}
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="text-center">
+                      {/* Full-width image preview */}
+                      {templateSelectedImageObj && (
+                        <div className="relative w-full rounded-lg overflow-hidden bg-gray-100 image-preview-container-full mt-4">
+                          {templateSelectedImageObj.isTIFF ? (
+                            <div className="relative w-full h-96 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+                              <img
+                                alt={templateSelectedImageObj.name}
+                                className="w-full h-auto object-contain max-h-full"
+                                src={templateSelectedImageObj.url}
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  const container = e.target.parentElement;
+                                  const placeholder = document.createElement('div');
+                                  placeholder.className = 'tiff-preview-placeholder';
+                                  placeholder.innerHTML = `
+                                    <div class="text-center p-8">
+                                      <div class="tiff-preview-icon mb-4">
+                                        <i class="fas fa-file-image text-5xl text-gray-400"></i>
+                                      </div>
+                                      <div class="text-gray-700 font-medium mb-2">${templateSelectedImageObj.name}</div>
+                                      <div class="text-gray-500 text-sm">
+                                        TIFF Image • ${formatFileSize(templateSelectedImageObj.size)}
+                                      </div>
+                                      <div class="mt-4 px-4 py-2 bg-blue-100 text-blue-800 rounded-full inline-block text-sm font-medium">
+                                        <i class="fas fa-sync-alt mr-2"></i>Converted for preview
+                                      </div>
+                                    </div>
+                                  `;
+                                  container.appendChild(placeholder);
+                                }}
+                              />
+                              <div className="absolute bottom-4 right-4 bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                                <i className="fas fa-file-image mr-1"></i> TIFF
+                              </div>
+                            </div>
+                          ) : (
+                            <img
+                              alt={templateSelectedImageObj.name}
+                              className="w-full h-auto object-contain max-h-96"
+                              src={templateSelectedImageObj.url}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                const container = e.target.parentElement;
+                                container.innerHTML = `
+                                  <div class="w-full h-64 bg-gray-100 flex items-center justify-center">
+                                    <div class="text-center">
+                                      <i class="fas fa-image text-gray-400 text-4xl mb-2"></i>
+                                      <div class="text-gray-600">Cannot display image preview</div>
+                                    </div>
+                                  </div>
+                                `;
+                              }}
+                            />
+                          )}
+                          <div className="absolute inset-0 border border-gray-200 rounded-lg pointer-events-none"></div>
+                        </div>
+                      )}
+
+                      {/* Template stats row */}
+                      <div className="flex justify-between items-center mt-4 mb-lg">
+                        <div className="flex items-center gap-4 text-sm text-muted">
+                          <div className="flex items-center">
+                            <i className="fas fa-layer-group mr-1 text-sm"></i>
+                            <span>
+                              {t('button.templateCount', { count: processingOptions.selectedTemplates.length })} {t('templates.selected')}
+                            </span>
+                          </div>
+                          <span className="text-muted">,&nbsp;</span>
+                          <div className="flex items-center">
+                            <span>
+                              {processingOptions.selectedTemplates.length > 0
+                                ? `${calculateTotalTemplateFiles(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES)} ${t('templates.filesToGenerate')}`
+                                : t('templates.selectTemplates')
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Download button */}
+                      <div className="text-center mt-6">
                         <button
                           className="btn btn-primary btn-lg relative"
                           disabled={!processingOptions.templateSelectedImage || processingOptions.selectedTemplates.length === 0 || isLoading}
@@ -1295,28 +1278,12 @@ function App() {
                               <i className="fas fa-file-archive"></i> {t('templates.download')}
                               {processingOptions.selectedTemplates.length > 0 && (
                                 <span className="absolute -top-2 -right-2 bg-danger text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                                  {processingOptions.selectedTemplates.length * 2}
+                                  {calculateTotalTemplateFiles(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES)}
                                 </span>
                               )}
                             </>
                           )}
                         </button>
-
-                        {processingOptions.selectedTemplates.length > 0 && (
-                          <div className="alert alert-info mt-md">
-                            <i className="fas fa-info-circle"></i>
-                            <span>
-                              {t('templates.eachGenerates')}
-                            </span>
-                          </div>
-                        )}
-
-                        {!processingOptions.templateSelectedImage && (
-                          <div className="alert alert-warning mt-md">
-                            <i className="fas fa-exclamation-triangle"></i>
-                            <span>{t('templates.selectImage')}</span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -1362,7 +1329,9 @@ function App() {
                 {images.map(image => {
                   const isSelected = processingOptions.processingMode === 'templates'
                     ? image.id === processingOptions.templateSelectedImage
-                    : selectedImages.includes(image.id)
+                    : selectedImages.includes(image.id);
+
+                  const isTIFF = image.isTIFF;
 
                   return (
                     <div
@@ -1378,13 +1347,68 @@ function App() {
                           <i className="fas fa-th-large mr-1"></i> {t('gallery.templateImage')}
                         </div>
                       )}
-                      <img src={image.url} alt={image.name} />
+
+                      {isTIFF ? (
+                        <div className="relative">
+                          {/* TIFF preview image (converted to PNG) */}
+                          <img
+                            src={image.url}
+                            alt={image.name}
+                            className="image-preview"
+                            onError={(e) => {
+                              // If the converted image fails to load, show a better placeholder
+                              e.target.style.display = 'none';
+                              const parent = e.target.parentElement;
+                              const placeholder = parent.querySelector('.tiff-placeholder');
+                              if (placeholder) placeholder.style.display = 'flex';
+                            }}
+                          />
+                          {/* Fallback placeholder */}
+                          <div className="tiff-placeholder" style={{ display: 'none' }}>
+                            <div className="tiff-icon">
+                              <i className="fas fa-file-image"></i>
+                            </div>
+                            <div className="tiff-label">TIFF</div>
+                            <div className="tiff-info">
+                              <span className="tiff-name">{image.name}</span>
+                              <span className="tiff-size">{formatFileSize(image.size)}</span>
+                            </div>
+                          </div>
+                          {/* TIFF badge overlay */}
+                          <div className="tiff-badge-overlay">
+                            <span className="tiff-badge">TIFF</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <img
+                          src={image.url}
+                          alt={image.name}
+                          className="image-preview"
+                          onError={(e) => {
+                            // Fallback for broken images
+                            e.target.style.display = 'none';
+                            const parent = e.target.parentElement;
+                            const fallback = parent.querySelector('.image-fallback');
+                            if (fallback) fallback.style.display = 'flex';
+                          }}
+                        />
+                      )}
+
+                      {/* Fallback for broken non-TIFF images */}
+                      <div className="image-fallback" style={{ display: 'none' }}>
+                        <i className="fas fa-image"></i>
+                        <span className="image-fallback-name">{image.name}</span>
+                      </div>
+
                       <div className="image-info">
                         <span className="image-name">{image.name}</span>
-                        <span className="image-size">{(image.size / 1024).toFixed(2)} KB • {image.type.split('/')[1].toUpperCase()}</span>
+                        <span className="image-size">
+                          {formatFileSize(image.size)} • {image.originalFormat?.toUpperCase() || image.type.split('/')[1].toUpperCase()}
+                          {isTIFF && <span className="image-format-badge">TIFF</span>}
+                        </span>
                       </div>
                     </div>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -1392,52 +1416,135 @@ function App() {
         )}
       </main>
 
-      <footer className="app-footer">
-        <div className="footer-left">
-          <div className="footer-logo-container">
-            <p className="text-muted mb-xs">{t('footer.createdBy')}</p>
-            <a
-              href="https://lemgenda.hr"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block"
-            >
-              <img
-                src={lemGendaLogo}
-                alt="LemGenda Logo"
-                className="footer-logo"
-              />
-            </a>
-          </div>
-        </div>
+      <Footer />
 
-        <div className="footer-right">
-          <div className="footer-text">
-            <p className="text-muted">{t('app.version')} - {t('app.processClientSide')}</p>
-            <p className="text-muted text-sm mt-xs">
-              <i className="fas fa-shield-alt"></i> {t('app.imagesNeverLeave')}
-            </p>
-            <p className="text-muted text-sm mt-xs">
-              <i className="fas fa-brain"></i> {t('footer.aiEnabled')}
-            </p>
-          </div>
-        </div>
-      </footer>
-
+      {/* Regular Modal */}
       <Modal
-        isOpen={modal.isOpen}
+        isOpen={modal.isOpen && modal.type !== 'summary'}
         onClose={closeModal}
         title={modal.title}
+        type={modal.type}
+      >
+        <p>{modal.message}</p>
+      </Modal>
+
+      {/* Summary Modal */}
+      <Modal
+        isOpen={modal.isOpen && modal.type === 'summary'}
+        onClose={closeModal}
+        title={modal.title}
+        type="summary"
         actions={
           <button className="btn btn-primary" onClick={closeModal}>
             {t('button.ok')}
           </button>
         }
       >
-        <p>{modal.message}</p>
+        {processingSummary && (
+          <div className="summary-content">
+            <div className="summary-section">
+              <h4 className="summary-title">
+                <i className="fas fa-check-circle text-success mr-2"></i>
+                {t('summary.processingComplete')}
+              </h4>
+
+              <div className="summary-grid">
+                <div className="summary-item">
+                  <div className="summary-label">{t('summary.mode')}:</div>
+                  <div className="summary-value capitalize">{processingSummary.mode}</div>
+                </div>
+
+                <div className="summary-item">
+                  <div className="summary-label">
+                    {processingSummary.mode === 'templates'
+                      ? t('summary.templatesApplied')
+                      : t('summary.imagesProcessed')}:
+                  </div>
+                  <div className="summary-value">
+                    {processingSummary.mode === 'templates'
+                      ? t('summary.templatesApplied', { count: processingSummary.templatesApplied })
+                      : t('summary.imagesProcessed', { count: processingSummary.imagesProcessed })}
+                  </div>
+                </div>
+
+                {processingSummary.mode === 'templates' && (
+                  <div className="summary-item">
+                    <div className="summary-label">{t('summary.categoriesApplied')}:</div>
+                    <div className="summary-value">{processingSummary.categoriesApplied}</div>
+                  </div>
+                )}
+
+                <div className="summary-item">
+                  <div className="summary-label">{t('summary.formatsExported')}:</div>
+                  <div className="summary-value">
+                    {processingSummary.formatsExported.map(format => (
+                      <span key={format} className="format-badge">
+                        {format.toUpperCase()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="summary-item">
+                  <div className="summary-label">{t('summary.totalFiles')}:</div>
+                  <div className="summary-value">{t('summary.totalFiles', { count: processingSummary.totalFiles })}</div>
+                </div>
+
+                <div className="summary-item">
+                  <div className="summary-label">{t('summary.aiUsed')}:</div>
+                  <div className="summary-value">
+                    {processingSummary.aiUsed ? (
+                      <span className="text-success">
+                        <i className="fas fa-brain mr-1"></i> {t('summary.yes')}
+                      </span>
+                    ) : (
+                      <span className="text-muted">{t('summary.no')}</span>
+                    )}
+                  </div>
+                </div>
+
+                {processingSummary.upscalingUsed && (
+                  <div className="summary-item">
+                    <div className="summary-label">{t('summary.upscalingUsed')}:</div>
+                    <div className="summary-value text-success">
+                      <i className="fas fa-expand-arrows-alt mr-1"></i> {t('summary.yes')}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {processingSummary.operations && processingSummary.operations.length > 0 && (
+              <div className="summary-section">
+                <h5 className="summary-subtitle">
+                  <i className="fas fa-tasks mr-2"></i>
+                  {t('summary.operationsPerformed')}:
+                </h5>
+                <ul className="summary-list">
+                  {processingSummary.operations.map((op, index) => (
+                    <li key={index} className="summary-list-item">
+                      <i className="fas fa-check text-success mr-2"></i>
+                      {op}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="alert alert-success mt-4">
+              <i className="fas fa-info-circle"></i>
+              {t('summary.downloadComplete')}
+              {processingSummary.mode === 'templates' && (
+                <div className="mt-1 text-sm">
+                  {t('summary.templatesNote', { count: processingSummary.templatesApplied })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
