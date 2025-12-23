@@ -34,9 +34,6 @@ export const SOCIAL_MEDIA_TEMPLATES = [
     { id: 'web-content', name: 'WebContent', width: 1200, height: 'auto', platform: 'Web', category: 'web', icon: 'fas fa-image' },
     { id: 'web-thumb', name: 'WebThumb', width: 250, height: 250, platform: 'Web', category: 'web', icon: 'fas fa-square' },
 
-    // Favicon Templates - Using FREE icons
-    { id: 'favicon-set', name: 'FaviconSet', width: 512, height: 512, platform: 'Web', category: 'favicon', icon: 'fas fa-star' },
-
     // Screenshot Templates - Using FREE icons
     {
         id: 'screenshots-mobile',

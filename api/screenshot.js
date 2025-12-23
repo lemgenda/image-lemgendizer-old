@@ -1,4 +1,4 @@
-// api/screenshot/index.js
+// api/screenshot/index.js - MUST be CommonJS, not ES modules
 const playwright = require('playwright-core');
 const chromium = require('@sparticuz/chromium-min');
 const { createCanvas } = require('canvas');

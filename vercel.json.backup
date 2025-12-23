@@ -1,0 +1,19 @@
+{
+    "functions": {
+        "api/screenshot/index.js": {
+            "maxDuration": 10,
+            "memory": 2048,
+            "runtime": "nodejs18.x"
+        }
+    },
+    "routes": [
+        {
+            "src": "/api/(.*)",
+            "dest": "/api/screenshot/index.js"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/"
+        }
+    ]
+}

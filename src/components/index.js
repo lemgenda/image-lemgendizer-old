@@ -7,3 +7,4 @@ export { default as LemGendaLogo } from './LemGendaLogo';
 export { default as Modal } from './Modal';
 export { default as RangeSlider } from './RangeSlider';
 export { default as SiteScreenshots } from './SiteScreenshots';
+export { default as ScreenshotCapture } from './ScreenshotCapture';

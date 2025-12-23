@@ -266,13 +266,24 @@ function App() {
   const handleFaviconToggle = (selected) => {
     setIsFaviconSelected(selected);
 
-    setProcessingOptions(prev => ({
-      ...prev,
-      includeFavicon: selected,
-      faviconSiteName: selected ? (prev.faviconSiteName || 'My Website') : 'My Website',
-      faviconThemeColor: selected ? (prev.faviconThemeColor || '#ffffff') : '#ffffff',
-      faviconBackgroundColor: selected ? (prev.faviconBackgroundColor || '#ffffff') : '#ffffff'
-    }));
+    // Find favicon template ID from your templateConfigs
+    const faviconTemplateId = 'favicon-set'; // or whatever the ID is
+
+    if (selected) {
+      if (!processingOptions.selectedTemplates.includes(faviconTemplateId)) {
+        setProcessingOptions(prev => ({
+          ...prev,
+          selectedTemplates: [...prev.selectedTemplates, faviconTemplateId],
+          includeFavicon: true
+        }));
+      }
+    } else {
+      setProcessingOptions(prev => ({
+        ...prev,
+        selectedTemplates: prev.selectedTemplates.filter(id => id !== faviconTemplateId),
+        includeFavicon: false
+      }));
+    }
   };
 
   /**

@@ -9,7 +9,6 @@ import {
 
 // Import favicon and screenshot generators
 import { generateFaviconSet, generateScreenshots } from '../utils';
-
 /**
  * Creates export settings based on processing mode.
  *
@@ -202,51 +201,6 @@ const processFaviconSet = async (sourceImage, settings, zip = null) => {
             const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/FaviconSet`);
             const errorText = `Favicon generation failed: ${error.message}\n\nPlease try again with a different image.`;
             faviconFolder.file('error.txt', errorText);
-        }
-        throw error;
-    }
-};
-
-/**
- * Processes screenshot generation
- * @async
- * @param {string} url - Website URL for screenshots
- * @param {Object} settings - Export settings with screenshot options
- * @param {JSZip} zip - JSZip instance (optional)
- * @returns {Promise<Blob|void>} Screenshot ZIP blob or adds to existing zip
- */
-const processScreenshots = async (url, settings, zip = null) => {
-    try {
-        const screenshotZipBlob = await generateScreenshots(
-            url,
-            settings.faviconSiteName || 'Website Screenshots'
-        );
-
-        if (zip) {
-            // Extract and add to existing ZIP
-            const screenshotZip = await JSZip.loadAsync(screenshotZipBlob);
-            const screenshotFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/Screenshots`);
-
-            const files = screenshotZip.files;
-            for (const [fileName, fileData] of Object.entries(files)) {
-                if (!fileData.dir) {
-                    const content = await fileData.async('blob');
-                    screenshotFolder.file(fileName, content);
-                }
-            }
-            return null;
-        } else {
-            // Return standalone ZIP
-            return screenshotZipBlob;
-        }
-    } catch (error) {
-        console.error('Failed to generate screenshots:', error);
-
-        if (zip) {
-            // Add error placeholder
-            const screenshotFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/Screenshots`);
-            const errorText = `Screenshot generation failed: ${error.message}\n\nURL: ${url}\nPlease ensure the website is publicly accessible.`;
-            screenshotFolder.file('error.txt', errorText);
         }
         throw error;
     }
@@ -487,7 +441,7 @@ export const createFaviconZip = async (imageFile, settings = {}) => {
  * @returns {Promise<Blob>} Screenshot ZIP blob
  */
 export const createScreenshotZip = async (url, settings = {}) => {
-    return await processScreenshots(url, settings);
+    return await generateScreenshots(url, settings);
 };
 
 /**

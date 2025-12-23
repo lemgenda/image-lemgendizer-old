@@ -1,6 +1,6 @@
 // src/components/ScreenshotCapture.jsx
 import React, { useState } from 'react';
-import { useScreenshot } from '../services/playwrightScreenshotService';
+import { useScreenshot } from '../utils';
 
 /**
  * Screenshot capture component for mobile, tablet, and desktop screenshots
@@ -9,7 +9,7 @@ import { useScreenshot } from '../services/playwrightScreenshotService';
  * @param {Function} props.onComplete - Callback when capture completes
  */
 const ScreenshotCapture = ({ url, onComplete }) => {
-    const { capture, isLoading, progress, error } = useScreenshot();
+    const { capture, isLoading, progress, error } = useScreenshotService();
     const [selectedDevices, setSelectedDevices] = useState({
         mobile: true,
         tablet: true,

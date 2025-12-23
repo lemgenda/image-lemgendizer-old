@@ -24,8 +24,6 @@ import {
     checkAVIFSupport
 } from '../utils/index.js';
 
-import { UnifiedScreenshotService } from '../utils/screenshotUtils.js';
-
 let cleanupInProgress = false;
 let aiUpscalingDisabled = false;
 
@@ -311,51 +309,6 @@ const createTemplateErrorFiles = async (template, image, error) => {
             resolve(errorImages);
         }, 'image/png', 0.8);
     });
-};
-
-/**
- * Processes screenshot templates using unified screenshot service.
- * @async
- * @param {string} url - Website URL
- * @param {Array<Object>} screenshotTemplates - Screenshot template objects
- * @param {Object} options - Screenshot options
- * @returns {Promise<Array<Object>>} Processed screenshot files
- */
-const processScreenshotTemplates = async (url, screenshotTemplates, options = {}) => {
-    const service = new UnifiedScreenshotService({
-        useServerCapture: true,
-        enableCaching: true,
-        timeout: 10000
-    });
-
-    const templateIds = screenshotTemplates.map(t => t.id);
-    const allTemplates = screenshotTemplates;
-
-    const results = await service.captureByTemplates(url, templateIds, allTemplates, options);
-
-    const processedImages = [];
-
-    Object.entries(results.results).forEach(([templateId, result]) => {
-        const template = screenshotTemplates.find(t => t.id === templateId);
-        if (template && result.blob) {
-            const baseName = `${template.platform}-${template.name}-${Date.now()}`;
-            const extension = result.format || 'png';
-            const fileName = `${baseName}.${extension}`;
-
-            processedImages.push({
-                file: new File([result.blob], fileName, { type: `image/${extension}` }),
-                name: fileName,
-                template: template,
-                format: extension,
-                processed: true,
-                success: result.success,
-                method: result.method,
-                dimensions: result.dimensions
-            });
-        }
-    });
-
-    return processedImages;
 };
 
 /**
