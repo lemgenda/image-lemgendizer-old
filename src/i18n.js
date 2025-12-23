@@ -9,7 +9,7 @@ const resources = {
             // App Titles
             'app.title': 'Image LemGendizer',
             'app.subtitle': 'Batch Image Processing & Optimization Tool',
-            'app.version': 'Image LemGendizer v2.1.0',
+            'app.version': 'Image LemGendizer v2.5.0',
             'app.processClientSide': 'All processing is done client-side',
             'app.imagesNeverLeave': 'Your images never leave your browser',
 
@@ -75,16 +75,19 @@ const resources = {
             'crop.helper': 'Image will be resized to fit dimensions, then cropped from selected position',
             'crop.smartBest': 'Smart crop works best with images containing clear subjects (people, objects, etc.)',
 
-            // Operations (for summary)
+            // Operations (for summary) - MERGED with fixes
             'operations.resized': 'Resized to {{dimension}}px',
             'operations.aiCrop': 'AI Smart Crop',
             'operations.standardCrop': 'Crop',
             'operations.compressed': 'Compressed ({{quality}}% quality)',
             'operations.renamed': 'Renamed to {{pattern}}',
-            'operations.autoUpscaling': 'Auto Upscaling',
+            'operations.autoUpscaling': 'Auto-upscaled when needed',
+            'operations.aiSmartCropping': 'AI Smart Cropping',
+            // NEW operations from merge
+            'operations.templatesApplied': '{{count}} templates applied',
+            // Plural forms for completeness
             'operations.templatesApplied_one': '{{count}} template applied',
             'operations.templatesApplied_other': '{{count}} templates applied',
-            'operations.aiSmartCropping': 'AI Smart Cropping',
 
             // Templates
             'templates.title': 'Template Selection',
@@ -102,6 +105,20 @@ const resources = {
             'templates.eachGenerates': 'Web templates generate WebP + JPG/PNG, logo templates generate JPG/PNG based on transparency, and social media templates generate JPG only',
             'templates.selectImage': 'Please select an image from the gallery above to apply templates',
 
+            // NEW: Favicon & Screenshot Options - From new translations
+            'templates.faviconOptions': 'Favicon Options',
+            'templates.screenshotOptions': 'Screenshot Options',
+            'templates.siteName': 'Website Name',
+            'templates.siteNamePlaceholder': 'Enter website name...',
+            'templates.faviconNote': 'This name will be used in the web app manifest',
+            'templates.websiteUrl': 'Website URL',
+            'templates.screenshotNote': 'Enter the URL of the website you want to capture',
+            'templates.faviconThemeColor': 'Theme Color',
+            'templates.faviconBgColor': 'Background Color',
+            'templates.colorPlaceholder': '#ffffff',
+            'templates.faviconIncludes': 'Includes: favicon.ico, site.webmanifest, all sizes (16x16 to 512x512)',
+            'templates.screenshotIncludes': 'Includes: Desktop (1280x720) and Mobile (720x1280) screenshots',
+
             // Image Gallery
             'gallery.title': 'Uploaded Images',
             'gallery.templatesMode': '(Templates mode: Click ONE image to select)',
@@ -111,7 +128,7 @@ const resources = {
             'gallery.templateImage': 'TEMPLATE IMAGE',
 
             // Buttons & Actions
-            'button.process': 'Download Custom Processed Images',
+            'button.process': 'Process Images',
             'button.processing': 'Processing...',
             'button.loadingAI': 'Loading AI Model...',
             'button.ok': 'OK',
@@ -124,6 +141,9 @@ const resources = {
             'button.formatCount_other': '{{count}} formats',
             'button.templateCount_one': '{{count}} template',
             'button.templateCount_other': '{{count}} templates',
+            'button.generateFavicon': 'Generate Favicon Set',
+            'button.generateScreenshots': 'Generate Screenshots',
+            'button.test': 'Test URL',
 
             // Messages
             'message.success': 'Success',
@@ -149,6 +169,20 @@ const resources = {
             'message.memoryCleaned': 'GPU memory has been cleaned up.',
             'message.largeImageWarning': 'Large image detected. Using optimized processing to prevent memory issues.',
 
+            // NEW: Favicon & Screenshot Messages - From new translations
+            'message.generatingFavicon': 'Generating favicon set...',
+            'message.generatingScreenshots': 'Generating screenshots...',
+            'message.faviconGenerated': 'Favicon set generated successfully!',
+            'message.screenshotsGenerated': 'Screenshots generated successfully!',
+            'message.errorFavicon': 'Failed to generate favicon set',
+            'message.errorScreenshots': 'Failed to generate screenshots',
+            'message.errorScreenshotUrl': 'Please enter a valid website URL for screenshots',
+            'message.screenshotFailed': 'Screenshot capture failed. Please try a different URL or check if the website is accessible.',
+            'message.faviconPreview': 'Favicon preview generated. Complete set will be created during export.',
+            // Missing messages from your issue report
+            'message.errorSelectImageForFavicon': 'Please select an image for favicon/screenshot generation',
+            'message.errorInvalidUrl': 'Please enter a valid URL for screenshot capture',
+
             // Loading States
             'loading.preparing': 'Preparing your ZIP file...',
             'loading.aiModel': 'Loading AI model for smart cropping...',
@@ -157,26 +191,35 @@ const resources = {
             'loading.upscalingWhenNeeded': 'Processing (auto upscaling applied when needed)...',
             'loading.aiForTemplates': 'AI model loading for smart template cropping',
             'loading.aiForSmartCrop': 'AI model loading for smart crop',
+            'loading.capturingScreenshot': 'Capturing website screenshot...',
+            'loading.creatingFavicon': 'Creating favicon set...',
 
-            // Summary Modal
+            // Summary Modal - MERGED with missing keys from your issue
             'summary.title': 'Processing Complete',
             'summary.processingComplete': 'Image Processing Complete',
             'summary.mode': 'Processing Mode',
             'summary.imagesProcessed_one': '{{count}} image processed',
             'summary.imagesProcessed_other': '{{count}} images processed',
             'summary.formatsExported': 'Formats Exported',
+            'summary.totalFiles': 'Total Files', // NEW: Missing from your original
             'summary.totalFiles_one': '{{count}} file generated',
             'summary.totalFiles_other': '{{count}} files generated',
             'summary.aiUsed': 'AI Processing Used',
-            'summary.upscalingUsed': 'AI Upscaling',
-            'summary.categoriesApplied': 'Categories Applied',
-            'summary.operationsPerformed': 'Operations Performed',
+            'summary.upscalingUsed': 'AI Upscaling Used',
+            'summary.categoriesApplied': 'Categories Applied', // NEW: Missing from your original
+            'summary.operationsPerformed': 'Operations Performed', // NEW: Missing from your original
+            'summary.templatesApplied': 'Templates Applied', // NEW: Missing from your original
             'summary.templatesApplied_one': '{{count}} template applied',
             'summary.templatesApplied_other': '{{count}} templates applied',
             'summary.downloadComplete': 'All files have been downloaded in the ZIP archive.',
             'summary.templatesNote': 'All {{count}} templates were processed with optimal cropping and upscaling.',
             'summary.yes': 'Yes',
             'summary.no': 'No',
+            // NEW: Favicon & Screenshot Summary
+            'summary.faviconGenerated': 'Favicon set created',
+            'summary.screenshotsCaptured': 'Screenshots captured',
+            'summary.faviconFiles': '15+ favicon files',
+            'summary.screenshotFiles': 'Desktop & mobile screenshots',
 
             // Common words for pluralization
             'common.image_one': 'image',
@@ -185,6 +228,10 @@ const resources = {
             'common.format_other': 'formats',
             'common.template_one': 'template',
             'common.template_other': 'templates',
+            'common.favicon_one': 'favicon',
+            'common.favicon_other': 'favicons',
+            'common.screenshot_one': 'screenshot',
+            'common.screenshot_other': 'screenshots',
 
             // Footer
             'footer.createdBy': 'Created by',
@@ -209,6 +256,8 @@ const resources = {
             'category.youtube': 'YouTube',
             'category.pinterest': 'Pinterest',
             'category.tiktok': 'TikTok',
+            'category.favicon': 'Favicon',
+            'category.screenshots': 'Screenshots',
 
             // Template Names
             'template.WebHero': 'Hero',
@@ -245,7 +294,26 @@ const resources = {
             'template.PinterestSquarePin': 'Square',
             'template.PinterestStoryPin': 'Story',
             'template.TikTokProfile': 'Profile',
-            'template.TikTokVideoCover': 'Video Cover'
+            'template.TikTokVideoCover': 'Video Cover',
+
+            // NEW: Favicon & Screenshot Template Names
+            'template.FaviconSet': 'Favicon Set',
+            'template.ScreenshotsDesktop': 'Desktop Screenshot',
+            'template.ScreenshotsMobile': 'Mobile Screenshot',
+
+            // NEW: Color Labels
+            'color.white': 'White',
+            'color.black': 'Black',
+            'color.blue': 'Blue',
+            'color.red': 'Red',
+            'color.green': 'Green',
+            'color.yellow': 'Yellow',
+            'color.purple': 'Purple',
+            'color.orange': 'Orange',
+            'color.gray': 'Gray',
+
+            // NEW: Screenshots translations from your issue
+            'screenshots.title': 'Generate Screenshots'
         }
     },
     hr: {
@@ -253,7 +321,7 @@ const resources = {
             // App Titles
             'app.title': 'Image LemGendizer',
             'app.subtitle': 'Alat za obradu i optimizaciju slika',
-            'app.version': 'Image LemGendizer v2.1.0',
+            'app.version': 'Image LemGendizer v2.5.0',
             'app.processClientSide': 'Sva obrada se vrši na klijentu',
             'app.imagesNeverLeave': 'Vaše slike nikada ne napuštaju preglednik',
 
@@ -319,17 +387,20 @@ const resources = {
             'crop.helper': 'Slika će se promijeniti veličinu da stane u dimenzije, zatim obrezati od odabrane pozicije',
             'crop.smartBest': 'Pametno obrezivanje najbolje funkcionira sa slikama koje imaju jasne subjekte (ljudi, objekti, itd.)',
 
-            // Operations (for summary)
+            // Operations (for summary) - MERGED with fixes
             'operations.resized': 'Promijenjena veličina na {{dimension}}px',
             'operations.aiCrop': 'Pametno AI obrezivanje',
             'operations.standardCrop': 'Obrezivanje',
             'operations.compressed': 'Komprimirano ({{quality}}% kvalitete)',
             'operations.renamed': 'Preimenovano u {{pattern}}',
             'operations.autoUpscaling': 'Automatsko povećavanje',
+            'operations.aiSmartCropping': 'Pametno AI obrezivanje',
+            // NEW operations from merge
+            'operations.templatesApplied': '{{count}} predložaka primijenjeno',
+            // Croatian plural forms
             'operations.templatesApplied_one': 'Primijenjen {{count}} predložak',
             'operations.templatesApplied_few': 'Primijenjena {{count}} predloška',
             'operations.templatesApplied_other': 'Primijenjeno {{count}} predložaka',
-            'operations.aiSmartCropping': 'Pametno AI obrezivanje',
 
             // Templates
             'templates.title': 'Odabir predložaka',
@@ -347,6 +418,20 @@ const resources = {
             'templates.eachGenerates': 'Web predlošci generiraju WebP + JPG/PNG, logo predlošci generiraju JPG/PNG ovisno o transparentnosti, a predlošci za društvene mreže generiraju samo JPG.',
             'templates.selectImage': 'Molimo odaberite sliku iz galerije iznad za primjenu predložaka',
 
+            // NEW: Favicon & Screenshot Options - From new translations
+            'templates.faviconOptions': 'Opcije za favicon',
+            'templates.screenshotOptions': 'Opcije za screenshotove',
+            'templates.siteName': 'Naziv web stranice',
+            'templates.siteNamePlaceholder': 'Unesite naziv web stranice...',
+            'templates.faviconNote': 'Ovaj naziv će se koristiti u web app manifestu',
+            'templates.websiteUrl': 'URL web stranice',
+            'templates.screenshotNote': 'Unesite URL web stranice koju želite snimiti',
+            'templates.faviconThemeColor': 'Boja teme',
+            'templates.faviconBgColor': 'Boja pozadine',
+            'templates.colorPlaceholder': '#ffffff',
+            'templates.faviconIncludes': 'Uključuje: favicon.ico, site.webmanifest, sve veličine (16x16 do 512x512)',
+            'templates.screenshotIncludes': 'Uključuje: Desktop (1280x720) i Mobile (720x1280) screenshotove',
+
             // Image Gallery
             'gallery.title': 'Učitane slike',
             'gallery.templatesMode': '(Način predložaka: Kliknite JEDNU sliku za odabir)',
@@ -356,7 +441,7 @@ const resources = {
             'gallery.templateImage': 'SLIKA ZA PREDLOŠKE',
 
             // Buttons & Actions
-            'button.process': 'Preuzmi prilagođeno obrađene slike',
+            'button.process': 'Obradi slike',
             'button.processing': 'Obrada...',
             'button.loadingAI': 'Učitavam AI model...',
             'button.ok': 'U redu',
@@ -372,6 +457,9 @@ const resources = {
             'button.templateCount_one': '{{count}} predložak',
             'button.templateCount_few': '{{count}} predloška',
             'button.templateCount_other': '{{count}} predložaka',
+            'button.generateFavicon': 'Generiraj favicon set',
+            'button.generateScreenshots': 'Generiraj screenshotove',
+            'button.test': 'Testiraj URL',
 
             // Messages
             'message.success': 'Uspjeh',
@@ -399,6 +487,20 @@ const resources = {
             'message.memoryCleaned': 'GPU memorija je očišćena.',
             'message.largeImageWarning': 'Otkrivena velika slika. Koristim optimiziranu obradu kako bih spriječio probleme s memorijom.',
 
+            // NEW: Favicon & Screenshot Messages - From new translations
+            'message.generatingFavicon': 'Generiram favicon set...',
+            'message.generatingScreenshots': 'Generiram screenshotove...',
+            'message.faviconGenerated': 'Favicon set uspješno generiran!',
+            'message.screenshotsGenerated': 'Screenshotovi uspješno generirani!',
+            'message.errorFavicon': 'Greška pri generiranju favicon seta',
+            'message.errorScreenshots': 'Greška pri generiranju screenshotova',
+            'message.errorScreenshotUrl': 'Molimo unesite valjani URL web stranice za screenshotove',
+            'message.screenshotFailed': 'Snimanje screenshotova nije uspjelo. Molimo pokušajte s drugim URL-om ili provjerite je li web stranica dostupna.',
+            'message.faviconPreview': 'Favicon pregled generiran. Kompletan set će biti kreiran tijekom izvoza.',
+            // Missing messages from your issue report
+            'message.errorSelectImageForFavicon': 'Molimo odaberite sliku za generiranje favicona/screenshotova',
+            'message.errorInvalidUrl': 'Molimo unesite valjani URL za snimanje screenshotova',
+
             // Loading States
             'loading.preparing': 'Pripremam vašu ZIP datoteku...',
             'loading.aiModel': 'Učitavam AI model za pametno obrezivanje...',
@@ -407,8 +509,10 @@ const resources = {
             'loading.upscalingWhenNeeded': 'Obrada (automatsko povećavanje primijenjeno kada je potrebno)...',
             'loading.aiForTemplates': 'Učitavam AI model za pametno obrezivanje predložaka',
             'loading.aiForSmartCrop': 'Učitavam AI model za pametno obrezivanje',
+            'loading.capturingScreenshot': 'Snimam screenshot web stranice...',
+            'loading.creatingFavicon': 'Kreiram favicon set...',
 
-            // Summary Modal
+            // Summary Modal - MERGED with missing keys from your issue
             'summary.title': 'Obrada Završena',
             'summary.processingComplete': 'Obrada slika završena',
             'summary.mode': 'Način obrade',
@@ -416,13 +520,15 @@ const resources = {
             'summary.imagesProcessed_few': 'Obrađene {{count}} slike',
             'summary.imagesProcessed_other': 'Obrađeno {{count}} slika',
             'summary.formatsExported': 'Izvozni formati',
+            'summary.totalFiles': 'Ukupno datoteka', // NEW: Missing from your original
             'summary.totalFiles_one': 'Generirana {{count}} datoteka',
             'summary.totalFiles_few': 'Generirane {{count}} datoteke',
             'summary.totalFiles_other': 'Generirano {{count}} datoteka',
             'summary.aiUsed': 'AI obrada korištena',
-            'summary.upscalingUsed': 'AI povećavanje',
-            'summary.categoriesApplied': 'Primijenjene kategorije',
-            'summary.operationsPerformed': 'Izvedene operacije',
+            'summary.upscalingUsed': 'AI povećavanje korišteno',
+            'summary.categoriesApplied': 'Primijenjene kategorije', // NEW: Missing from your original
+            'summary.operationsPerformed': 'Izvedene operacije', // NEW: Missing from your original
+            'summary.templatesApplied': 'Primijenjeni predlošci', // NEW: Missing from your original
             'summary.templatesApplied_one': 'Primijenjen {{count}} predložak',
             'summary.templatesApplied_few': 'Primijenjena {{count}} predloška',
             'summary.templatesApplied_other': 'Primijenjeno {{count}} predložaka',
@@ -430,6 +536,11 @@ const resources = {
             'summary.templatesNote': 'Svi {{count}} predložaka obrađeni su s optimalnim obrezivanjem i povećavanjem.',
             'summary.yes': 'Da',
             'summary.no': 'Ne',
+            // NEW: Favicon & Screenshot Summary
+            'summary.faviconGenerated': 'Favicon set kreiran',
+            'summary.screenshotsCaptured': 'Screenshotovi snimljeni',
+            'summary.faviconFiles': '15+ favicon datoteka',
+            'summary.screenshotFiles': 'Desktop i mobilni screenshotovi',
 
             // Common words for pluralization
             'common.image_one': 'slika',
@@ -441,6 +552,12 @@ const resources = {
             'common.template_one': 'predložak',
             'common.template_few': 'predloška',
             'common.template_other': 'predložaka',
+            'common.favicon_one': 'favicon',
+            'common.favicon_few': 'favicona',
+            'common.favicon_other': 'favicona',
+            'common.screenshot_one': 'screenshot',
+            'common.screenshot_few': 'screenshota',
+            'common.screenshot_other': 'screenshota',
 
             // Footer
             'footer.createdBy': 'Kreirao',
@@ -465,6 +582,8 @@ const resources = {
             'category.youtube': 'YouTube',
             'category.pinterest': 'Pinterest',
             'category.tiktok': 'TikTok',
+            'category.favicon': 'Favicon',
+            'category.screenshots': 'Screenshotovi',
 
             // Template Names
             'template.WebHero': 'Hero slika',
@@ -501,7 +620,26 @@ const resources = {
             'template.PinterestSquarePin': 'Kvadratni pin',
             'template.PinterestStoryPin': 'Story pin',
             'template.TikTokProfile': 'Profilna slika',
-            'template.TikTokVideoCover': 'Naslovnica videa'
+            'template.TikTokVideoCover': 'Naslovnica videa',
+
+            // NEW: Favicon & Screenshot Template Names
+            'template.FaviconSet': 'Favicon Set',
+            'template.ScreenshotsDesktop': 'Desktop Screenshot',
+            'template.ScreenshotsMobile': 'Mobile Screenshot',
+
+            // NEW: Color Labels
+            'color.white': 'Bijela',
+            'color.black': 'Crna',
+            'color.blue': 'Plava',
+            'color.red': 'Crvena',
+            'color.green': 'Zelena',
+            'color.yellow': 'Žuta',
+            'color.purple': 'Ljubičasta',
+            'color.orange': 'Narančasta',
+            'color.gray': 'Siva',
+
+            // NEW: Screenshots translations from your issue
+            'screenshots.title': 'Generiraj Screenshotove'
         }
     }
 };

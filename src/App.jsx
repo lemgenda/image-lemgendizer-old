@@ -1,3 +1,4 @@
+// src/App.jsx
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -16,6 +17,7 @@ import {
 import {
   validateProcessingOptions,
   calculateTotalTemplateFiles,
+  validateScreenshotUrl,
   formatFileSize
 } from './utils';
 import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './configs/templateConfigs';
@@ -30,17 +32,21 @@ import {
   Header,
   Footer,
   Modal,
-  RangeSlider
+  RangeSlider,
+  SiteScreenshots
 } from './components';
 import './styles/App.css';
 
 /**
- * Main application component for image processing and optimization.
- *
+ * Main application component for image processing and optimization
  * @returns {JSX.Element} Rendered application
  */
 function App() {
   const { t, i18n } = useTranslation();
+  const [isFaviconSelected, setIsFaviconSelected] = useState(false);
+  const [isScreenshotSelected, setIsScreenshotSelected] = useState(false);
+  const [screenshotUrl, setScreenshotUrl] = useState('');
+  const [screenshotValidation, setScreenshotValidation] = useState(null);
   const [images, setImages] = useState([]);
   const [selectedImages, setSelectedImages] = useState([]);
   const [modal, setModal] = useState({
@@ -55,11 +61,11 @@ function App() {
   const [processingSummary, setProcessingSummary] = useState(null);
   const [processingOptions, setProcessingOptions] = useState({
     compression: {
-      quality: DEFAULT_COMPRESSION_QUALITY,  // Using constant
+      quality: DEFAULT_COMPRESSION_QUALITY,
       fileSize: ''
     },
     output: {
-      formats: DEFAULT_OUTPUT_FORMATS,  // Using constant
+      formats: DEFAULT_OUTPUT_FORMATS,
       rename: false,
       newFileName: ''
     },
@@ -70,17 +76,21 @@ function App() {
     showCrop: false,
     showTemplates: false,
     selectedTemplates: [],
-    processingMode: PROCESSING_MODES.CUSTOM,  // Using constant
+    processingMode: PROCESSING_MODES.CUSTOM,
     templateSelectedImage: null,
     smartCrop: false,
     cropMode: 'smart',
-    cropPosition: 'center'
+    cropPosition: 'center',
+    faviconSiteName: 'My Website',
+    faviconThemeColor: '#ffffff',
+    faviconBackgroundColor: '#ffffff'
   });
 
   const fileInputRef = useRef(null);
 
   /**
    * Preload UTIF.js library for TIFF support
+   * @returns {void}
    */
   useEffect(() => {
     const preloadLibraries = async () => {
@@ -94,7 +104,8 @@ function App() {
   }, []);
 
   /**
-   * Loads AI model when needed for smart cropping or templates.
+   * Loads AI model when needed for smart cropping or templates
+   * @returns {void}
    */
   useEffect(() => {
     const loadAIModelAsync = async () => {
@@ -121,18 +132,35 @@ function App() {
   }, [processingOptions.cropMode, processingOptions.processingMode, t]);
 
   /**
-   * Cleans up blob URLs when component unmounts.
+   * Cleans up blob URLs when component unmounts
+   * @returns {Function} Cleanup function
    */
   useEffect(() => {
+    const blobUrls = [];
+
+    images.forEach(image => {
+      if (image.url && image.url.startsWith('blob:')) {
+        blobUrls.push(image.url);
+      }
+    });
+
     return () => {
+      blobUrls.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (e) {
+        }
+      });
+
       cleanupBlobUrls(images);
     };
-  }, []);
+  }, [images]);
 
   /**
-   * Handles image upload from file input or drag-and-drop.
-   *
+   * Handles image upload from file input or drag-and-drop
+   * @async
    * @param {File[]} files - Array of uploaded image files
+   * @returns {Promise<void>}
    */
   const handleImageUpload = async (files) => {
     try {
@@ -171,9 +199,9 @@ function App() {
   };
 
   /**
-   * Handles image selection in gallery.
-   *
+   * Handles image selection in gallery
    * @param {string} imageId - Unique identifier of the image
+   * @returns {void}
    */
   const handleImageSelect = (imageId) => {
     if (processingOptions.processingMode === 'templates') {
@@ -192,7 +220,8 @@ function App() {
   };
 
   /**
-   * Selects or deselects all images.
+   * Selects or deselects all images
+   * @returns {void}
    */
   const handleSelectAll = () => {
     if (processingOptions.processingMode === 'templates') return;
@@ -205,7 +234,8 @@ function App() {
   };
 
   /**
-   * Removes selected images from the gallery.
+   * Removes selected images from the gallery
+   * @returns {void}
    */
   const handleRemoveSelected = () => {
     const imagesToRemove = processingOptions.processingMode === 'templates'
@@ -229,20 +259,89 @@ function App() {
   };
 
   /**
-   * Displays modal dialog.
-   *
+   * Toggles favicon selection
+   * @param {boolean} selected - Whether favicon is selected
+   * @returns {void}
+   */
+  const handleFaviconToggle = (selected) => {
+    setIsFaviconSelected(selected);
+
+    setProcessingOptions(prev => ({
+      ...prev,
+      includeFavicon: selected,
+      faviconSiteName: selected ? (prev.faviconSiteName || 'My Website') : 'My Website',
+      faviconThemeColor: selected ? (prev.faviconThemeColor || '#ffffff') : '#ffffff',
+      faviconBackgroundColor: selected ? (prev.faviconBackgroundColor || '#ffffff') : '#ffffff'
+    }));
+  };
+
+  /**
+   * Toggles screenshot selection
+   * @param {boolean} selected - Whether screenshot is selected
+   * @returns {void}
+   */
+  const handleScreenshotToggle = (selected) => {
+    setIsScreenshotSelected(selected);
+
+    const screenshotTemplateId = 'screenshots-desktop';
+    if (selected) {
+      if (!processingOptions.selectedTemplates.includes(screenshotTemplateId)) {
+        setProcessingOptions(prev => ({
+          ...prev,
+          selectedTemplates: [...prev.selectedTemplates, screenshotTemplateId]
+        }));
+      }
+    } else {
+      setProcessingOptions(prev => ({
+        ...prev,
+        selectedTemplates: prev.selectedTemplates.filter(id => id !== screenshotTemplateId)
+      }));
+      setScreenshotUrl('');
+      setScreenshotValidation(null);
+    }
+  };
+
+  /**
+   * Handles screenshot URL change with validation
+   * @param {string} url - New screenshot URL
+   * @returns {void}
+   */
+  const handleScreenshotUrlChange = (url) => {
+    setScreenshotUrl(url);
+
+    if (url.trim()) {
+      try {
+        new URL(url.startsWith('http') ? url : `https://${url}`);
+        setScreenshotValidation({
+          isValid: true,
+          message: 'Valid URL format'
+        });
+      } catch (error) {
+        setScreenshotValidation({
+          isValid: false,
+          message: 'Invalid URL format'
+        });
+      }
+    } else {
+      setScreenshotValidation(null);
+    }
+  };
+
+  /**
+   * Displays modal dialog
    * @param {string} title - Modal title
    * @param {string} message - Modal message content
    * @param {string} type - Modal type ('info', 'success', 'error', 'summary')
+   * @returns {void}
    */
   const showModal = (title, message, type = 'info') => {
     setModal({ isOpen: true, title, message, type });
   };
 
   /**
-   * Shows summary modal with processing details.
-   *
+   * Shows summary modal with processing details
    * @param {Object} summary - Processing summary object
+   * @returns {void}
    */
   const showSummaryModal = (summary) => {
     setProcessingSummary(summary);
@@ -255,7 +354,8 @@ function App() {
   };
 
   /**
-   * Closes modal dialog.
+   * Closes modal dialog
+   * @returns {void}
    */
   const closeModal = () => {
     setModal({ isOpen: false, title: '', message: '', type: 'info' });
@@ -263,7 +363,8 @@ function App() {
   };
 
   /**
-   * Toggles between resize and crop modes.
+   * Toggles between resize and crop modes
+   * @returns {void}
    */
   const toggleResizeCrop = () => {
     setProcessingOptions(prev => ({
@@ -274,7 +375,8 @@ function App() {
   };
 
   /**
-   * Toggles crop mode between standard and smart.
+   * Toggles crop mode between standard and smart
+   * @returns {void}
    */
   const toggleCropMode = () => {
     setProcessingOptions(prev => ({
@@ -284,9 +386,9 @@ function App() {
   };
 
   /**
-   * Toggles format selection.
-   *
+   * Toggles format selection
    * @param {string} format - Format to toggle
+   * @returns {void}
    */
   const handleFormatToggle = (format) => {
     setProcessingOptions(prev => {
@@ -308,7 +410,8 @@ function App() {
   };
 
   /**
-   * Selects all output formats.
+   * Selects all output formats
+   * @returns {void}
    */
   const handleSelectAllFormats = () => {
     const allFormats = ['webp', 'avif', 'jpg', 'png'];
@@ -322,7 +425,8 @@ function App() {
   };
 
   /**
-   * Clears all output formats.
+   * Clears all output formats
+   * @returns {void}
    */
   const handleClearAllFormats = () => {
     setProcessingOptions(prev => ({
@@ -335,9 +439,9 @@ function App() {
   };
 
   /**
-   * Switches between custom processing and templates mode.
-   *
+   * Switches between custom processing and templates mode
    * @param {'custom'|'templates'} mode - Processing mode
+   * @returns {void}
    */
   const toggleProcessingMode = (mode) => {
     const newMode = mode === 'templates' ? 'templates' : 'custom';
@@ -370,9 +474,9 @@ function App() {
   };
 
   /**
-   * Toggles selection of a specific template.
-   *
+   * Toggles selection of a specific template
    * @param {string} templateId - Unique identifier of the template
+   * @returns {void}
    */
   const handleTemplateToggle = (templateId) => {
     setProcessingOptions(prev => {
@@ -385,7 +489,8 @@ function App() {
   };
 
   /**
-   * Selects all available templates.
+   * Selects all available templates
+   * @returns {void}
    */
   const handleSelectAllTemplates = () => {
     const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id);
@@ -396,9 +501,9 @@ function App() {
   };
 
   /**
-   * Selects all templates in a specific category.
-   *
+   * Selects all templates in a specific category
    * @param {string} category - Template category identifier
+   * @returns {void}
    */
   const handleSelectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
@@ -412,9 +517,9 @@ function App() {
   };
 
   /**
-   * Deselects all templates in a specific category.
-   *
+   * Deselects all templates in a specific category
    * @param {string} category - Template category identifier
+   * @returns {void}
    */
   const handleDeselectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
@@ -428,11 +533,11 @@ function App() {
   };
 
   /**
-   * Updates processing options.
-   *
+   * Updates processing options
    * @param {string} category - Option category
    * @param {string} key - Option key within the category
    * @param {any} value - New option value
+   * @returns {void}
    */
   const handleOptionChange = (category, key, value) => {
     setProcessingOptions(prev => ({
@@ -445,10 +550,10 @@ function App() {
   };
 
   /**
-   * Updates single processing option.
-   *
+   * Updates single processing option
    * @param {string} key - Option key to update
    * @param {any} value - New option value
+   * @returns {void}
    */
   const handleSingleOptionChange = (key, value) => {
     setProcessingOptions(prev => ({
@@ -458,8 +563,7 @@ function App() {
   };
 
   /**
-   * Gets currently selected images for processing.
-   *
+   * Gets currently selected images for processing
    * @returns {Array<Object>} Array of selected image objects
    */
   const getSelectedImagesForProcessing = () => {
@@ -473,7 +577,9 @@ function App() {
   };
 
   /**
-   * Processes images using custom settings.
+   * Processes images using custom settings
+   * @async
+   * @returns {Promise<void>}
    */
   const processCustomImages = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing();
@@ -513,7 +619,9 @@ function App() {
       const summary = createProcessingSummary({
         imagesProcessed: selectedImagesForProcessing.length,
         totalFiles: processedImages.length,
-        success: true
+        success: true,
+        templatesApplied: processingOptions.selectedTemplates.length,
+        categoriesApplied: calculateCategoriesApplied(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES)
       }, processingConfig, t);
 
       closeModal();
@@ -527,7 +635,9 @@ function App() {
   };
 
   /**
-   * Processes images using social media templates.
+   * Processes images using social media templates
+   * @async
+   * @returns {Promise<void>}
    */
   const processTemplates = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing();
@@ -536,7 +646,26 @@ function App() {
       return;
     }
 
-    if (processingOptions.selectedTemplates.length === 0) {
+    if ((isFaviconSelected || isScreenshotSelected) && !processingOptions.templateSelectedImage) {
+      showModal(t('message.error'), t('message.errorSelectImageForFavicon'), 'error');
+      return;
+    }
+
+    if (isScreenshotSelected && !screenshotUrl.trim()) {
+      showModal(t('message.error'), t('message.errorScreenshotUrl'), 'error');
+      return;
+    }
+
+    if (isScreenshotSelected && screenshotUrl.trim()) {
+      try {
+        new URL(screenshotUrl.startsWith('http') ? screenshotUrl : `https://${screenshotUrl}`);
+      } catch (error) {
+        showModal(t('message.error'), t('message.errorInvalidUrl'), 'error');
+        return;
+      }
+    }
+
+    if (processingOptions.selectedTemplates.length === 0 && !isFaviconSelected && !isScreenshotSelected) {
       showModal(t('message.error'), t('message.errorSelectTemplate'), 'error');
       return;
     }
@@ -546,16 +675,51 @@ function App() {
 
     try {
       const processingConfig = getProcessingConfiguration(processingOptions);
+
+      const processingOptionsWithExtras = {
+        ...processingConfig,
+        faviconSiteName: processingOptions.faviconSiteName || 'My Website',
+        faviconThemeColor: processingOptions.faviconThemeColor || '#ffffff',
+        faviconBackgroundColor: processingOptions.faviconBackgroundColor || '#ffffff',
+        screenshotUrl: isScreenshotSelected && screenshotUrl ? screenshotUrl : '',
+        includeFavicon: isFaviconSelected,
+        includeScreenshots: isScreenshotSelected,
+        selectedTemplates: processingOptions.selectedTemplates,
+        ...(isFaviconSelected && { faviconTemplateIds: ['favicon-set'] })
+      };
+
       const processedImages = await orchestrateTemplateProcessing(
         selectedImagesForProcessing[0],
         processingOptions.selectedTemplates,
         SOCIAL_MEDIA_TEMPLATES,
         true,
         aiModelLoaded,
+        null,
+        processingOptionsWithExtras
       );
 
-      const settings = generateExportSettings('templates');
-      const zipBlob = await createExportZip([selectedImagesForProcessing[0]], processedImages, settings, 'templates');
+      const settings = generateExportSettings('templates', {
+        faviconSiteName: processingOptions.faviconSiteName || 'My Website',
+        faviconThemeColor: processingOptions.faviconThemeColor || '#ffffff',
+        faviconBackgroundColor: processingOptions.faviconBackgroundColor || '#ffffff',
+        screenshotUrl: isScreenshotSelected ? screenshotUrl : '',
+        includeFavicon: isFaviconSelected,
+        includeScreenshots: isScreenshotSelected,
+        includeOriginal: false,
+        includeOptimized: false,
+        includeWebImages: true,
+        includeLogoImages: true,
+        includeSocialMedia: true,
+        createFolders: true
+      });
+
+      const zipBlob = await createExportZip(
+        [selectedImagesForProcessing[0]],
+        processedImages,
+        settings,
+        'templates'
+      );
+
       downloadZip(zipBlob, 'template-images');
 
       const summary = createProcessingSummary({
@@ -568,15 +732,14 @@ function App() {
       showSummaryModal(summary);
 
     } catch (error) {
-      showModal(t('message.error'), t('message.errorApplying'), 'error');
+      showModal(t('message.error'), `${t('message.errorApplying')}: ${error.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   /**
-   * Formats template names for display using translations.
-   *
+   * Formats template names for display using translations
    * @param {string} name - Original template name
    * @returns {string} Formatted display name
    */
@@ -585,10 +748,10 @@ function App() {
   };
 
   /**
-   * Increments number value.
-   *
+   * Increments number value
    * @param {string} key - State key to update
    * @param {number} increment - Amount to increment by
+   * @returns {void}
    */
   const incrementValue = (key, increment = 1) => {
     const currentValue = parseInt(processingOptions[key] || '0');
@@ -597,10 +760,10 @@ function App() {
   };
 
   /**
-   * Decrements number value.
-   *
+   * Decrements number value
    * @param {string} key - State key to update
    * @param {number} decrement - Amount to decrement by
+   * @returns {void}
    */
   const decrementValue = (key, decrement = 1) => {
     const currentValue = parseInt(processingOptions[key] || '1');
@@ -608,14 +771,38 @@ function App() {
     handleSingleOptionChange(key, String(newValue));
   };
 
-  // UI state
+  /**
+   * Calculates categories applied from selected templates
+   * @param {Array<string>} selectedTemplates - Selected template IDs
+   * @param {Array<Object>} SOCIAL_MEDIA_TEMPLATES - All available templates
+   * @returns {number} Number of categories applied
+   */
+  const calculateCategoriesApplied = (selectedTemplates, SOCIAL_MEDIA_TEMPLATES) => {
+    if (!selectedTemplates || selectedTemplates.length === 0) return 0;
+
+    const categories = new Set();
+    selectedTemplates.forEach(templateId => {
+      const template = SOCIAL_MEDIA_TEMPLATES.find(t => t.id === templateId);
+      if (template && template.category) {
+        let displayCategory = template.category;
+        if (displayCategory === 'twitter') displayCategory = 'twitter/x';
+        if (displayCategory === 'favicon' || displayCategory === 'screenshots') {
+          categories.add(displayCategory);
+        } else if (displayCategory !== 'web' && displayCategory !== 'logo') {
+          categories.add(displayCategory);
+        }
+      }
+    });
+
+    return categories.size;
+  };
+
   const selectedImagesForProcessing = getSelectedImagesForProcessing();
   const templateCategories = getTemplateCategories();
   const templateSelectedImageObj = images.find(img => img.id === processingOptions.templateSelectedImage);
 
   return (
     <div className="app">
-      {/* Loading Overlay */}
       {isLoading && (
         <div className="loading-overlay">
           <div className="loading-spinner">
@@ -630,7 +817,6 @@ function App() {
         </div>
       )}
 
-      {/* AI Model Loading Overlay */}
       {aiLoading && (
         <div className="loading-overlay">
           <div className="loading-spinner">
@@ -656,7 +842,6 @@ function App() {
 
         {images.length > 0 && (
           <>
-            {/* Mode Selection */}
             <div className="card">
               <div className="card-header">
                 <h2 className="card-title">
@@ -689,7 +874,6 @@ function App() {
               {processingOptions.processingMode === 'custom' ? (
                 <>
                   <div className="grid grid-cols-auto gap-lg mb-lg">
-                    {/* Compression Card */}
                     <div className="card">
                       <h3 className="card-title">
                         <i className="fas fa-compress"></i> {t('compression.title')}
@@ -698,8 +882,8 @@ function App() {
                         <div className="range-wrapper">
                           <RangeSlider
                             label={t('compression.quality')}
-                            min={COMPRESSION_QUALITY_RANGE.MIN}  // Using constant
-                            max={COMPRESSION_QUALITY_RANGE.MAX}  // Using constant
+                            min={COMPRESSION_QUALITY_RANGE.MIN}
+                            max={COMPRESSION_QUALITY_RANGE.MAX}
                             value={processingOptions.compression.quality}
                             onChange={(val) =>
                               handleOptionChange('compression', 'quality', val)
@@ -737,17 +921,14 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Output Card */}
                     <div className="card">
                       <h3 className="card-title">
                         <i className="fas fa-file-export"></i> {t('output.title')}
                       </h3>
 
-                      {/* Format Selection */}
                       <div className="form-group">
                         <label className="form-label">{t('output.format')}</label>
                         <div className="space-y-sm mb-md">
-                          {/* Format checkboxes */}
                           <div className="grid grid-cols-2 gap-sm">
                             <label className="checkbox-wrapper">
                               <input
@@ -805,7 +986,6 @@ function App() {
                             </label>
                           </div>
 
-                          {/* Quick selection buttons */}
                           <div className="flex flex-col gap-xs mt-sm">
                             <button
                               className="btn btn-secondary btn-xs"
@@ -849,7 +1029,6 @@ function App() {
                       )}
                     </div>
 
-                    {/* Resize/Crop Card */}
                     <div className="card">
                       <h3 className="card-title">
                         {processingOptions.showResize ? (
@@ -1010,7 +1189,6 @@ function App() {
                             </div>
                           </div>
 
-                          {/* Position selector for standard crop */}
                           {processingOptions.cropMode === 'standard' && (
                             <div className="form-group">
                               <label className="form-label">{t('crop.position')}</label>
@@ -1066,7 +1244,6 @@ function App() {
                 </>
               ) : (
                 <>
-                  {/* Templates Selection */}
                   <div className="card">
                     <div className="card-header">
                       <div>
@@ -1146,13 +1323,40 @@ function App() {
                                   </span>
                                 </label>
                               ))}
+
+                              {category.id === 'favicon' && (
+                                <div className="checkbox-wrapper" onClick={() => handleFaviconToggle(!isFaviconSelected)}>
+                                  <input
+                                    type="checkbox"
+                                    className="checkbox-input"
+                                    checked={isFaviconSelected}
+                                    onChange={(e) => handleFaviconToggle(e.target.checked)}
+                                    disabled={!processingOptions.templateSelectedImage}
+                                  />
+                                  <span className="checkbox-custom"></span>
+                                  <span className="flex-1">
+                                    <div className="flex justify-between items-center">
+                                      <span className="font-medium">Favicon Set</span>
+                                      <span className="text-muted text-sm">Multiple sizes</span>
+                                    </div>
+                                  </span>
+                                </div>
+                              )}
+                              {category.id === 'screenshots' && (
+                                <SiteScreenshots
+                                  isSelected={isScreenshotSelected}
+                                  onToggle={handleScreenshotToggle}
+                                  onUrlChange={handleScreenshotUrlChange}
+                                  screenshotUrl={screenshotUrl}
+                                  validation={screenshotValidation}
+                                />
+                              )}
                             </div>
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* Template Action Section */}
                     <div className="card">
                       <div className="card-header">
                         <div className="flex justify-between items-start w-full">
@@ -1183,7 +1387,6 @@ function App() {
                         </div>
                       </div>
 
-                      {/* Full-width image preview */}
                       {templateSelectedImageObj && (
                         <div className="relative w-full rounded-lg overflow-hidden bg-gray-100 image-preview-container-full mt-4">
                           {templateSelectedImageObj.isTIFF ? (
@@ -1241,7 +1444,6 @@ function App() {
                         </div>
                       )}
 
-                      {/* Template stats row */}
                       <div className="flex justify-between items-center mt-4 mb-lg">
                         <div className="flex items-center gap-4 text-sm text-muted">
                           <div className="flex items-center">
@@ -1255,14 +1457,12 @@ function App() {
                             <span>
                               {processingOptions.selectedTemplates.length > 0
                                 ? `${calculateTotalTemplateFiles(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES)} ${t('templates.filesToGenerate')}`
-                                : t('templates.selectTemplates')
-                              }
+                                : t('templates.selectTemplates')}
                             </span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Download button */}
                       <div className="text-center mt-6">
                         <button
                           className="btn btn-primary btn-lg relative"
@@ -1291,7 +1491,6 @@ function App() {
               )}
             </div>
 
-            {/* Image Gallery */}
             <div className="card">
               <div className="card-header">
                 <h3 className="card-title">
@@ -1350,20 +1549,17 @@ function App() {
 
                       {isTIFF ? (
                         <div className="relative">
-                          {/* TIFF preview image (converted to PNG) */}
                           <img
                             src={image.url}
                             alt={image.name}
                             className="image-preview"
                             onError={(e) => {
-                              // If the converted image fails to load, show a better placeholder
                               e.target.style.display = 'none';
                               const parent = e.target.parentElement;
                               const placeholder = parent.querySelector('.tiff-placeholder');
                               if (placeholder) placeholder.style.display = 'flex';
                             }}
                           />
-                          {/* Fallback placeholder */}
                           <div className="tiff-placeholder" style={{ display: 'none' }}>
                             <div className="tiff-icon">
                               <i className="fas fa-file-image"></i>
@@ -1374,7 +1570,6 @@ function App() {
                               <span className="tiff-size">{formatFileSize(image.size)}</span>
                             </div>
                           </div>
-                          {/* TIFF badge overlay */}
                           <div className="tiff-badge-overlay">
                             <span className="tiff-badge">TIFF</span>
                           </div>
@@ -1385,7 +1580,6 @@ function App() {
                           alt={image.name}
                           className="image-preview"
                           onError={(e) => {
-                            // Fallback for broken images
                             e.target.style.display = 'none';
                             const parent = e.target.parentElement;
                             const fallback = parent.querySelector('.image-fallback');
@@ -1394,7 +1588,6 @@ function App() {
                         />
                       )}
 
-                      {/* Fallback for broken non-TIFF images */}
                       <div className="image-fallback" style={{ display: 'none' }}>
                         <i className="fas fa-image"></i>
                         <span className="image-fallback-name">{image.name}</span>
@@ -1418,7 +1611,6 @@ function App() {
 
       <Footer />
 
-      {/* Regular Modal */}
       <Modal
         isOpen={modal.isOpen && modal.type !== 'summary'}
         onClose={closeModal}
@@ -1428,7 +1620,6 @@ function App() {
         <p>{modal.message}</p>
       </Modal>
 
-      {/* Summary Modal */}
       <Modal
         isOpen={modal.isOpen && modal.type === 'summary'}
         onClose={closeModal}
@@ -1457,13 +1648,13 @@ function App() {
                 <div className="summary-item">
                   <div className="summary-label">
                     {processingSummary.mode === 'templates'
-                      ? t('summary.templatesApplied')
-                      : t('summary.imagesProcessed')}:
+                      ? t('summary.templatesApplied') + ':'
+                      : t('summary.imagesProcessed') + ':'}
                   </div>
                   <div className="summary-value">
                     {processingSummary.mode === 'templates'
-                      ? t('summary.templatesApplied', { count: processingSummary.templatesApplied })
-                      : t('summary.imagesProcessed', { count: processingSummary.imagesProcessed })}
+                      ? processingSummary.templatesApplied + ' templates applied'
+                      : processingSummary.imagesProcessed + ' images processed'}
                   </div>
                 </div>
 
@@ -1477,17 +1668,19 @@ function App() {
                 <div className="summary-item">
                   <div className="summary-label">{t('summary.formatsExported')}:</div>
                   <div className="summary-value">
-                    {processingSummary.formatsExported.map(format => (
-                      <span key={format} className="format-badge">
-                        {format.toUpperCase()}
-                      </span>
-                    ))}
+                    {processingSummary.formatsExported && processingSummary.formatsExported.length > 0
+                      ? processingSummary.formatsExported.map(format => (
+                        <span key={format} className="format-badge">
+                          {format.toUpperCase()}
+                        </span>
+                      ))
+                      : 'WEBP, JPG, PNG'}
                   </div>
                 </div>
 
                 <div className="summary-item">
                   <div className="summary-label">{t('summary.totalFiles')}:</div>
-                  <div className="summary-value">{t('summary.totalFiles', { count: processingSummary.totalFiles })}</div>
+                  <div className="summary-value">{processingSummary.totalFiles} files generated</div>
                 </div>
 
                 <div className="summary-item">
@@ -1495,10 +1688,10 @@ function App() {
                   <div className="summary-value">
                     {processingSummary.aiUsed ? (
                       <span className="text-success">
-                        <i className="fas fa-brain mr-1"></i> {t('summary.yes')}
+                        <i className="fas fa-brain mr-1"></i> Yes
                       </span>
                     ) : (
-                      <span className="text-muted">{t('summary.no')}</span>
+                      <span className="text-muted">No</span>
                     )}
                   </div>
                 </div>
@@ -1507,7 +1700,7 @@ function App() {
                   <div className="summary-item">
                     <div className="summary-label">{t('summary.upscalingUsed')}:</div>
                     <div className="summary-value text-success">
-                      <i className="fas fa-expand-arrows-alt mr-1"></i> {t('summary.yes')}
+                      <i className="fas fa-expand-arrows-alt mr-1"></i> Yes
                     </div>
                   </div>
                 )}
@@ -1530,16 +1723,6 @@ function App() {
                 </ul>
               </div>
             )}
-
-            <div className="alert alert-success mt-4">
-              <i className="fas fa-info-circle"></i>
-              {t('summary.downloadComplete')}
-              {processingSummary.mode === 'templates' && (
-                <div className="mt-1 text-sm">
-                  {t('summary.templatesNote', { count: processingSummary.templatesApplied })}
-                </div>
-              )}
-            </div>
           </div>
         )}
       </Modal>

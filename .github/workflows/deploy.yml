@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # ⬅️ CHANGED FROM 18 TO 20
+          node-version: '20'  # Fixed: Changed from 18 to 20
           cache: npm
 
       - name: Install dependencies

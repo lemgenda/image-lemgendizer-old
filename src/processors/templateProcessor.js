@@ -1,38 +1,513 @@
+// src/processors/templateProcessor.js
 import {
     CROP_MODES,
     MAX_SAFE_DIMENSION,
     DEFAULT_QUALITY,
     LARGE_IMAGE_THRESHOLD,
-    PROCESSING_DELAYS
+    PROCESSING_DELAYS,
+    TEMPLATE_CATEGORIES
 } from '../constants/sharedConstants.js';
 
-// Import core image processor for basic operations
 import {
     processLemGendaryResize,
     processLemGendaryCrop,
     processSmartCrop,
     processSimpleSmartCrop,
     optimizeForWeb,
-    checkImageTransparency
-} from '../processors';
+    checkImageTransparency,
+    checkImageTransparencyDetailed
+} from '../processors/index.js';
 
-// Import utilities
 import {
     safeCleanupGPUMemory,
     ensureFileObject,
-    createTIFFPlaceholderFile,
-    checkAVIFSupport,
-    getTemplateById,
-    getTemplatesByCategory
-} from '../utils';
+    checkAVIFSupport
+} from '../utils/index.js';
 
-// Global variables (these should likely be managed elsewhere)
+import { UnifiedScreenshotService } from '../utils/screenshotUtils.js';
+
 let cleanupInProgress = false;
 let aiUpscalingDisabled = false;
 
-// ================================
-// Template Processing Functions
-// ================================
+/**
+ * Creates favicon preview image with theme colors.
+ * @async
+ * @param {File} imageFile - Source image file
+ * @param {string} siteName - Website name
+ * @param {string} themeColor - Theme color (e.g., #ffffff)
+ * @param {string} backgroundColor - Background color (e.g., #ffffff)
+ * @returns {Promise<File>} Favicon preview file
+ */
+const createFaviconPreview = async (imageFile, siteName, themeColor = '#ffffff', backgroundColor = '#ffffff') => {
+    return new Promise((resolve) => {
+        checkImageTransparency(imageFile).then(hasTransparency => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = 512;
+            canvas.height = 512;
+
+            if (hasTransparency) {
+                ctx.clearRect(0, 0, 512, 512);
+            } else {
+                ctx.fillStyle = backgroundColor;
+                ctx.fillRect(0, 0, 512, 512);
+            }
+
+            const img = new Image();
+            const objectUrl = URL.createObjectURL(imageFile);
+
+            img.onload = () => {
+                const scale = Math.min(400 / img.width, 400 / img.height);
+                const scaledWidth = img.width * scale;
+                const scaledHeight = img.height * scale;
+                const x = (512 - scaledWidth) / 2;
+                const y = (512 - scaledHeight) / 2;
+
+                ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+
+                ctx.fillStyle = themeColor;
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(siteName, 256, 500);
+
+                ctx.fillStyle = '#4a90e2';
+                ctx.font = 'bold 18px Arial';
+                ctx.fillText('Favicon Set', 256, 470);
+
+                URL.revokeObjectURL(objectUrl);
+
+                canvas.toBlob((blob) => {
+                    resolve(new File([blob], 'favicon-preview.png', { type: 'image/png' }));
+                }, 'image/png', 0.9);
+            };
+
+            img.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+
+                ctx.fillStyle = backgroundColor;
+                ctx.fillRect(0, 0, 512, 512);
+
+                ctx.fillStyle = themeColor;
+                ctx.beginPath();
+                ctx.arc(256, 256, 150, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = backgroundColor;
+                ctx.font = 'bold 120px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('F', 256, 256);
+
+                ctx.font = 'bold 24px Arial';
+                ctx.fillText(siteName, 256, 420);
+
+                ctx.font = 'bold 18px Arial';
+                ctx.fillText('Favicon Set Preview', 256, 450);
+
+                canvas.toBlob((blob) => {
+                    resolve(new File([blob], 'favicon-preview.png', { type: 'image/png' }));
+                }, 'image/png', 0.9);
+            };
+
+            img.src = objectUrl;
+        });
+    });
+};
+
+/**
+ * Creates screenshot preview image.
+ * @async
+ * @param {File} imageFile - Source image file
+ * @param {string} url - Website URL
+ * @returns {Promise<File>} Screenshot preview file
+ */
+const createScreenshotPreview = async (imageFile, url) => {
+    return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 800;
+        canvas.height = 450;
+
+        ctx.fillStyle = '#f5f5f5';
+        ctx.fillRect(0, 0, 800, 450);
+
+        ctx.fillStyle = '#e0e0e0';
+        ctx.fillRect(50, 30, 700, 40);
+
+        ctx.fillStyle = '#ff5f57';
+        ctx.beginPath();
+        ctx.arc(75, 50, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffbd2e';
+        ctx.beginPath();
+        ctx.arc(100, 50, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#28ca42';
+        ctx.beginPath();
+        ctx.arc(125, 50, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(150, 38, 550, 24);
+        ctx.strokeStyle = '#d0d0d0';
+        ctx.strokeRect(150, 38, 550, 24);
+
+        ctx.fillStyle = '#666666';
+        ctx.font = '14px Arial';
+        const displayUrl = url.length > 50 ? url.substring(0, 47) + '...' : url;
+        ctx.fillText(displayUrl, 155, 55);
+
+        const contentY = 90;
+        const contentHeight = 450 - contentY - 30;
+
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(imageFile);
+
+        img.onload = () => {
+            const scale = Math.min(650 / img.width, contentHeight / img.height) * 0.7;
+            const scaledWidth = img.width * scale;
+            const scaledHeight = img.height * scale;
+            const x = 75 + ((700 - 50) - scaledWidth) / 2;
+            const y = contentY + (contentHeight - scaledHeight) / 2;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(75, contentY, 650, contentHeight);
+
+            ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+
+            ctx.fillStyle = '#4a90e2';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Screenshot Preview', 400, contentY + 40);
+
+            ctx.fillStyle = '#666666';
+            ctx.font = '16px Arial';
+            ctx.fillText('Actual screenshot will be captured from:', 400, contentY + 80);
+
+            ctx.fillStyle = '#333333';
+            ctx.font = '14px Arial';
+            ctx.fillText(displayUrl, 400, contentY + 110);
+
+            URL.revokeObjectURL(objectUrl);
+
+            canvas.toBlob((blob) => {
+                resolve(new File([blob], 'screenshot-preview.jpg', { type: 'image/jpeg' }));
+            }, 'image/jpeg', DEFAULT_QUALITY);
+        };
+
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(75, contentY, 650, contentHeight);
+
+            ctx.fillStyle = '#4a90e2';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Website Screenshot', 400, 250);
+
+            ctx.fillStyle = '#666666';
+            ctx.font = '16px Arial';
+            ctx.fillText('Will capture from:', 400, 290);
+            ctx.fillText(displayUrl, 400, 320);
+
+            canvas.toBlob((blob) => {
+                resolve(new File([blob], 'screenshot-preview.jpg', { type: 'image/jpeg' }));
+            }, 'image/jpeg', DEFAULT_QUALITY);
+        };
+
+        img.src = objectUrl;
+    });
+};
+
+/**
+ * Creates error placeholder files for failed templates.
+ * @async
+ * @param {Object} template - Template object
+ * @param {Object} image - Original image object
+ * @param {Error} error - Error object
+ * @returns {Promise<Array<Object>>} Array of error placeholder image objects
+ */
+const createTemplateErrorFiles = async (template, image, error) => {
+    return new Promise((resolve) => {
+        const errorImages = [];
+        const baseName = image.name.replace(/\.[^/.]+$/, '');
+        const templateName = template.name.replace(/\s+/g, '-').toLowerCase();
+
+        const errorFileName = `${templateName}-${baseName}-error.png`;
+        const errorCanvas = document.createElement('canvas');
+        const errorCtx = errorCanvas.getContext('2d');
+
+        errorCanvas.width = template.width || 800;
+        errorCanvas.height = template.height === 'auto' ? 600 : template.height || 600;
+
+        errorCtx.fillStyle = '#f8d7da';
+        errorCtx.fillRect(0, 0, errorCanvas.width, errorCanvas.height);
+
+        errorCtx.strokeStyle = '#f5c6cb';
+        errorCtx.lineWidth = 3;
+        errorCtx.strokeRect(10, 10, errorCanvas.width - 20, errorCanvas.height - 20);
+
+        errorCtx.fillStyle = '#721c24';
+        errorCtx.font = `bold ${Math.min(48, errorCanvas.height / 10)}px Arial`;
+        errorCtx.textAlign = 'center';
+        errorCtx.textBaseline = 'middle';
+        errorCtx.fillText('Error', errorCanvas.width / 2, errorCanvas.height / 2 - 40);
+
+        errorCtx.font = `bold ${Math.min(24, errorCanvas.height / 15)}px Arial`;
+        errorCtx.fillText('Processing Error', errorCanvas.width / 2, errorCanvas.height / 2);
+
+        errorCtx.fillStyle = '#856404';
+        errorCtx.font = `${Math.min(16, errorCanvas.height / 20)}px Arial`;
+
+        const errorMessage = error.message || 'Unknown error';
+        const maxWidth = errorCanvas.width - 40;
+        const words = errorMessage.split(' ');
+        const lines = [];
+        let currentLine = '';
+
+        for (const word of words) {
+            const testLine = currentLine ? `${currentLine} ${word}` : word;
+            const metrics = errorCtx.measureText(testLine);
+
+            if (metrics.width > maxWidth && currentLine !== '') {
+                lines.push(currentLine);
+                currentLine = word;
+            } else {
+                currentLine = testLine;
+            }
+        }
+        if (currentLine) lines.push(currentLine);
+
+        lines.forEach((line, index) => {
+            errorCtx.fillText(
+                line,
+                errorCanvas.width / 2,
+                errorCanvas.height / 2 + 40 + (index * 30)
+            );
+        });
+
+        errorCanvas.toBlob((blob) => {
+            const errorFile = new File([blob], errorFileName, {
+                type: 'image/png'
+            });
+
+            errorImages.push({
+                ...image,
+                file: errorFile,
+                name: errorFileName,
+                template: template,
+                format: 'png',
+                processed: false,
+                error: error.message,
+                aiCropped: false
+            });
+
+            resolve(errorImages);
+        }, 'image/png', 0.8);
+    });
+};
+
+/**
+ * Processes screenshot templates using unified screenshot service.
+ * @async
+ * @param {string} url - Website URL
+ * @param {Array<Object>} screenshotTemplates - Screenshot template objects
+ * @param {Object} options - Screenshot options
+ * @returns {Promise<Array<Object>>} Processed screenshot files
+ */
+const processScreenshotTemplates = async (url, screenshotTemplates, options = {}) => {
+    const service = new UnifiedScreenshotService({
+        useServerCapture: true,
+        enableCaching: true,
+        timeout: 10000
+    });
+
+    const templateIds = screenshotTemplates.map(t => t.id);
+    const allTemplates = screenshotTemplates;
+
+    const results = await service.captureByTemplates(url, templateIds, allTemplates, options);
+
+    const processedImages = [];
+
+    Object.entries(results.results).forEach(([templateId, result]) => {
+        const template = screenshotTemplates.find(t => t.id === templateId);
+        if (template && result.blob) {
+            const baseName = `${template.platform}-${template.name}-${Date.now()}`;
+            const extension = result.format || 'png';
+            const fileName = `${baseName}.${extension}`;
+
+            processedImages.push({
+                file: new File([result.blob], fileName, { type: `image/${extension}` }),
+                name: fileName,
+                template: template,
+                format: extension,
+                processed: true,
+                success: result.success,
+                method: result.method,
+                dimensions: result.dimensions
+            });
+        }
+    });
+
+    return processedImages;
+};
+
+/**
+ * Processes a single template.
+ * @async
+ * @param {Object} template - Template object
+ * @param {Object} image - Original image object
+ * @param {File} imageFile - Source image file
+ * @param {boolean} useSmartCrop - Whether to use AI smart cropping
+ * @param {boolean} aiModelLoaded - Whether AI model is loaded
+ * @param {boolean} isLargeImage - Whether the image is large
+ * @param {boolean} hasTransparency - Whether the image has transparency
+ * @returns {Promise<Array<Object>>} Array of processed images for this template
+ */
+const processSingleTemplate = async (template, image, imageFile, useSmartCrop, aiModelLoaded, isLargeImage, hasTransparency) => {
+    const processedImages = [];
+
+    try {
+        let processedFile = imageFile;
+        let wasUpscaled = false;
+        let wasSmartCropped = false;
+
+        if (template.width && template.height) {
+            const targetWidth = parseInt(template.width);
+            const targetHeight = template.height === 'auto' ? null : parseInt(template.height);
+
+            if (targetHeight) {
+                if (useSmartCrop && aiModelLoaded && !isLargeImage && !aiUpscalingDisabled) {
+                    try {
+                        processedFile = await processSmartCrop(
+                            processedFile,
+                            targetWidth,
+                            targetHeight,
+                            { quality: DEFAULT_QUALITY, format: 'webp' }
+                        );
+                        wasSmartCropped = true;
+                    } catch (smartCropError) {
+                        processedFile = await processSimpleSmartCrop(
+                            processedFile,
+                            targetWidth,
+                            targetHeight,
+                            'center',
+                            { quality: DEFAULT_QUALITY, format: 'webp' }
+                        );
+                    }
+                } else {
+                    const cropResults = await processLemGendaryCrop(
+                        [{ file: processedFile, name: image.name }],
+                        targetWidth,
+                        targetHeight,
+                        'center',
+                        { quality: DEFAULT_QUALITY, format: 'webp' }
+                    );
+                    if (cropResults.length > 0 && cropResults[0].cropped) {
+                        processedFile = cropResults[0].cropped;
+                    }
+                }
+            } else {
+                const resizeResults = await processLemGendaryResize(
+                    [{ file: processedFile, name: image.name }],
+                    targetWidth,
+                    { quality: DEFAULT_QUALITY, format: 'webp' }
+                );
+                if (resizeResults.length > 0 && resizeResults[0].resized) {
+                    processedFile = resizeResults[0].resized;
+                    wasUpscaled = resizeResults[0].upscaled || false;
+                }
+            }
+        }
+
+        const webpFile = await optimizeForWeb(processedFile, 0.8, 'webp');
+        const baseName = `${template.platform}-${template.name}-${image.name.replace(/\.[^/.]+$/, '')}`;
+        const webpName = `${baseName}.webp`;
+
+        processedImages.push({
+            ...image,
+            file: webpFile,
+            name: webpName,
+            template: template,
+            format: 'webp',
+            processed: true,
+            aiCropped: wasSmartCropped,
+            upscaled: wasUpscaled
+        });
+
+        if (template.category === TEMPLATE_CATEGORIES.LOGO) {
+            const pngFile = await optimizeForWeb(processedFile, 0.9, 'png');
+            const pngName = `${baseName}.png`;
+
+            processedImages.push({
+                ...image,
+                file: pngFile,
+                name: pngName,
+                template: template,
+                format: 'png',
+                processed: true,
+                aiCropped: wasSmartCropped,
+                upscaled: wasUpscaled,
+                hasTransparency: true
+            });
+
+            const jpgFile = await optimizeForWeb(processedFile, 0.95, 'jpg');
+            const jpgName = `${baseName}.jpg`;
+
+            processedImages.push({
+                ...image,
+                file: jpgFile,
+                name: jpgName,
+                template: template,
+                format: 'jpg',
+                processed: true,
+                aiCropped: wasSmartCropped,
+                upscaled: wasUpscaled,
+                hasTransparency: false
+            });
+        } else if (template.category === TEMPLATE_CATEGORIES.WEB) {
+            const fallbackFormat = hasTransparency ? 'png' : 'jpg';
+            const fallbackFile = await optimizeForWeb(processedFile, 0.85, fallbackFormat);
+            const fallbackName = `${baseName}.${fallbackFormat}`;
+
+            processedImages.push({
+                ...image,
+                file: fallbackFile,
+                name: fallbackName,
+                template: template,
+                format: fallbackFormat,
+                processed: true,
+                aiCropped: wasSmartCropped,
+                upscaled: wasUpscaled,
+                hasTransparency: hasTransparency
+            });
+        } else {
+            const jpgFile = await optimizeForWeb(processedFile, 0.85, 'jpg');
+            const jpgName = `${baseName}.jpg`;
+
+            processedImages.push({
+                ...image,
+                file: jpgFile,
+                name: jpgName,
+                template: template,
+                format: 'jpg',
+                processed: true,
+                aiCropped: wasSmartCropped,
+                upscaled: wasUpscaled
+            });
+        }
+
+        return processedImages;
+    } catch (error) {
+        return await createTemplateErrorFiles(template, image, error);
+    }
+};
 
 /**
  * Processes images using social media templates.
@@ -41,13 +516,16 @@ let aiUpscalingDisabled = false;
  * @param {Array<Object>} selectedTemplates - Array of template objects
  * @param {boolean} useSmartCrop - Whether to use AI smart cropping
  * @param {boolean} aiModelLoaded - Whether AI model is loaded
+ * @param {Object} options - Additional options for favicon/screenshot generation
  * @returns {Promise<Array<Object>>} Array of processed template images
  */
-export const processTemplateImages = async (image, selectedTemplates, useSmartCrop = false, aiModelLoaded = false) => {
+export const processTemplateImages = async (image, selectedTemplates, useSmartCrop = false, aiModelLoaded = false, options = {}) => {
     const processedImages = [];
     const imageFile = await ensureFileObject(image);
     const isSVG = imageFile.type === 'image/svg+xml';
-    const hasTransparency = isSVG ? false : await checkImageTransparency(imageFile);
+
+    const transparencyInfo = await checkImageTransparencyDetailed(imageFile);
+    const hasTransparency = transparencyInfo.hasTransparency;
 
     const img = new Image();
     const objectUrl = URL.createObjectURL(imageFile);
@@ -59,416 +537,103 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
     URL.revokeObjectURL(objectUrl);
 
     const totalPixels = img.naturalWidth * img.naturalHeight;
-    const isLargeImage = totalPixels > LARGE_IMAGE_THRESHOLD;  // Using constant
+    const isLargeImage = totalPixels > LARGE_IMAGE_THRESHOLD;
 
-    const templatesByDimensions = {};
-    selectedTemplates.forEach(template => {
-        const key = template.height === 'auto' ?
-            `auto_${template.width}` :
-            `${template.width}x${template.height}`;
-        if (!templatesByDimensions[key]) templatesByDimensions[key] = [];
-        templatesByDimensions[key].push(template);
-    });
+    const regularTemplates = selectedTemplates.filter(t =>
+        t.category !== 'favicon' && t.category !== 'screenshots'
+    );
+
+    const faviconTemplate = selectedTemplates.find(t => t.category === 'favicon');
+    const screenshotTemplates = selectedTemplates.filter(t => t.category === 'screenshots');
 
     const wasCleanupInProgress = cleanupInProgress;
     cleanupInProgress = true;
 
     try {
-        for (const [dimKey, templates] of Object.entries(templatesByDimensions)) {
-            try {
-                let processedFile = imageFile;
-                const template = templates[0];
+        for (const template of regularTemplates) {
+            const templateResults = await processSingleTemplate(
+                template,
+                image,
+                imageFile,
+                useSmartCrop,
+                aiModelLoaded,
+                isLargeImage,
+                hasTransparency
+            );
+            processedImages.push(...templateResults);
 
-                if (template.width && template.height) {
-                    if (template.height === 'auto') {
-                        const resizeResults = await processLemGendaryResize(
-                            [{ ...image, file: imageFile }],
-                            template.width
-                        );
-                        if (resizeResults.length > 0) {
-                            processedFile = resizeResults[0].resized;
-                        }
-                    } else {
-                        if (useSmartCrop && aiModelLoaded && !isLargeImage && !aiUpscalingDisabled) {
-                            try {
-                                processedFile = await processSmartCrop(
-                                    imageFile,
-                                    template.width,
-                                    template.height
-                                );
-                            } catch (error) {
-                                processedFile = await processSimpleSmartCrop(
-                                    imageFile,
-                                    template.width,
-                                    template.height,
-                                    'center'
-                                );
-                            }
-                        } else {
-                            try {
-                                processedFile = await processSimpleSmartCrop(
-                                    imageFile,
-                                    template.width,
-                                    template.height,
-                                    'center'
-                                );
-                            } catch (error) {
-                                const cropResults = await processLemGendaryCrop(
-                                    [{ ...image, file: imageFile }],
-                                    template.width,
-                                    template.height,
-                                    'center'
-                                );
-                                if (cropResults.length > 0) {
-                                    processedFile = cropResults[0].cropped;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                for (const template of templates) {
-                    const webpFile = await optimizeForWeb(processedFile, 0.8, 'webp');
-                    const jpgPngFile = await optimizeForWeb(processedFile, 0.85, hasTransparency ? 'png' : 'jpg');
-
-                    const baseName = `${template.platform}-${template.name}-${image.name.replace(/\.[^/.]+$/, '')}`;
-                    const webpName = `${baseName}.webp`;
-
-                    // Check if template is web or logo category using utility function
-                    const isWebTemplate = getTemplatesByCategory('web', [template]).length > 0;
-                    const isLogoTemplate = getTemplatesByCategory('logo', [template]).length > 0;
-                    const isWebOrLogo = isWebTemplate || isLogoTemplate;
-
-                    processedImages.push({
-                        ...image,
-                        file: webpFile,
-                        name: webpName,
-                        template: template,
-                        format: 'webp',
-                        processed: true,
-                        aiCropped: useSmartCrop && aiModelLoaded && !isLargeImage && !aiUpscalingDisabled
-                    });
-
-                    if (isWebOrLogo) {
-                        const pngName = `${baseName}.${hasTransparency ? 'png' : 'jpg'}`;
-                        processedImages.push({
-                            ...image,
-                            file: jpgPngFile,
-                            name: pngName,
-                            template: template,
-                            format: hasTransparency ? 'png' : 'jpg',
-                            processed: true,
-                            aiCropped: useSmartCrop && aiModelLoaded && !isLargeImage && !aiUpscalingDisabled
-                        });
-                    } else {
-                        const jpgName = `${baseName}.jpg`;
-                        const socialJpgFile = await optimizeForWeb(processedFile, 0.85, 'jpg');
-                        processedImages.push({
-                            ...image,
-                            file: socialJpgFile,
-                            name: jpgName,
-                            template: template,
-                            format: 'jpg',
-                            processed: true,
-                            aiCropped: useSmartCrop && aiModelLoaded && !isLargeImage && !aiUpscalingDisabled
-                        });
-                    }
-                }
-
-                await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAYS.MEMORY_CLEANUP));  // Using constant
-            } catch (groupError) {
-                // Error handling
-            }
-        }
-    } finally {
-        cleanupInProgress = wasCleanupInProgress;
-        setTimeout(safeCleanupGPUMemory, PROCESSING_DELAYS.MEMORY_CLEANUP);  // Using constant
-    }
-
-    return processedImages;
-};
-
-/**
- * Processes custom images with various operations.
- * @async
- * @param {Array<Object>} selectedImages - Array of images to process
- * @param {Object} processingOptions - Processing configuration options
- * @param {boolean} aiModelLoaded - Whether AI model is loaded
- * @returns {Promise<Array<Object>>} Array of processed images
- */
-export const processCustomImagesBatch = async (selectedImages, processingOptions, aiModelLoaded = false) => {
-    const processedImages = [];
-    const formats = processingOptions.output.formats || ['webp'];
-
-    safeCleanupGPUMemory();
-
-    for (let i = 0; i < selectedImages.length; i++) {
-        const image = selectedImages[i];
-
-        try {
-            // Get the original file from the image object
-            let baseProcessedFile = await ensureFileObject(image);
-
-            let resizeResult = null;
-            let cropResult = null;
-
-            // Only resize if resize is enabled AND dimension is provided
-            if (processingOptions.resize?.enabled && processingOptions.resize.dimension) {
-                const resizeDimension = parseInt(processingOptions.resize.dimension);
-                const safeDimension = Math.min(resizeDimension, MAX_SAFE_DIMENSION);
-
-                const resizeResults = await processLemGendaryResize(
-                    [{ ...image, file: baseProcessedFile }],
-                    safeDimension
-                );
-                if (resizeResults.length > 0 && resizeResults[0].resized) {
-                    resizeResult = resizeResults[0].resized;
-                    baseProcessedFile = resizeResult;
-                }
-                safeCleanupGPUMemory();
-            }
-
-            // Only crop if crop is enabled AND both dimensions are provided
-            if (processingOptions.crop?.enabled && processingOptions.crop.width && processingOptions.crop.height) {
-                const cropWidth = parseInt(processingOptions.crop.width);
-                const cropHeight = parseInt(processingOptions.crop.height);
-
-                const safeWidth = Math.min(cropWidth, MAX_SAFE_DIMENSION);
-                const safeHeight = Math.min(cropHeight, MAX_SAFE_DIMENSION);
-
-                if (processingOptions.crop.mode === CROP_MODES.SMART && aiModelLoaded && !aiUpscalingDisabled) {
-                    try {
-                        const smartCropFile = await processSmartCrop(
-                            baseProcessedFile,
-                            safeWidth,
-                            safeHeight,
-                            { quality: processingOptions.compression?.quality || DEFAULT_QUALITY, format: 'webp' }
-                        );
-                        cropResult = smartCropFile;
-                        baseProcessedFile = smartCropFile;
-                    } catch (aiError) {
-                        const cropResults = await processLemGendaryCrop(
-                            [{ ...image, file: baseProcessedFile }],
-                            safeWidth,
-                            safeHeight,
-                            processingOptions.crop.position || 'center',
-                            { quality: processingOptions.compression?.quality || DEFAULT_QUALITY, format: 'webp' }
-                        );
-                        if (cropResults.length > 0 && cropResults[0].cropped) {
-                            cropResult = cropResults[0].cropped;
-                            baseProcessedFile = cropResult;
-                        }
-                    }
-                } else {
-                    const cropResults = await processLemGendaryCrop(
-                        [{ ...image, file: baseProcessedFile }],
-                        safeWidth,
-                        safeHeight,
-                        processingOptions.crop.position || 'center',
-                        { quality: processingOptions.compression?.quality || DEFAULT_QUALITY, format: 'webp' }
-                    );
-                    if (cropResults.length > 0 && cropResults[0].cropped) {
-                        cropResult = cropResults[0].cropped;
-                        baseProcessedFile = cropResult;
-                    }
-                }
-                safeCleanupGPUMemory();
-            }
-
-            for (const format of formats) {
-                let processedFile = baseProcessedFile;
-                let finalName = image.name;
-                const baseName = image.name.replace(/\.[^/.]+$/, '');
-
-                if (processingOptions.output.rename && processingOptions.output.newFileName) {
-                    // Use new filename pattern with numbering
-                    const numberedName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}`;
-
-                    if (format === 'original') {
-                        finalName = `${numberedName}.${image.name.split('.').pop()}`;
-                        processedFile = new File([await ensureFileObject(image)], finalName, {
-                            type: image.type || processedFile.type
-                        });
-                    } else {
-                        finalName = `${numberedName}.${format}`;
-                    }
-                } else {
-                    // Keep original naming - NO operation suffixes
-                    if (format === 'original') {
-                        // For original format, keep exact original filename
-                        finalName = image.name;
-                        processedFile = new File([await ensureFileObject(image)], finalName, {
-                            type: image.type || processedFile.type
-                        });
-                    } else {
-                        // For converted formats: baseName.extension
-                        finalName = `${baseName}.${format}`;
-                    }
-                }
-
-                if (format !== 'original') {
-                    // Check transparency
-                    const hasTransparency = await checkImageTransparency(processedFile);
-                    let targetFormat = format;
-
-                    // Handle JPG format with transparency
-                    if ((targetFormat === 'jpg' || targetFormat === 'jpeg') && hasTransparency) {
-                        // Keep as JPG but add white background in optimizeForWeb
-                        // Don't switch to PNG
-                        targetFormat = 'jpg';
-                    }
-
-                    // Check AVIF support if needed
-                    if (targetFormat === 'avif') {
-                        const supportsAVIF = await checkAVIFSupport();
-                        if (!supportsAVIF) {
-                            targetFormat = 'webp';
-                        }
-                    }
-
-                    try {
-                        processedFile = await optimizeForWeb(
-                            processedFile,
-                            processingOptions.compression?.quality || DEFAULT_QUALITY,
-                            targetFormat
-                        );
-                    } catch (error) {
-                        // For TIFF files, try to create a simple conversion
-                        const isTIFF = image.isTIFF ||
-                            image.type === 'image/tiff' ||
-                            image.type === 'image/tif' ||
-                            image.name.toLowerCase().endsWith('.tiff') ||
-                            image.name.toLowerCase().endsWith('.tif');
-
-                        if (isTIFF) {
-                            try {
-                                processedFile = await createTIFFPlaceholderFile(image.file);
-                            } catch (fallbackError) {
-                                // Skip this format
-                                continue;
-                            }
-                        } else {
-                            // Skip this format for non-TIFF files
-                            continue;
-                        }
-                    }
-
-                    // Update filename extension if format changed
-                    if (targetFormat !== format) {
-                        if (processingOptions.output.rename && processingOptions.output.newFileName) {
-                            // For renamed files, replace the extension
-                            const numberedName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}`;
-                            finalName = `${numberedName}.${targetFormat}`;
-                        } else {
-                            // For original filenames, update with correct extension
-                            finalName = `${baseName}.${targetFormat}`;
-                        }
-                    }
-                }
-
-                // Ensure file has correct name
-                if (processedFile.name !== finalName) {
-                    processedFile = new File([processedFile], finalName, {
-                        type: processedFile.type
-                    });
-                }
-
-                processedImages.push({
-                    ...image,
-                    file: processedFile,
-                    name: finalName,
-                    url: URL.createObjectURL(processedFile),
-                    processed: true,
-                    format: format === 'original'
-                        ? image.type?.split('/')[1] || 'webp'
-                        : format,
-                    operations: {
-                        resized: !!resizeResult,
-                        cropped: !!cropResult,
-                        aiUsed: processingOptions.crop?.mode === CROP_MODES.SMART && aiModelLoaded && !aiUpscalingDisabled && !!cropResult
-                    }
-                });
-            }
-
-        } catch (error) {
-            // Create error entries for each format
-            for (const format of formats) {
-                const baseName = image.name.replace(/\.[^/.]+$/, '');
-                let finalName;
-
-                if (processingOptions.output.rename && processingOptions.output.newFileName) {
-                    const numberedName = `${processingOptions.output.newFileName}-${String(i + 1).padStart(2, '0')}`;
-                    const extension = format === 'original' ? image.name.split('.').pop() : format;
-                    finalName = `${numberedName}.${extension}`;
-                } else {
-                    if (format === 'original') {
-                        finalName = image.name;
-                    } else {
-                        finalName = `${baseName}.${format}`;
-                    }
-                }
-
-                processedImages.push({
-                    ...image,
-                    file: null,
-                    name: finalName,
-                    processed: false,
-                    format: format === 'original' ? image.type?.split('/')[1] : format,
-                    error: error.message
-                });
-            }
-        }
-
-        // Add small delay between images for better UI responsiveness
-        if (i < selectedImages.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAYS.BETWEEN_IMAGES));  // Using constant
+            await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAYS.MEMORY_CLEANUP));
             safeCleanupGPUMemory();
         }
+
+        if (options.includeFavicon === true && faviconTemplate) {
+            try {
+                const faviconPlaceholder = await createFaviconPreview(
+                    imageFile,
+                    options.faviconSiteName || 'My Website',
+                    options.faviconThemeColor || '#ffffff',
+                    options.faviconBackgroundColor || '#ffffff'
+                );
+
+                processedImages.push({
+                    ...image,
+                    file: faviconPlaceholder,
+                    name: `favicon-preview.png`,
+                    template: faviconTemplate,
+                    format: 'png',
+                    processed: true,
+                    isFaviconSource: true,
+                    metadata: {
+                        siteName: options.faviconSiteName || 'My Website',
+                        themeColor: options.faviconThemeColor || '#ffffff',
+                        backgroundColor: options.faviconBackgroundColor || '#ffffff'
+                    }
+                });
+
+                await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAYS.MEMORY_CLEANUP));
+                safeCleanupGPUMemory();
+
+            } catch (faviconError) {
+                const errorFiles = await createTemplateErrorFiles(faviconTemplate, image, faviconError);
+                processedImages.push(...errorFiles);
+            }
+        }
+
+        if (options.includeScreenshots === true && screenshotTemplates.length > 0 && options.screenshotUrl) {
+            try {
+                const screenshotPlaceholder = await createScreenshotPreview(
+                    imageFile,
+                    options.screenshotUrl
+                );
+
+                processedImages.push({
+                    ...image,
+                    file: screenshotPlaceholder,
+                    name: `screenshot-preview.jpg`,
+                    template: screenshotTemplates[0],
+                    format: 'jpg',
+                    processed: true,
+                    isScreenshotSource: true,
+                    metadata: {
+                        url: options.screenshotUrl
+                    }
+                });
+
+                await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAYS.MEMORY_CLEANUP));
+                safeCleanupGPUMemory();
+
+            } catch (screenshotError) {
+                const errorFiles = await createTemplateErrorFiles(screenshotTemplates[0], image, screenshotError);
+                processedImages.push(...errorFiles);
+            }
+        }
+
+    } finally {
+        cleanupInProgress = wasCleanupInProgress;
+        setTimeout(safeCleanupGPUMemory, PROCESSING_DELAYS.MEMORY_CLEANUP);
     }
 
-    safeCleanupGPUMemory();
     return processedImages;
-};
-
-// ================================
-// Orchestration Functions
-// ================================
-
-/**
- * Orchestrates custom image processing workflow.
- * @async
- * @param {Array<Object>} selectedImages - Selected image objects
- * @param {Object} processingOptions - Processing configuration
- * @param {boolean} aiModelLoaded - Whether AI model is loaded
- * @param {Function} onProgress - Progress callback
- * @returns {Promise<Array<Object>>} Processed images
- * @throws {Error} If no images selected or no output formats
- */
-export const orchestrateCustomProcessing = async (selectedImages, processingOptions, aiModelLoaded = false, onProgress = null) => {
-    try {
-        if (!selectedImages || selectedImages.length === 0) {
-            throw new Error('No images selected for processing');
-        }
-
-        if (!processingOptions.output.formats || processingOptions.output.formats.length === 0) {
-            throw new Error('No output formats selected');
-        }
-
-        if (onProgress) onProgress('preparing', 10);
-
-        const processedImages = await processCustomImagesBatch(
-            selectedImages,
-            processingOptions,
-            aiModelLoaded
-        );
-
-        if (onProgress) onProgress('completed', 100);
-
-        return processedImages;
-
-    } catch (error) {
-        throw error;
-    }
 };
 
 /**
@@ -480,10 +645,11 @@ export const orchestrateCustomProcessing = async (selectedImages, processingOpti
  * @param {boolean} useSmartCrop - Whether to use AI smart cropping
  * @param {boolean} aiModelLoaded - Whether AI model is loaded
  * @param {Function} onProgress - Progress callback
+ * @param {Object} processingOptions - Additional processing options for favicon/screenshot
  * @returns {Promise<Array<Object>>} Processed template images
  * @throws {Error} If no image or templates selected
  */
-export const orchestrateTemplateProcessing = async (selectedImage, selectedTemplateIds, templateConfigs, useSmartCrop = false, aiModelLoaded = false, onProgress = null) => {
+export const orchestrateTemplateProcessing = async (selectedImage, selectedTemplateIds, templateConfigs, useSmartCrop = false, aiModelLoaded = false, onProgress = null, processingOptions = {}) => {
     try {
         if (!selectedImage) {
             throw new Error('No image selected for template processing');
@@ -495,9 +661,22 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
 
         if (onProgress) onProgress('preparing', 10);
 
-        // Use getTemplateById utility function to get templates
-        const selectedTemplates = selectedTemplateIds
-            .map(templateId => getTemplateById(templateId, templateConfigs))
+        const filteredTemplateIds = selectedTemplateIds.filter(id => {
+            const template = templateConfigs.find(t => t.id === id);
+            if (!template) return false;
+
+            if (template.category === 'favicon' && !processingOptions.includeFavicon) return false;
+            if (template.category === 'screenshots' && !processingOptions.includeScreenshots) return false;
+
+            return true;
+        });
+
+        if (filteredTemplateIds.length === 0) {
+            throw new Error('No valid templates found after filtering');
+        }
+
+        const selectedTemplates = filteredTemplateIds
+            .map(templateId => templateConfigs.find(t => t.id === templateId))
             .filter(template => template !== null);
 
         if (selectedTemplates.length === 0) {
@@ -506,12 +685,44 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
 
         if (onProgress) onProgress('processing', 30);
 
-        const processedImages = await processTemplateImages(
-            selectedImage,
-            selectedTemplates,
-            useSmartCrop,
-            aiModelLoaded
-        );
+        const processedImages = [];
+
+        const screenshotTemplates = selectedTemplates.filter(t => t.category === 'screenshots');
+        const otherTemplates = selectedTemplates.filter(t => t.category !== 'screenshots');
+
+        if (otherTemplates.length > 0) {
+            if (onProgress) onProgress('processing-regular-templates', 40);
+
+            const regularTemplateImages = await processTemplateImages(
+                selectedImage,
+                otherTemplates,
+                useSmartCrop,
+                aiModelLoaded,
+                processingOptions
+            );
+
+            processedImages.push(...regularTemplateImages);
+        }
+
+        if (screenshotTemplates.length > 0 && processingOptions.includeScreenshots && processingOptions.screenshotUrl) {
+            if (onProgress) onProgress('capturing-screenshots', 70);
+
+            const screenshotResults = await processScreenshotTemplates(
+                processingOptions.screenshotUrl,
+                screenshotTemplates,
+                {
+                    fullPage: processingOptions.fullPageScreenshots || false,
+                    siteName: processingOptions.faviconSiteName || 'Website'
+                }
+            );
+
+            processedImages.push(...screenshotResults);
+        }
+
+        if (onProgress) onProgress('finalizing', 90);
+
+        await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAYS.MEMORY_CLEANUP));
+        safeCleanupGPUMemory();
 
         if (onProgress) onProgress('completed', 100);
 

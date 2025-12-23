@@ -147,3 +147,47 @@ export const validateProcessingOptions = (processingOptions) => {
         errors
     };
 };
+
+/**
+ * Validates a screenshot URL.
+ * @param {string} url - URL to validate
+ * @returns {Object} Validation result with isValid flag and message
+ */
+export const validateScreenshotUrl = (url) => {
+    if (!url || url.trim() === '') {
+        return {
+            isValid: false,
+            message: 'URL cannot be empty'
+        };
+    }
+
+    try {
+        // Add protocol if missing
+        let formattedUrl = url;
+        if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+            formattedUrl = `https://${formattedUrl}`;
+        }
+
+        // Basic URL validation
+        new URL(formattedUrl);
+
+        // Basic domain validation
+        const hostname = new URL(formattedUrl).hostname;
+        if (!hostname || hostname === '') {
+            return {
+                isValid: false,
+                message: 'Invalid domain name'
+            };
+        }
+
+        return {
+            isValid: true,
+            message: 'Valid URL'
+        };
+    } catch (error) {
+        return {
+            isValid: false,
+            message: 'Invalid URL format. Please enter a valid website URL (e.g., example.com or https://example.com)'
+        };
+    }
+};

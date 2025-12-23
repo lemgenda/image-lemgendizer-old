@@ -1,0 +1,20 @@
+{
+  "name": "screenshot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@sparticuz/chromium-min": "^143.0.0",
+    "canvas": "^3.2.0",
+    "chromium": "^3.0.3",
+    "playwright": "^1.57.0",
+    "playwright-core": "^1.57.0"
+  }
+}

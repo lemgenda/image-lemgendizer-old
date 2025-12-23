@@ -93,7 +93,8 @@ function Modal({ isOpen, onClose, title, children, actions, type = 'info' }) {
                 }
 
                 .modal.summary .modal-content {
-                    max-width: 600px;
+                    width: 100vw;
+                    height:100vh;
                 }
 
                 .modal-header {

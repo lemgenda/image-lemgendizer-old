@@ -8,8 +8,24 @@ export const TEMPLATE_CATEGORIES = [
     { id: 'linkedin', name: 'LinkedIn', icon: 'fab fa-linkedin' },
     { id: 'youtube', name: 'YouTube', icon: 'fab fa-youtube' },
     { id: 'pinterest', name: 'Pinterest', icon: 'fab fa-pinterest' },
-    { id: 'tiktok', name: 'TikTok', icon: 'fab fa-tiktok' }
-]
+    { id: 'tiktok', name: 'TikTok', icon: 'fab fa-tiktok' },
+    { id: 'favicon', name: 'Favicon', icon: 'fas fa-star' },
+    { id: 'screenshots', name: 'Screenshots', icon: 'fas fa-camera' }
+];
+
+export const FAVICON_SIZES = [
+    { name: 'android-chrome-192x192', width: 192, height: 192 },
+    { name: 'android-chrome-512x512', width: 512, height: 512 },
+    { name: 'apple-touch-icon', width: 180, height: 180 },
+    { name: 'favicon-16x16', width: 16, height: 16 },
+    { name: 'favicon-32x32', width: 32, height: 32 },
+    { name: 'favicon-48x48', width: 48, height: 48 }
+];
+
+export const SCREENSHOT_SIZES = [
+    { name: 'screenshot-desktop-wide', width: 1280, height: 720, type: 'desktop' },
+    { name: 'screenshot-mobile-narrow', width: 720, height: 1280, type: 'mobile' }
+];
 
 export const SOCIAL_MEDIA_TEMPLATES = [
     // Web Images - Using FREE icons
@@ -17,6 +33,91 @@ export const SOCIAL_MEDIA_TEMPLATES = [
     { id: 'web-blog', name: 'WebBlog', width: 1200, height: 630, platform: 'Web', category: 'web', icon: 'fas fa-blog' },
     { id: 'web-content', name: 'WebContent', width: 1200, height: 'auto', platform: 'Web', category: 'web', icon: 'fas fa-image' },
     { id: 'web-thumb', name: 'WebThumb', width: 250, height: 250, platform: 'Web', category: 'web', icon: 'fas fa-square' },
+
+    // Favicon Templates - Using FREE icons
+    { id: 'favicon-set', name: 'FaviconSet', width: 512, height: 512, platform: 'Web', category: 'favicon', icon: 'fas fa-star' },
+
+    // Screenshot Templates - Using FREE icons
+    {
+        id: 'screenshots-mobile',
+        name: 'Mobile',
+        width: 375,
+        height: 667,
+        platform: 'Web',
+        category: 'screenshots',
+        icon: 'fas fa-mobile-alt',
+        description: 'Mobile viewport screenshot (375x667)'
+    },
+    {
+        id: 'screenshots-tablet',
+        name: 'Tablet',
+        width: 768,
+        height: 1024,
+        platform: 'Web',
+        category: 'screenshots',
+        icon: 'fas fa-tablet',
+        description: 'Tablet viewport screenshot (768x1024)'
+    },
+    {
+        id: 'screenshots-desktop',
+        name: 'Desktop',
+        width: 1280,
+        height: 720,
+        platform: 'Web',
+        category: 'screenshots',
+        icon: 'fas fa-desktop',
+        description: 'Desktop viewport screenshot (1280x720)'
+    },
+    {
+        id: 'screenshots-desktop-hd',
+        name: 'Desktop HD',
+        width: 1920,
+        height: 1080,
+        platform: 'Web',
+        category: 'screenshots',
+        icon: 'fas fa-desktop-alt',
+        description: 'HD desktop viewport screenshot (1920x1080)'
+    },
+    {
+        id: 'screenshots-mobile-full',
+        name: 'Mobile(all content)',
+        width: 375,
+        height: 'auto',
+        platform: 'Web',
+        category: 'screenshots',
+        icon: 'fas fa-mobile-alt',
+        description: 'Full mobile page screenshot'
+    },
+    {
+        id: 'screenshots-tablet-full',
+        name: 'Tablet(all content)',
+        width: 768,
+        height: 'auto',
+        platform: 'Web',
+        category: 'screenshots',
+        icon: 'fas fa-tablet',
+        description: 'Full tablet page screenshot'
+    },
+    {
+        id: 'screenshots-desktop-full',
+        name: 'Desktop(all content)',
+        width: 1280,
+        height: 'auto',
+        platform: 'Web',
+        category: 'screenshots',
+        icon: 'fas fa-desktop',
+        description: 'Full desktop page screenshot'
+    },
+    {
+        id: 'screenshots-desktop-hd-full',
+        name: 'Desktop HD(all content)',
+        width: 1920,
+        height: 'auto',
+        platform: 'Web',
+        category: 'screenshots',
+        icon: 'fas fa-desktop-alt',
+        description: 'Full HD desktop page screenshot'
+    },
 
     // Logo Images - Using FREE icons
     { id: 'logo-rect', name: 'LogoRectangular', width: 300, height: 150, platform: 'Logo', category: 'logo', icon: 'fas fa-copyright' },

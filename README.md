@@ -3,7 +3,9 @@ Image LemGendizer
 
 A modern web application for batch image processing and optimization. Process images for web and social media templates directly in your browser.
 
-[https://img.shields.io/badge/demo-live-brightgreen](https://img.shields.io/badge/demo-live-brightgreen)[https://img.shields.io/github/actions/workflow/status/lemgenda/image-lemgendizer-old/deploy.yml?branch=main](https://img.shields.io/github/actions/workflow/status/lemgenda/image-lemgendizer-old/deploy.yml?branch=main)[https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)[https://img.shields.io/badge/License-MIT-yellow.svg](https://img.shields.io/badge/License-MIT-yellow.svg)
+[https://img.shields.io/npm/v/@lemgenda/image-lemgendizer](https://img.shields.io/npm/v/@lemgenda/image-lemgendizer)
+[https://img.shields.io/npm/l/@lemgenda/image-lemgendizer](https://img.shields.io/npm/l/@lemgenda/image-lemgendizer)
+[https://img.shields.io/bundlephobia/minzip/@lemgenda/image-lemgendizer](https://img.shields.io/bundlephobia/minzip/@lemgenda/image-lemgendizer)
 
 🚀 Live Demo
 ------------

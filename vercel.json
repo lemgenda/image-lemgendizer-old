@@ -1,0 +1,33 @@
+{
+    "functions": {
+        "api/screenshot/index.js": {
+            "maxDuration": 10,
+            "memory": 2048,
+            "runtime": "nodejs18.x"
+        }
+    },
+    "builds": [
+        {
+            "src": "src/main.jsx",
+            "use": "@vercel/vite-builder",
+            "config": {
+                "buildCommand": "npm run build",
+                "outputDirectory": "dist"
+            }
+        },
+        {
+            "src": "api/screenshot/index.js",
+            "use": "@vercel/node"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/api/(.*)",
+            "dest": "/api/screenshot/index.js"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/"
+        }
+    ]
+}

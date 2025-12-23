@@ -1868,103 +1868,46 @@ export const createImageObjects = (files) => {
             fileName.endsWith('.tiff') || fileName.endsWith('.tif');
         const isSVG = mimeType === 'image/svg+xml' || fileName.endsWith('.svg');
 
-        let url;
-        let previewData = null;
-        let originalWidth = null;
-        let originalHeight = null;
+        // For regular images, use a data URL instead of blob URL for preview
+        // This prevents the blob URL cleanup issue
+        let previewUrl = null;
 
-        if (isTIFF) {
+        if (!isTIFF && !isSVG && fileObj.size < 500000) { // Small files only
             try {
-                const converted = await convertTIFFForProcessing(fileObj);
-
-                const img = new Image();
-                const objectUrl = URL.createObjectURL(converted);
-
-                await new Promise((resolve, reject) => {
-                    img.onload = () => {
-                        URL.revokeObjectURL(objectUrl);
-                        originalWidth = img.naturalWidth;
-                        originalHeight = img.naturalHeight;
-                        resolve();
-                    };
-                    img.onerror = () => {
-                        URL.revokeObjectURL(objectUrl);
-                        reject(new Error('Failed to load converted TIFF'));
-                    };
-                    img.src = objectUrl;
-                });
-
-                url = URL.createObjectURL(converted);
-                previewData = {
-                    blob: converted,
-                    width: originalWidth,
-                    height: originalHeight
-                };
-
+                previewUrl = await fileToDataURL(fileObj);
             } catch (error) {
-                url = createTIFFPlaceholder();
-            }
-        } else if (isSVG) {
-            try {
-                const svgText = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => resolve(e.target.result);
-                    reader.onerror = reject;
-                    reader.readAsText(fileObj);
-                });
-
-                const parser = new DOMParser();
-                const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
-                const svgElement = svgDoc.documentElement;
-
-                let width = 200;
-                let height = 200;
-
-                const widthAttr = svgElement.getAttribute('width');
-                const heightAttr = svgElement.getAttribute('height');
-                if (widthAttr && heightAttr) {
-                    width = parseFloat(widthAttr);
-                    height = parseFloat(heightAttr);
-                } else {
-                    const viewBox = svgElement.getAttribute('viewBox');
-                    if (viewBox) {
-                        const parts = viewBox.split(' ').map(parseFloat);
-                        if (parts.length >= 4) {
-                            width = parts[2];
-                            height = parts[3];
-                        }
-                    }
-                }
-
-                const previewFile = await convertSVGToRaster(fileObj, Math.min(200, width), Math.min(200, height), 'png');
-                url = URL.createObjectURL(previewFile);
-                originalWidth = width;
-                originalHeight = height;
-
-            } catch (error) {
-                url = createTIFFPlaceholder();
+                // Fall back to blob URL
+                previewUrl = URL.createObjectURL(fileObj);
             }
         } else {
-            url = URL.createObjectURL(fileObj);
+            // For large files or special formats, use blob URL
+            previewUrl = URL.createObjectURL(fileObj);
         }
 
         return {
             id: Date.now() + Math.random(),
             file: fileObj,
             name: fileObj.name,
-            url: url,
+            url: previewUrl,
             size: fileObj.size,
             type: fileObj.type,
             optimized: false,
             isTIFF: isTIFF,
             isSVG: isSVG,
-            previewData: previewData,
             originalFormat: isTIFF ? 'tiff' : (isSVG ? 'svg' : fileObj.type.split('/')[1]),
-            originalWidth: originalWidth,
-            originalHeight: originalHeight,
             hasPreview: true
         };
     }));
+};
+
+// Helper function to convert file to data URL
+const fileToDataURL = (file) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 };
 
 const convertTIFFForProcessing = async (tiffFile) => {
@@ -2308,18 +2251,26 @@ const createTIFFPlaceholder = () => {
 };
 
 export const cleanupBlobUrls = (imageObjects) => {
-    imageObjects?.forEach(image => {
+    if (!imageObjects || !Array.isArray(imageObjects)) return;
+
+    imageObjects.forEach(image => {
+        // Check if it's a blob URL and hasn't already been cleaned up
         if (image.url && image.url.startsWith('blob:')) {
             try {
                 URL.revokeObjectURL(image.url);
+                // Set to null to prevent React from trying to use it
+                image.url = null;
             } catch (e) {
+                // Ignore errors if URL was already revoked
             }
         }
 
         if (image.previewData && image.previewData.url) {
             try {
                 URL.revokeObjectURL(image.previewData.url);
+                image.previewData.url = null;
             } catch (e) {
+                // Ignore errors
             }
         }
 
@@ -2328,6 +2279,7 @@ export const cleanupBlobUrls = (imageObjects) => {
                 const ctx = image.previewData.canvas.getContext('2d');
                 ctx.clearRect(0, 0, image.previewData.canvas.width, image.previewData.canvas.height);
             } catch (e) {
+                // Ignore errors
             }
         }
     });
@@ -2999,49 +2951,45 @@ export const createProcessingSummary = (result, options, t) => {
         upscalingUsed: false,
         totalFiles: result.totalFiles || 0,
         success: result.success || false,
-        errors: result.errors || []
+        errors: result.errors || [],
+        // Calculate categories properly
+        templatesApplied: result.templatesApplied || 0,
+        categoriesApplied: result.categoriesApplied || 0,
+        // Collect all formats from processed images
+        formatsExported: result.formatsExported || ['WEBP', 'PNG', 'JPG'] // Default formats
     };
 
-    if (options.resize && options.resize.enabled) {
-        summary.operations.push(t('operations.resized', { dimension: options.resize.dimension }));
-        summary.upscalingUsed = true;
-    }
-
-    if (options.crop && options.crop.enabled) {
-        const cropType = options.crop.mode === CROP_MODES.SMART ? t('operations.aiCrop') : t('operations.standardCrop');
-        summary.operations.push(`${cropType} ${options.crop.width}x${options.crop.height}`);
-        summary.upscalingUsed = true;
-
-        if (options.crop.mode === CROP_MODES.SMART) {
-            summary.aiUsed = true;
-        }
-    }
-
+    // Add operations based on what was done
     if (options.compression && options.compression.quality < 1) {
         const qualityPercent = Math.round(options.compression.quality * 100);
         summary.operations.push(t('operations.compressed', { quality: qualityPercent }));
     }
 
-    if (options.output && options.output.rename && options.output.newFileName) {
-        summary.operations.push(t('operations.renamed', { pattern: options.output.newFileName }));
-    }
-
-    if (options.output && options.output.formats) {
-        summary.formatsExported = options.output.formats;
-    }
-
-    if (options.templates && options.templates.selected.length > 0) {
-        summary.templatesApplied = options.templates.selected.length;
-        summary.categoriesApplied = new Set(
-            options.templates.selected.map(id => {
-                const template = getTemplateById(id, []);
-                return template?.category;
-            }).filter(Boolean)
-        ).size;
+    // Add AI operations if used
+    if (options.crop && options.crop.enabled && options.crop.mode === CROP_MODES.SMART) {
+        summary.operations.push('AI Smart Cropped');
+        summary.aiUsed = true;
     }
 
     if (summary.upscalingUsed) {
-        summary.operations.push(t('operations.autoUpscaling'));
+        summary.operations.push('AI Upscaled');
+        summary.aiUsed = true;
+    }
+
+    // Add favicon/screenshot operations if they were generated
+    if (options.includeFavicon) {
+        summary.operations.push('Favicons Generated');
+    }
+
+    if (options.includeScreenshots && options.screenshotUrl) {
+        summary.operations.push(`Screenshots Generated for ${options.screenshotUrl}`);
+    }
+
+    // For templates mode, add template-specific operations
+    if (summary.mode === PROCESSING_MODES.TEMPLATES) {
+        if (summary.templatesApplied > 0) {
+            summary.operations.push(t('operations.templatesApplied', { count: summary.templatesApplied }));
+        }
     }
 
     return summary;
@@ -4037,6 +3985,33 @@ export const cleanupAllResources = () => {
 
     aiUpscalingDisabled = false;
     textureManagerFailures = 0;
+};
+
+/**
+ * Orchestrates custom image processing workflow.
+ * @async
+ * @param {Array<Object>} images - Array of image objects to process
+ * @param {Object} processingConfig - Processing configuration
+ * @param {boolean} aiModelLoaded - Whether AI model is loaded
+ * @returns {Promise<Array<Object>>} Array of processed images
+ */
+export const orchestrateCustomProcessing = async (images, processingConfig, aiModelLoaded) => {
+    try {
+        const processedImages = [];
+
+        // Your processing logic here...
+        for (const image of images) {
+            // Process each image based on processingConfig
+            // Apply resize, crop, compression, etc.
+            const processedImage = await processSingleImage(image, processingConfig, aiModelLoaded);
+            processedImages.push(processedImage);
+        }
+
+        return processedImages;
+    } catch (error) {
+        console.error('Error in orchestrateCustomProcessing:', error);
+        throw error;
+    }
 };
 
 if (typeof window !== 'undefined') {

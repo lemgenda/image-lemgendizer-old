@@ -434,6 +434,9 @@ export const PLATFORM_NAMES = {
  * @constant {Object}
  */
 export const TEMPLATE_NAMES = {
+    FAVICON_SET: 'FaviconSet',
+    SCREENSHOTS_DESKTOP: 'ScreenshotsDesktop',
+    SCREENSHOTS_MOBILE: 'ScreenshotsMobile',
     INSTAGRAM: [
         'InstagramProfile',
         'InstagramSquare',
@@ -486,5 +489,7 @@ export const TEMPLATE_NAMES = {
 export const TEMPLATE_CATEGORIES = {
     WEB: 'web',
     LOGO: 'logo',
-    SOCIAL_MEDIA: 'social_media'
+    SOCIAL_MEDIA: 'social_media',
+    FAVICON: 'favicon',
+    SCREENSHOTS: 'screenshots'
 };
