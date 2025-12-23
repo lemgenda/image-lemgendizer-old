@@ -299,7 +299,6 @@ export class UnifiedScreenshotService {
      * @returns {Promise<Object>} Server-captured screenshot
      */
     async captureWithServerOptimized(url, options) {
-        // Replace with your actual Vercel API endpoint
         const API_ENDPOINT = 'https://image-lemgendizer-old.vercel.app/api/screenshot';
 
         const startTime = Date.now();
@@ -921,7 +920,7 @@ export function useScreenshotService() {
     const [error, setError] = useState(null);
 
     const service = useRef(new UnifiedScreenshotService({
-        useServerCapture: false,
+        useServerCapture: true,
         enableCaching: true,
         enableCompression: true
     }));
