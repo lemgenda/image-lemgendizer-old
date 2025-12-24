@@ -1,4 +1,10 @@
-// src/utils/api.js
+/**
+ * Capture screenshot using API
+ * @async
+ * @param {string} url - Website URL
+ * @param {string} device - Device type
+ * @returns {Promise<Object>} Screenshot result
+ */
 export async function captureScreenshot(url, device = 'mobile') {
     try {
         const params = new URLSearchParams({
@@ -12,7 +18,6 @@ export async function captureScreenshot(url, device = 'mobile') {
             throw new Error(`API error: ${response.status}`);
         }
 
-        // Check if it's an image
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('image')) {
             const blob = await response.blob();
@@ -24,12 +29,10 @@ export async function captureScreenshot(url, device = 'mobile') {
                 dimensions: response.headers.get('x-dimensions')
             };
         } else {
-            // Handle JSON error response
             const error = await response.json();
             throw new Error(error.error || 'Unknown error');
         }
     } catch (error) {
-        console.error('Screenshot capture failed:', error);
         return {
             success: false,
             error: error.message

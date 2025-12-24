@@ -1,3 +1,4 @@
+// src/processors/imageProcessor.js
 import UTIF from 'utif';
 import {
     MEMORY_CLEANUP_INTERVAL,
@@ -22,12 +23,28 @@ import {
     DEFAULT_QUALITY,
     DEFAULT_WEBP_QUALITY,
     DEFAULT_PNG_QUALITY,
+    DEFAULT_JPG_QUALITY,
     OUTPUT_FORMATS,
     PROCESSING_MODES,
     CROP_MODES,
     CROP_MARGIN,
     MAX_SCALE_FACTOR,
-    MAX_PIXELS_FOR_SMART_SHARPENING
+    MAX_PIXELS_FOR_SMART_SHARPENING,
+    SVG_DEFAULT_WIDTH,
+    SVG_DEFAULT_HEIGHT,
+    SVG_MIN_SIZE,
+    SVG_MAX_SIZE,
+    PLACEHOLDER_BACKGROUND,
+    PLACEHOLDER_BORDER,
+    PLACEHOLDER_TEXT,
+    SUCCESS_COLOR,
+    INFO_COLOR,
+    ERROR_BACKGROUND_COLOR,
+    ERROR_BORDER_COLOR,
+    ERROR_TEXT_COLOR,
+    WARNING_TEXT_COLOR,
+    DEFAULT_FONT_FAMILY,
+    ERROR_MESSAGES
 } from '../constants/sharedConstants';
 
 import {
@@ -54,6 +71,11 @@ let aiUpscalingDisabled = false;
 let textureManagerFailures = 0;
 let cleanupInProgress = false;
 
+/**
+ * Loads UTIF library from CDN if not already available.
+ * @async
+ * @returns {Promise<boolean>} Whether UTIF library was successfully loaded
+ */
 export const loadUTIFLibrary = () => {
     return new Promise((resolve) => {
         if (window.UTIF) {
@@ -77,6 +99,12 @@ export const loadUTIFLibrary = () => {
     });
 };
 
+/**
+ * Converts TIFF file using UTIF library.
+ * @async
+ * @param {File} tiffFile - TIFF file to convert
+ * @returns {Promise<File>} Converted PNG file
+ */
 const convertTIFFWithUTIF = (tiffFile) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -87,7 +115,7 @@ const convertTIFFWithUTIF = (tiffFile) => {
                 const ifds = window.UTIF.decode(arrayBuffer);
 
                 if (!ifds || ifds.length === 0) {
-                    reject(new Error('No TIFF data found'));
+                    reject(new Error(ERROR_MESSAGES.TIFF_CONVERSION_FAILED));
                     return;
                 }
 
@@ -100,7 +128,7 @@ const convertTIFFWithUTIF = (tiffFile) => {
                         window.UTIF.decodeImages(arrayBuffer, ifds);
                     }
                 } catch (decodeError) {
-                    reject(new Error('Failed to decode TIFF image'));
+                    reject(new Error(ERROR_MESSAGES.TIFF_CONVERSION_FAILED));
                     return;
                 }
 
@@ -148,11 +176,11 @@ const convertTIFFWithUTIF = (tiffFile) => {
                     canvas.height = firstIFD.height;
                     const ctx = canvas.getContext('2d');
 
-                    ctx.fillStyle = '#f8f9fa';
+                    ctx.fillStyle = PLACEHOLDER_BACKGROUND;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                    ctx.fillStyle = '#6c757d';
-                    ctx.font = 'bold 24px Arial';
+                    ctx.fillStyle = PLACEHOLDER_TEXT;
+                    ctx.font = `bold ${HEADLINE_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText('TIFF', canvas.width / 2, canvas.height / 2);
@@ -167,7 +195,7 @@ const convertTIFFWithUTIF = (tiffFile) => {
                         const baseName = originalName.replace(/\.[^/.]+$/, '');
                         const newFileName = `${baseName}.png`;
                         resolve(new File([blob], newFileName, { type: 'image/png' }));
-                    }, 'image/png', 0.9);
+                    }, 'image/png', DEFAULT_PNG_QUALITY);
 
                     return;
                 }
@@ -193,7 +221,7 @@ const convertTIFFWithUTIF = (tiffFile) => {
 
                     resolve(new File([blob], newFileName, { type: 'image/png' }));
 
-                }, 'image/png', 1.0);
+                }, 'image/png', DEFAULT_PNG_QUALITY);
 
             } catch (error) {
                 reject(error);
@@ -205,6 +233,14 @@ const convertTIFFWithUTIF = (tiffFile) => {
     });
 };
 
+/**
+ * Processes image resize operation.
+ * @async
+ * @param {Array<Object>} images - Array of image objects to resize
+ * @param {number} dimension - Target dimension
+ * @param {Object} options - Processing options
+ * @returns {Promise<Array<Object>>} Array of resize results
+ */
 export const processLemGendaryResize = async (images, dimension, options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const results = [];
 
@@ -232,8 +268,8 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
                     const svgElement = svgDoc.documentElement;
 
-                    let originalWidth = 100;
-                    let originalHeight = 100;
+                    let originalWidth = SVG_DEFAULT_WIDTH;
+                    let originalHeight = SVG_DEFAULT_HEIGHT;
 
                     const widthAttr = svgElement.getAttribute('width');
                     const heightAttr = svgElement.getAttribute('height');
@@ -265,8 +301,8 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                         newWidth = Math.round(dimension * aspectRatio);
                     }
 
-                    newWidth = Math.max(1, newWidth);
-                    newHeight = Math.max(1, newHeight);
+                    newWidth = Math.max(SVG_MIN_SIZE, newWidth);
+                    newHeight = Math.max(SVG_MIN_SIZE, newHeight);
 
                     const resizedSVG = await processSVGResize(imageFile, newWidth, newHeight);
 
@@ -279,37 +315,37 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                         canvas.height = newHeight;
                         const ctx = canvas.getContext('2d');
 
-                        const bgColor = '#f8f9fa';
+                        const bgColor = PLACEHOLDER_BACKGROUND;
                         ctx.fillStyle = bgColor;
                         ctx.fillRect(0, 0, newWidth, newHeight);
 
-                        ctx.strokeStyle = '#dee2e6';
+                        ctx.strokeStyle = PLACEHOLDER_BORDER;
                         ctx.lineWidth = 2;
                         ctx.strokeRect(10, 10, newWidth - 20, newHeight - 20);
 
                         const centerX = newWidth / 2;
                         const centerY = newHeight / 2;
 
-                        ctx.fillStyle = '#4a90e2';
+                        ctx.fillStyle = INFO_COLOR;
                         const iconSize = Math.min(32, newHeight / 8);
-                        ctx.font = `bold ${iconSize}px Arial`;
+                        ctx.font = `bold ${iconSize}px ${DEFAULT_FONT_FAMILY}`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        ctx.fillText('🖋️', centerX, centerY - iconSize);
-
-                        ctx.fillStyle = '#495057';
-                        const titleSize = Math.min(18, newHeight / 12);
-                        ctx.font = `bold ${titleSize}px Arial`;
                         ctx.fillText('SVG', centerX, centerY);
 
-                        ctx.fillStyle = '#6c757d';
-                        const infoSize = Math.min(14, newHeight / 16);
-                        ctx.font = `${infoSize}px Arial`;
-                        ctx.fillText(`${newWidth}×${newHeight}`, centerX, centerY + iconSize);
+                        ctx.fillStyle = PLACEHOLDER_TEXT;
+                        const titleSize = Math.min(18, newHeight / 12);
+                        ctx.font = `bold ${titleSize}px ${DEFAULT_FONT_FAMILY}`;
+                        ctx.fillText('Image', centerX, centerY + iconSize);
 
-                        ctx.fillStyle = '#28a745';
+                        ctx.fillStyle = PLACEHOLDER_TEXT;
+                        const infoSize = Math.min(14, newHeight / 16);
+                        ctx.font = `${infoSize}px ${DEFAULT_FONT_FAMILY}`;
+                        ctx.fillText(`${newWidth}×${newHeight}`, centerX, centerY + iconSize * 2);
+
+                        ctx.fillStyle = SUCCESS_COLOR;
                         const ratio = Math.round((originalWidth / originalHeight) * 100) / 100;
-                        ctx.fillText(`${ratio}:1`, centerX, centerY + iconSize * 2);
+                        ctx.fillText(`${ratio}:1`, centerX, centerY + iconSize * 3);
 
                         const blob = await new Promise(resolve => {
                             canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
@@ -342,16 +378,16 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     canvas.height = dimension;
                     const ctx = canvas.getContext('2d');
 
-                    ctx.fillStyle = '#f8d7da';
+                    ctx.fillStyle = ERROR_BACKGROUND_COLOR;
                     ctx.fillRect(0, 0, dimension, dimension);
 
-                    ctx.strokeStyle = '#f5c6cb';
+                    ctx.strokeStyle = ERROR_BORDER_COLOR;
                     ctx.lineWidth = 3;
                     ctx.strokeRect(10, 10, dimension - 20, dimension - 20);
 
-                    ctx.fillStyle = '#721c24';
+                    ctx.fillStyle = ERROR_TEXT_COLOR;
                     const fontSize = Math.min(16, dimension / 10);
-                    ctx.font = `bold ${fontSize}px Arial`;
+                    ctx.font = `bold ${fontSize}px ${DEFAULT_FONT_FAMILY}`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
 
@@ -363,12 +399,12 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     const displayName = image.name.length > 20 ? image.name.substring(0, 17) + '...' : image.name;
                     ctx.fillText(displayName, centerX, centerY);
 
-                    ctx.fillStyle = '#856404';
-                    ctx.font = `${Math.min(12, dimension / 15)}px Arial`;
+                    ctx.fillStyle = WARNING_TEXT_COLOR;
+                    ctx.font = `${Math.min(12, dimension / 15)}px ${DEFAULT_FONT_FAMILY}`;
                     ctx.fillText(svgError.message.substring(0, 30) + '...', centerX, centerY + fontSize);
 
                     const blob = await new Promise(resolve => {
-                        canvas.toBlob(resolve, 'image/webp', 0.8);
+                        canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
                     });
 
                     const errorFile = new File([blob], image.name.replace(/\.svg$/i, '-error.webp'), {
@@ -405,7 +441,7 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                         };
                         img.onerror = () => {
                             URL.revokeObjectURL(objectUrl);
-                            reject(new Error(`Failed to load converted TIFF image: ${image.name}`));
+                            reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
                         };
                         img.src = objectUrl;
                     });
@@ -436,7 +472,7 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                         finalImg.onload = resolve;
                         finalImg.onerror = () => {
                             URL.revokeObjectURL(finalObjectUrl);
-                            reject(new Error(`Failed to load final image: ${image.name}`));
+                            reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
                         };
                         finalImg.src = finalObjectUrl;
                     });
@@ -492,7 +528,7 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     };
                     img.onerror = () => {
                         URL.revokeObjectURL(objectUrl);
-                        reject(new Error(`Failed to load image: ${image.name}`));
+                        reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
                     };
                     img.src = objectUrl;
                 });
@@ -523,7 +559,7 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     finalImg.onload = resolve;
                     finalImg.onerror = () => {
                         URL.revokeObjectURL(finalObjectUrl);
-                        reject(new Error(`Failed to load final image: ${image.name}`));
+                        reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
                     };
                     finalImg.src = finalObjectUrl;
                 });
@@ -559,11 +595,11 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
             canvas.height = dimension;
             const ctx = canvas.getContext('2d');
 
-            ctx.fillStyle = '#f8d7da';
+            ctx.fillStyle = ERROR_BACKGROUND_COLOR;
             ctx.fillRect(0, 0, dimension, dimension);
 
-            ctx.fillStyle = '#721c24';
-            ctx.font = 'bold 16px Arial';
+            ctx.fillStyle = ERROR_TEXT_COLOR;
+            ctx.font = `bold ${BODY_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
@@ -574,13 +610,13 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
             ctx.fillText('Error', centerX, centerY - 20);
             ctx.fillText(displayName, centerX, centerY);
 
-            ctx.fillStyle = '#856404';
-            ctx.font = '12px Arial';
+            ctx.fillStyle = WARNING_TEXT_COLOR;
+            ctx.font = `${CAPTION_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
             const errorMsg = error.message.length > 30 ? error.message.substring(0, 27) + '...' : error.message;
             ctx.fillText(errorMsg, centerX, centerY + 25);
 
             const blob = await new Promise(resolve => {
-                canvas.toBlob(resolve, 'image/webp', 0.8);
+                canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
             });
 
             const errorFile = new File([blob], `${image.name}-error.webp`, {
@@ -601,6 +637,16 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
     return results;
 };
 
+/**
+ * Processes image crop operation.
+ * @async
+ * @param {Array<Object>} images - Array of image objects to crop
+ * @param {number} width - Target width
+ * @param {number} height - Target height
+ * @param {string} cropPosition - Crop position
+ * @param {Object} options - Processing options
+ * @returns {Promise<Array<Object>>} Array of crop results
+ */
 export const processLemGendaryCrop = async (images, width, height, cropPosition = 'center', options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const results = [];
 
@@ -635,7 +681,7 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
                             isSVG: false,
                             isTIFF: true,
                             optimized: false,
-                            error: 'TIFF conversion failed'
+                            error: ERROR_MESSAGES.TIFF_CONVERSION_FAILED
                         });
                         continue;
                     }
@@ -647,7 +693,7 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
                 await new Promise((resolve, reject) => {
                     const timeout = setTimeout(() => {
                         URL.revokeObjectURL(objectUrl);
-                        reject(new Error('Image load timeout'));
+                        reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
                     }, IMAGE_LOAD_TIMEOUT);
 
                     img.onload = () => {
@@ -658,7 +704,7 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
                     img.onerror = () => {
                         clearTimeout(timeout);
                         URL.revokeObjectURL(objectUrl);
-                        reject(new Error('Failed to load image'));
+                        reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
                     };
                     img.src = objectUrl;
                 });
@@ -671,6 +717,7 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
                     try {
                         sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, image.name);
                     } catch (upscaleError) {
+                        // Continue with original file if upscaling fails
                     }
                 }
 
@@ -695,11 +742,11 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
             canvas.height = height;
             const ctx = canvas.getContext('2d');
 
-            ctx.fillStyle = '#f8d7da';
+            ctx.fillStyle = ERROR_BACKGROUND_COLOR;
             ctx.fillRect(0, 0, width, height);
 
-            ctx.fillStyle = '#721c24';
-            ctx.font = 'bold 16px Arial';
+            ctx.fillStyle = ERROR_TEXT_COLOR;
+            ctx.font = `bold ${BODY_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
@@ -710,13 +757,13 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
             ctx.fillText('Crop Error', centerX, centerY - 20);
             ctx.fillText(displayName, centerX, centerY);
 
-            ctx.fillStyle = '#856404';
-            ctx.font = '12px Arial';
+            ctx.fillStyle = WARNING_TEXT_COLOR;
+            ctx.font = `${CAPTION_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
             const errorMsg = error.message.length > 30 ? error.message.substring(0, 27) + '...' : error.message;
             ctx.fillText(errorMsg, centerX, centerY + 25);
 
             const blob = await new Promise(resolve => {
-                canvas.toBlob(resolve, 'image/webp', 0.8);
+                canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
             });
 
             const errorFile = new File([blob], `${image.name}-crop-error.webp`, {
@@ -738,6 +785,11 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
     return results;
 };
 
+/**
+ * Loads AI model for object detection.
+ * @async
+ * @returns {Promise<Object>} Loaded AI model
+ */
 export const loadAIModel = async () => {
     if (aiModel) return aiModel;
     if (aiModelLoading) {
@@ -752,7 +804,7 @@ export const loadAIModel = async () => {
 
         if (!window.cocoSsd) await loadCocoSsdFromCDN();
         if (window.cocoSsd) {
-            aiModel = await window.cocoSsd.load({ base: 'lite_mobilenet_v2' });
+            aiModel = await window.cocoSsd.load({ base: AI_SETTINGS.MODEL_TYPE });
         } else {
             throw new Error('COCO-SSD not available');
         }
@@ -766,6 +818,11 @@ export const loadAIModel = async () => {
     }
 };
 
+/**
+ * Loads TensorFlow.js from CDN.
+ * @async
+ * @returns {Promise<void>}
+ */
 const loadTensorFlowFromCDN = () => {
     return new Promise((resolve) => {
         if (window.tf) {
@@ -774,13 +831,18 @@ const loadTensorFlowFromCDN = () => {
         }
 
         const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js';
+        script.src = `https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@${AI_SETTINGS.TENSORFLOW_VERSION}/dist/tf.min.js`;
         script.onload = () => resolve();
         script.onerror = () => resolve();
         document.head.appendChild(script);
     });
 };
 
+/**
+ * Loads COCO-SSD model from CDN.
+ * @async
+ * @returns {Promise<void>}
+ */
 const loadCocoSsdFromCDN = () => {
     return new Promise((resolve) => {
         if (window.cocoSsd) {
@@ -789,13 +851,17 @@ const loadCocoSsdFromCDN = () => {
         }
 
         const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js';
+        script.src = `https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@${AI_SETTINGS.COCO_SSD_VERSION}/dist/coco-ssd.min.js`;
         script.onload = () => resolve();
         script.onerror = () => resolve();
         document.head.appendChild(script);
     });
 };
 
+/**
+ * Creates a simple fallback AI model.
+ * @returns {Object} Simple AI model object
+ */
 const createSimpleAIModel = () => {
     return {
         detect: async (imgElement) => {
@@ -811,6 +877,15 @@ const createSimpleAIModel = () => {
     };
 };
 
+/**
+ * Processes smart crop using AI detection.
+ * @async
+ * @param {File} imageFile - Image file to crop
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {Object} options - Processing options
+ * @returns {Promise<File>} Cropped image file
+ */
 export const processSmartCrop = async (imageFile, targetWidth, targetHeight, options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
@@ -845,7 +920,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 URL.revokeObjectURL(objectUrl);
-                reject(new Error('Image load timeout'));
+                reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
             }, IMAGE_LOAD_TIMEOUT);
 
             img.onload = () => {
@@ -856,7 +931,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
             img.onerror = () => {
                 clearTimeout(timeout);
                 URL.revokeObjectURL(objectUrl);
-                reject(new Error('Failed to load image'));
+                reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
             };
             img.src = objectUrl;
 
@@ -895,6 +970,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
                 try {
                     sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
                 } catch (upscaleError) {
+                    // Continue without upscaling
                 }
             }
         }
@@ -944,6 +1020,16 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
     }
 };
 
+/**
+ * Processes simple smart crop without AI.
+ * @async
+ * @param {File} imageFile - Image file to crop
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {string} cropPosition - Crop position
+ * @param {Object} options - Processing options
+ * @returns {Promise<File>} Cropped image file
+ */
 export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeight, cropPosition = 'center', options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
@@ -992,7 +1078,7 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 URL.revokeObjectURL(objectUrl);
-                reject(new Error('Image load timeout'));
+                reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
             }, IMAGE_LOAD_TIMEOUT);
 
             img.onload = () => {
@@ -1003,7 +1089,7 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             img.onerror = () => {
                 clearTimeout(timeout);
                 URL.revokeObjectURL(objectUrl);
-                reject(new Error('Failed to load image'));
+                reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
             };
             img.src = objectUrl;
         });
@@ -1026,6 +1112,7 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
                         sourceFile = await upscaleImageEnhancedFallback(processableFile, upscaleFactor, imageFile.name);
                     }
                 } catch (upscaleError) {
+                    // Continue without upscaling
                 }
             }
         }
@@ -1058,11 +1145,11 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             canvas.height = targetHeight;
             const ctx = canvas.getContext('2d');
 
-            ctx.fillStyle = '#f8d7da';
+            ctx.fillStyle = ERROR_BACKGROUND_COLOR;
             ctx.fillRect(0, 0, targetWidth, targetHeight);
 
-            ctx.fillStyle = '#721c24';
-            ctx.font = 'bold 16px Arial';
+            ctx.fillStyle = ERROR_TEXT_COLOR;
+            ctx.font = `bold ${BODY_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
@@ -1074,14 +1161,14 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             ctx.fillText('Crop Error', centerX, centerY - 20);
             ctx.fillText(displayName, centerX, centerY);
 
-            ctx.fillStyle = '#856404';
-            ctx.font = '12px Arial';
+            ctx.fillStyle = WARNING_TEXT_COLOR;
+            ctx.font = `${CAPTION_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
             const errorMsg = error.message.length > 30 ?
                 error.message.substring(0, 27) + '...' : error.message;
             ctx.fillText(errorMsg, centerX, centerY + 25);
 
             const blob = await new Promise(resolve => {
-                canvas.toBlob(resolve, 'image/webp', 0.8);
+                canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
             });
 
             return new File([blob], `${imageFile.name}-crop-error.webp`, {
@@ -1091,6 +1178,14 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
     }
 };
 
+/**
+ * Processes SVG resize operation.
+ * @async
+ * @param {File} svgFile - SVG file to resize
+ * @param {number} width - Target width
+ * @param {number} height - Target height
+ * @returns {Promise<File>} Resized SVG file
+ */
 export const processSVGResize = async (svgFile, width, height) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1124,8 +1219,8 @@ export const processSVGResize = async (svgFile, width, height) => {
                     }
                 }
 
-                if (!originalWidth) originalWidth = 100;
-                if (!originalHeight) originalHeight = 100;
+                if (!originalWidth) originalWidth = SVG_DEFAULT_WIDTH;
+                if (!originalHeight) originalHeight = SVG_DEFAULT_HEIGHT;
 
                 const aspectRatio = originalWidth / originalHeight;
                 let finalWidth = width;
@@ -1172,6 +1267,15 @@ export const processSVGResize = async (svgFile, width, height) => {
     });
 };
 
+/**
+ * Converts SVG to raster format.
+ * @async
+ * @param {File} svgFile - SVG file to convert
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {string} format - Output format
+ * @returns {Promise<File>} Converted raster file
+ */
 export const convertSVGToRaster = async (svgFile, targetWidth, targetHeight, format = 'png') => {
     try {
         return await convertSVGToRasterWithAspectRatio(svgFile, targetWidth, targetHeight, format);
@@ -1180,6 +1284,15 @@ export const convertSVGToRaster = async (svgFile, targetWidth, targetHeight, for
     }
 };
 
+/**
+ * Converts SVG to raster with aspect ratio preservation.
+ * @async
+ * @param {File} svgFile - SVG file to convert
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {string} format - Output format
+ * @returns {Promise<File>} Converted raster file
+ */
 const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHeight, format) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1203,16 +1316,16 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                 if (!trimmedText.startsWith('<')) {
                     finalSvgText = `<?xml version="1.0" encoding="UTF-8"?>
                     <svg xmlns="http://www.w3.org/2000/svg"
-                         width="${targetWidth || 100}"
-                         height="${targetHeight || 100}"
-                         viewBox="0 0 ${targetWidth || 100} ${targetHeight || 100}">
+                         width="${targetWidth || SVG_DEFAULT_WIDTH}"
+                         height="${targetHeight || SVG_DEFAULT_HEIGHT}"
+                         viewBox="0 0 ${targetWidth || SVG_DEFAULT_WIDTH} ${targetHeight || SVG_DEFAULT_HEIGHT}">
                         ${trimmedText}
                     </svg>`;
                 }
 
                 let svgElement;
-                let originalWidth = targetWidth || 100;
-                let originalHeight = targetHeight || 100;
+                let originalWidth = targetWidth || SVG_DEFAULT_WIDTH;
+                let originalHeight = targetHeight || SVG_DEFAULT_HEIGHT;
 
                 try {
                     const parser = new DOMParser();
@@ -1241,6 +1354,7 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                             }
                         }
                     } catch (dimError) {
+                        // Continue with default dimensions
                     }
 
                 } catch (parseError) {
@@ -1249,10 +1363,10 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                          width="${originalWidth}"
                          height="${originalHeight}"
                          viewBox="0 0 ${originalWidth} ${originalHeight}">
-                        <rect width="100%" height="100%" fill="#f8f9fa"/>
+                        <rect width="100%" height="100%" fill="${PLACEHOLDER_BACKGROUND}"/>
                         <text x="50%" y="50%" text-anchor="middle" dy=".3em"
-                              font-family="Arial" font-size="${Math.min(24, originalHeight / 10)}"
-                              fill="#495057" font-weight="bold">
+                              font-family="${DEFAULT_FONT_FAMILY}" font-size="${Math.min(HEADLINE_FONT_SIZE, originalHeight / 10)}"
+                              fill="${PLACEHOLDER_TEXT}" font-weight="bold">
                             SVG
                         </text>
                     </svg>`;
@@ -1282,8 +1396,8 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                     finalHeight = originalHeight;
                 }
 
-                finalWidth = Math.max(1, Math.round(finalWidth));
-                finalHeight = Math.max(1, Math.round(finalHeight));
+                finalWidth = Math.max(SVG_MIN_SIZE, Math.round(finalWidth));
+                finalHeight = Math.max(SVG_MIN_SIZE, Math.round(finalHeight));
 
                 const svgBlob = new Blob([finalSvgText], { type: 'image/svg+xml' });
                 svgUrl = URL.createObjectURL(svgBlob);
@@ -1294,7 +1408,7 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                 const ctx = canvas.getContext('2d');
 
                 if (format === 'jpg' || format === 'jpeg') {
-                    ctx.fillStyle = '#ffffff';
+                    ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
 
@@ -1303,7 +1417,7 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                 await new Promise((resolveLoad, rejectLoad) => {
                     const timeout = setTimeout(() => {
                         if (svgUrl) URL.revokeObjectURL(svgUrl);
-                        rejectLoad(new Error('SVG load timeout'));
+                        rejectLoad(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
                     }, IMAGE_LOAD_TIMEOUT);
 
                     img.onload = () => {
@@ -1314,7 +1428,7 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                     img.onerror = (error) => {
                         clearTimeout(timeout);
                         if (svgUrl) URL.revokeObjectURL(svgUrl);
-                        rejectLoad(new Error('Failed to load SVG image'));
+                        rejectLoad(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
                     };
                     img.src = svgUrl;
                 });
@@ -1325,19 +1439,19 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                 switch (format.toLowerCase()) {
                     case 'jpg':
                     case 'jpeg':
-                        mimeType = 'image/jpeg';
+                        mimeType = MIME_TYPE_MAP.jpg;
                         extension = 'jpg';
                         break;
                     case 'png':
-                        mimeType = 'image/png';
+                        mimeType = MIME_TYPE_MAP.png;
                         extension = 'png';
                         break;
                     case 'webp':
-                        mimeType = 'image/webp';
+                        mimeType = MIME_TYPE_MAP.webp;
                         extension = 'webp';
                         break;
                     default:
-                        mimeType = 'image/png';
+                        mimeType = MIME_TYPE_MAP.png;
                         extension = 'png';
                 }
 
@@ -1362,11 +1476,20 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
             }
         };
 
-        reader.onerror = () => reject(new Error('Failed to read SVG file'));
+        reader.onerror = () => reject(new Error(ERROR_MESSAGES.SVG_CONVERSION_FAILED));
         reader.readAsText(svgFile);
     });
 };
 
+/**
+ * Creates SVG placeholder with aspect ratio.
+ * @async
+ * @param {File} svgFile - Original SVG file
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {string} format - Output format
+ * @returns {Promise<File>} Placeholder image file
+ */
 const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetHeight, format) => {
     return new Promise((resolve) => {
         let aspectRatio = 1;
@@ -1412,51 +1535,51 @@ const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetH
         canvas.height = finalHeight;
         const ctx = canvas.getContext('2d');
 
-        ctx.fillStyle = '#f8f9fa';
+        ctx.fillStyle = PLACEHOLDER_BACKGROUND;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        ctx.strokeStyle = '#dee2e6';
+        ctx.strokeStyle = PLACEHOLDER_BORDER;
         ctx.lineWidth = 2;
         ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
 
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
 
-        ctx.fillStyle = '#4a90e2';
-        ctx.font = `bold ${Math.min(32, canvas.height / 8)}px Arial`;
+        ctx.fillStyle = INFO_COLOR;
+        ctx.font = `bold ${Math.min(32, canvas.height / 8)}px ${DEFAULT_FONT_FAMILY}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('🖋️', centerX, centerY - 30);
+        ctx.fillText('SVG', centerX, centerY - 30);
 
-        ctx.fillStyle = '#495057';
-        ctx.font = `bold ${Math.min(18, canvas.height / 12)}px Arial`;
-        ctx.fillText('SVG', centerX, centerY);
+        ctx.fillStyle = PLACEHOLDER_TEXT;
+        ctx.font = `bold ${Math.min(18, canvas.height / 12)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillText('Image', centerX, centerY);
 
-        ctx.fillStyle = '#6c757d';
-        ctx.font = `${Math.min(14, canvas.height / 16)}px Arial`;
+        ctx.fillStyle = PLACEHOLDER_TEXT;
+        ctx.font = `${Math.min(14, canvas.height / 16)}px ${DEFAULT_FONT_FAMILY}`;
         ctx.fillText(`${Math.round(aspectRatio * 100) / 100}:1`, centerX, centerY + 30);
 
-        ctx.fillStyle = '#28a745';
-        ctx.font = `${Math.min(12, canvas.height / 20)}px Arial`;
+        ctx.fillStyle = SUCCESS_COLOR;
+        ctx.font = `${Math.min(12, canvas.height / 20)}px ${DEFAULT_FONT_FAMILY}`;
         ctx.fillText(`${finalWidth}×${finalHeight}`, centerX, centerY + 60);
 
         let mimeType, extension;
         switch (format.toLowerCase()) {
             case 'jpg':
             case 'jpeg':
-                mimeType = 'image/jpeg';
+                mimeType = MIME_TYPE_MAP.jpg;
                 extension = 'jpg';
                 break;
             case 'png':
-                mimeType = 'image/png';
+                mimeType = MIME_TYPE_MAP.png;
                 extension = 'png';
                 break;
             case 'webp':
-                mimeType = 'image/webp';
+                mimeType = MIME_TYPE_MAP.webp;
                 extension = 'webp';
                 break;
             default:
-                mimeType = 'image/png';
+                mimeType = MIME_TYPE_MAP.png;
                 extension = 'png';
         }
 
@@ -1464,10 +1587,16 @@ const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetH
             const baseName = svgFile.name.replace(/\.svg$/i, '') || 'svg-converted';
             const fileName = `${baseName}-${finalWidth}x${finalHeight}.${extension}`;
             resolve(new File([blob], fileName, { type: mimeType }));
-        }, mimeType, 0.8);
+        }, mimeType, DEFAULT_QUALITY);
     });
 };
 
+/**
+ * Converts legacy image formats to PNG.
+ * @async
+ * @param {File} imageFile - Legacy format image file
+ * @returns {Promise<File>} Converted PNG file
+ */
 const convertLegacyFormat = async (imageFile) => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
@@ -1493,7 +1622,7 @@ const convertLegacyFormat = async (imageFile) => {
 
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(objectUrl);
-            reject(new Error('Image load timeout'));
+            reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
         }, IMAGE_LOAD_TIMEOUT);
 
         img.onload = () => {
@@ -1520,7 +1649,7 @@ const convertLegacyFormat = async (imageFile) => {
                     const convertedFile = new File([blob], newFileName, { type: 'image/png' });
                     resolve(convertedFile);
 
-                }, 'image/png', 1.0);
+                }, 'image/png', DEFAULT_PNG_QUALITY);
 
             } catch (error) {
                 URL.revokeObjectURL(objectUrl);
@@ -1545,6 +1674,12 @@ const convertLegacyFormat = async (imageFile) => {
     });
 };
 
+/**
+ * Converts TIFF using browser capabilities.
+ * @async
+ * @param {File} tiffFile - TIFF file to convert
+ * @returns {Promise<File>} Converted PNG file
+ */
 const convertTIFFWithBrowser = (tiffFile) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -1552,7 +1687,7 @@ const convertTIFFWithBrowser = (tiffFile) => {
 
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(objectUrl);
-            reject(new Error('TIFF load timeout'));
+            reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
         }, IMAGE_LOAD_TIMEOUT);
 
         img.onload = () => {
@@ -1578,7 +1713,7 @@ const convertTIFFWithBrowser = (tiffFile) => {
 
                     resolve(new File([blob], newFileName, { type: 'image/png' }));
 
-                }, 'image/png', 1.0);
+                }, 'image/png', DEFAULT_PNG_QUALITY);
 
             } catch (error) {
                 URL.revokeObjectURL(objectUrl);
@@ -1596,9 +1731,17 @@ const convertTIFFWithBrowser = (tiffFile) => {
     });
 };
 
+/**
+ * Optimizes image for web delivery.
+ * @async
+ * @param {File} imageFile - Image file to optimize
+ * @param {number} quality - Compression quality (0-1)
+ * @param {string} format - Output format
+ * @returns {Promise<File>} Optimized image file
+ */
 export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, format = 'webp') => {
     if (!imageFile || typeof imageFile !== 'object') {
-        throw new Error('Invalid image file provided to optimizeForWeb');
+        throw new Error(ERROR_MESSAGES.INVALID_IMAGE_FILE);
     }
 
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
@@ -1662,7 +1805,7 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
 
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(objectUrl);
-            reject(new Error('Image load timeout'));
+            reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
         }, IMAGE_LOAD_TIMEOUT);
 
         img.onload = () => {
@@ -1681,7 +1824,7 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
                 if (needsWhiteBackground) {
-                    ctx.fillStyle = '#ffffff';
+                    ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
 
@@ -1693,29 +1836,29 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
                 switch (format.toLowerCase()) {
                     case 'jpg':
                     case 'jpeg':
-                        mimeType = 'image/jpeg';
+                        mimeType = MIME_TYPE_MAP.jpg;
                         extension = 'jpg';
                         break;
                     case 'png':
-                        mimeType = 'image/png';
+                        mimeType = MIME_TYPE_MAP.png;
                         extension = 'png';
                         targetQuality = undefined;
                         break;
                     case 'webp':
-                        mimeType = 'image/webp';
+                        mimeType = MIME_TYPE_MAP.webp;
                         extension = 'webp';
                         break;
                     case 'avif':
                         if (!supportsAVIF) {
-                            mimeType = 'image/webp';
+                            mimeType = MIME_TYPE_MAP.webp;
                             extension = 'webp';
                         } else {
-                            mimeType = 'image/avif';
+                            mimeType = MIME_TYPE_MAP.avif;
                             extension = 'avif';
                         }
                         break;
                     default:
-                        mimeType = 'image/webp';
+                        mimeType = MIME_TYPE_MAP.webp;
                         extension = 'webp';
                 }
 
@@ -1751,10 +1894,10 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
                             });
                     })
                     .catch(() => {
-                        reject(new Error('Failed to create TIFF placeholder'));
+                        reject(new Error(ERROR_MESSAGES.TIFF_CONVERSION_FAILED));
                     });
             } else {
-                reject(new Error('Failed to load image'));
+                reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
             }
         };
 
@@ -1762,6 +1905,16 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
     });
 };
 
+/**
+ * Converts SVG to raster and crops it.
+ * @async
+ * @param {File} svgFile - SVG file to convert and crop
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {string} format - Output format
+ * @param {string} cropPosition - Crop position
+ * @returns {Promise<File>} Cropped raster file
+ */
 export const convertSVGToRasterAndCrop = async (svgFile, targetWidth, targetHeight, format = 'webp', cropPosition = 'center') => {
     try {
         const scaleFactor = 2;
@@ -1789,6 +1942,12 @@ export const convertSVGToRasterAndCrop = async (svgFile, targetWidth, targetHeig
     }
 };
 
+/**
+ * Creates simple legacy format conversion placeholder.
+ * @async
+ * @param {File} imageFile - Legacy format image file
+ * @returns {Promise<File>} Placeholder PNG file
+ */
 const createSimpleLegacyConversion = async (imageFile) => {
     return new Promise((resolve) => {
         const canvas = document.createElement('canvas');
@@ -1814,10 +1973,10 @@ const createSimpleLegacyConversion = async (imageFile) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
 
-        ctx.fillStyle = '#f8f9fa';
+        ctx.fillStyle = PLACEHOLDER_BACKGROUND;
         ctx.fillRect(0, 0, width, height);
 
-        ctx.strokeStyle = '#dee2e6';
+        ctx.strokeStyle = PLACEHOLDER_BORDER;
         ctx.lineWidth = 2;
         ctx.strokeRect(10, 10, width - 20, height - 20);
 
@@ -1829,22 +1988,22 @@ const createSimpleLegacyConversion = async (imageFile) => {
         const centerX = width / 2;
         const centerY = height / 2;
 
-        ctx.fillStyle = '#6c757d';
-        ctx.font = `bold ${Math.min(48, height / 8)}px Arial`;
+        ctx.fillStyle = PLACEHOLDER_TEXT;
+        ctx.font = `bold ${Math.min(48, height / 8)}px ${DEFAULT_FONT_FAMILY}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('📄', centerX, centerY - 50);
+        ctx.fillText(fileType, centerX, centerY - 50);
 
-        ctx.fillStyle = '#343a40';
-        ctx.font = `bold ${Math.min(24, height / 12)}px Arial`;
-        ctx.fillText(fileType, centerX, centerY);
+        ctx.fillStyle = PLACEHOLDER_TEXT;
+        ctx.font = `bold ${Math.min(24, height / 12)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillText('Legacy Format', centerX, centerY);
 
-        ctx.fillStyle = '#28a745';
-        ctx.font = `${Math.min(16, height / 16)}px Arial`;
+        ctx.fillStyle = SUCCESS_COLOR;
+        ctx.font = `${Math.min(16, height / 16)}px ${DEFAULT_FONT_FAMILY}`;
         ctx.fillText(`${width} × ${height}`, centerX, centerY + 40);
 
-        ctx.fillStyle = '#6c757d';
-        ctx.font = `${Math.min(14, height / 20)}px Arial`;
+        ctx.fillStyle = PLACEHOLDER_TEXT;
+        ctx.font = `${Math.min(14, height / 20)}px ${DEFAULT_FONT_FAMILY}`;
         const displayName = imageFile.name.length > 30 ?
             imageFile.name.substring(0, 27) + '...' : imageFile.name;
         ctx.fillText(displayName, centerX, centerY + 80);
@@ -1853,10 +2012,16 @@ const createSimpleLegacyConversion = async (imageFile) => {
             const newName = imageFile.name ?
                 imageFile.name.replace(/\.[^/.]+$/, '.png') : 'converted.png';
             resolve(new File([blob], newName, { type: 'image/png' }));
-        }, 'image/png', 0.9);
+        }, 'image/png', DEFAULT_PNG_QUALITY);
     });
 };
 
+/**
+ * Creates image objects from file list.
+ * @async
+ * @param {Array<File>} files - Array of files
+ * @returns {Promise<Array<Object>>} Array of image objects
+ */
 export const createImageObjects = (files) => {
     return Promise.all(Array.from(files).map(async (file) => {
         const fileObj = file instanceof File ? file : new File([file], file.name || 'image', { type: file.type });
@@ -1868,19 +2033,15 @@ export const createImageObjects = (files) => {
             fileName.endsWith('.tiff') || fileName.endsWith('.tif');
         const isSVG = mimeType === 'image/svg+xml' || fileName.endsWith('.svg');
 
-        // For regular images, use a data URL instead of blob URL for preview
-        // This prevents the blob URL cleanup issue
         let previewUrl = null;
 
-        if (!isTIFF && !isSVG && fileObj.size < 500000) { // Small files only
+        if (!isTIFF && !isSVG && fileObj.size < 500000) {
             try {
                 previewUrl = await fileToDataURL(fileObj);
             } catch (error) {
-                // Fall back to blob URL
                 previewUrl = URL.createObjectURL(fileObj);
             }
         } else {
-            // For large files or special formats, use blob URL
             previewUrl = URL.createObjectURL(fileObj);
         }
 
@@ -1900,7 +2061,12 @@ export const createImageObjects = (files) => {
     }));
 };
 
-// Helper function to convert file to data URL
+/**
+ * Converts file to data URL.
+ * @async
+ * @param {File} file - File to convert
+ * @returns {Promise<string>} Data URL
+ */
 const fileToDataURL = (file) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1910,12 +2076,19 @@ const fileToDataURL = (file) => {
     });
 };
 
+/**
+ * Converts TIFF file for processing.
+ * @async
+ * @param {File} tiffFile - TIFF file to convert
+ * @returns {Promise<File>} Converted PNG file
+ */
 const convertTIFFForProcessing = async (tiffFile) => {
     try {
         try {
             const result = await convertTIFFSimple(tiffFile);
             return result;
         } catch (simpleError) {
+            // Continue to next method
         }
 
         if (window.UTIF && typeof window.UTIF.decode === 'function') {
@@ -1923,12 +2096,14 @@ const convertTIFFForProcessing = async (tiffFile) => {
                 const result = await convertTIFFWithUTIFRobust(tiffFile);
                 return result;
             } catch (utifError) {
+                // Continue to next method
             }
         }
 
         try {
             return await createTIFFPlaceholderFromInfo(tiffFile);
         } catch (placeholderError) {
+            // Continue to next method
         }
 
         return await createTIFFPlaceholderFile(tiffFile);
@@ -1938,6 +2113,12 @@ const convertTIFFForProcessing = async (tiffFile) => {
     }
 };
 
+/**
+ * Creates TIFF placeholder from file info.
+ * @async
+ * @param {File} tiffFile - TIFF file
+ * @returns {Promise<File>} Placeholder PNG file
+ */
 const createTIFFPlaceholderFromInfo = async (tiffFile) => {
     return new Promise((resolve) => {
         const canvas = document.createElement('canvas');
@@ -1964,23 +2145,23 @@ const createTIFFPlaceholderFromInfo = async (tiffFile) => {
         const ctx = canvas.getContext('2d');
 
         const gradient = ctx.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, '#4a90e2');
-        gradient.addColorStop(0.5, '#5cb85c');
+        gradient.addColorStop(0, INFO_COLOR);
+        gradient.addColorStop(0.5, SUCCESS_COLOR);
         gradient.addColorStop(1, '#f0ad4e');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.min(60, width / 10)}px Arial`;
+        ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
+        ctx.font = `bold ${Math.min(60, width / 10)}px ${DEFAULT_FONT_FAMILY}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('📷', width / 2, height / 2 - 40);
+        ctx.fillText('TIFF', width / 2, height / 2 - 40);
 
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.min(24, width / 20)}px Arial`;
+        ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
+        ctx.font = `bold ${Math.min(24, width / 20)}px ${DEFAULT_FONT_FAMILY}`;
         ctx.fillText('TIFF Image', width / 2, height / 2 + 20);
 
-        ctx.font = `${Math.min(16, width / 30)}px Arial`;
+        ctx.font = `${Math.min(16, width / 30)}px ${DEFAULT_FONT_FAMILY}`;
         ctx.fillText(`${width} × ${height}`, width / 2, height / 2 + 60);
 
         canvas.toBlob((blob) => {
@@ -1988,10 +2169,16 @@ const createTIFFPlaceholderFromInfo = async (tiffFile) => {
                 fileName.replace(/\.(tiff|tif)$/i, '.png') :
                 'converted-tiff.png';
             resolve(new File([blob], newName, { type: 'image/png' }));
-        }, 'image/png', 0.9);
+        }, 'image/png', DEFAULT_PNG_QUALITY);
     });
 };
 
+/**
+ * Converts TIFF using UTIF with robust error handling.
+ * @async
+ * @param {File} tiffFile - TIFF file to convert
+ * @returns {Promise<File>} Converted PNG file
+ */
 const convertTIFFWithUTIFRobust = (tiffFile) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -2007,7 +2194,7 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                         throw new Error('No TIFF data found');
                     }
                 } catch (decodeError) {
-                    reject(new Error(`TIFF decode failed: ${decodeError.message}`));
+                    reject(new Error(`${ERROR_MESSAGES.TIFF_CONVERSION_FAILED}: ${decodeError.message}`));
                     return;
                 }
 
@@ -2023,6 +2210,7 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                         decodeSuccess = true;
                     }
                 } catch (imageDecodeError) {
+                    // Continue without decode
                 }
 
                 let width = 800;
@@ -2070,9 +2258,9 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                         rgba = window.UTIF.toRGBA8(firstIFD);
                         if (rgba && rgba.length > 0 && rgba.length >= (width * height * 2)) {
                             rgbaSuccess = true;
-                        } else {
                         }
                     } catch (rgbaError) {
+                        // Continue without RGBA
                     }
                 }
 
@@ -2113,7 +2301,7 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
 
                         resolve(new File([blob], newFileName, { type: 'image/png' }));
 
-                    }, 'image/png', 1.0);
+                    }, 'image/png', DEFAULT_PNG_QUALITY);
                 } else {
                     const canvas = document.createElement('canvas');
 
@@ -2129,8 +2317,8 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                     const ctx = canvas.getContext('2d');
 
                     const gradient = ctx.createLinearGradient(0, 0, width, height);
-                    gradient.addColorStop(0, '#4a90e2');
-                    gradient.addColorStop(0.5, '#5cb85c');
+                    gradient.addColorStop(0, INFO_COLOR);
+                    gradient.addColorStop(0.5, SUCCESS_COLOR);
                     gradient.addColorStop(1, '#f0ad4e');
                     ctx.fillStyle = gradient;
                     ctx.fillRect(0, 0, width, height);
@@ -2142,24 +2330,24 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                     const centerX = width / 2;
                     const centerY = height / 2;
 
-                    ctx.fillStyle = '#ffffff';
+                    ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
                     const iconSize = Math.min(60, width / 8);
-                    ctx.font = `bold ${iconSize}px Arial`;
+                    ctx.font = `bold ${iconSize}px ${DEFAULT_FONT_FAMILY}`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText('📷', centerX, centerY - 50);
+                    ctx.fillText('TIFF', centerX, centerY - 50);
 
-                    ctx.fillStyle = '#ffffff';
+                    ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
                     const titleSize = Math.min(28, width / 15);
-                    ctx.font = `bold ${titleSize}px Arial`;
+                    ctx.font = `bold ${titleSize}px ${DEFAULT_FONT_FAMILY}`;
                     ctx.fillText('TIFF Image', centerX, centerY);
 
                     const infoSize = Math.min(18, width / 25);
-                    ctx.font = `${infoSize}px Arial`;
+                    ctx.font = `${infoSize}px ${DEFAULT_FONT_FAMILY}`;
                     ctx.fillText(`${width} × ${height}`, centerX, centerY + 40);
 
-                    ctx.fillStyle = '#ff6b6b';
-                    ctx.font = `${Math.min(14, width / 30)}px Arial`;
+                    ctx.fillStyle = ERROR_TEXT_COLOR;
+                    ctx.font = `${Math.min(14, width / 30)}px ${DEFAULT_FONT_FAMILY}`;
                     ctx.fillText('Preview Not Available', centerX, centerY + 80);
 
                     canvas.toBlob((blob) => {
@@ -2172,7 +2360,7 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                         const baseName = originalName.replace(/\.[^/.]+$/, '');
                         const newFileName = `${baseName}.png`;
                         resolve(new File([blob], newFileName, { type: 'image/png' }));
-                    }, 'image/png', 0.95);
+                    }, 'image/png', DEFAULT_PNG_QUALITY);
                 }
 
             } catch (error) {
@@ -2185,6 +2373,12 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
     });
 };
 
+/**
+ * Converts TIFF using simple browser method.
+ * @async
+ * @param {File} tiffFile - TIFF file to convert
+ * @returns {Promise<File>} Converted PNG file
+ */
 const convertTIFFSimple = (tiffFile) => {
     return new Promise((resolve, reject) => {
         const objectUrl = URL.createObjectURL(tiffFile);
@@ -2192,7 +2386,7 @@ const convertTIFFSimple = (tiffFile) => {
 
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(objectUrl);
-            reject(new Error('TIFF load timeout'));
+            reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
         }, 15000);
 
         img.onload = () => {
@@ -2220,7 +2414,7 @@ const convertTIFFSimple = (tiffFile) => {
 
                     resolve(new File([blob], newFileName, { type: 'image/png' }));
 
-                }, 'image/png', 1.0);
+                }, 'image/png', DEFAULT_PNG_QUALITY);
 
             } catch (error) {
                 URL.revokeObjectURL(objectUrl);
@@ -2238,27 +2432,17 @@ const convertTIFFSimple = (tiffFile) => {
     });
 };
 
-const createTIFFPlaceholder = () => {
-    return 'data:image/svg+xml;utf8,' + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-            <rect width="200" height="200" fill="#f8f9fa"/>
-            <rect x="10" y="10" width="180" height="180" fill="#ffffff" stroke="#dee2e6" stroke-width="2"/>
-            <text x="100" y="90" font-family="Arial, sans-serif" font-size="24" text-anchor="middle" fill="#495057" font-weight="bold">TIFF</text>
-            <text x="100" y="130" font-family="Arial, sans-serif" font-size="14" text-anchor="middle" fill="#6c757d">File</text>
-            <text x="100" y="170" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#28a745">Preview not available</text>
-        </svg>
-    `);
-};
-
+/**
+ * Cleans up blob URLs from image objects.
+ * @param {Array<Object>} imageObjects - Array of image objects
+ */
 export const cleanupBlobUrls = (imageObjects) => {
     if (!imageObjects || !Array.isArray(imageObjects)) return;
 
     imageObjects.forEach(image => {
-        // Check if it's a blob URL and hasn't already been cleaned up
         if (image.url && image.url.startsWith('blob:')) {
             try {
                 URL.revokeObjectURL(image.url);
-                // Set to null to prevent React from trying to use it
                 image.url = null;
             } catch (e) {
                 // Ignore errors if URL was already revoked
@@ -2285,6 +2469,12 @@ export const cleanupBlobUrls = (imageObjects) => {
     });
 };
 
+/**
+ * Checks if image has transparency.
+ * @async
+ * @param {File} file - Image file to check
+ * @returns {Promise<boolean>} Whether image has transparency
+ */
 export const checkImageTransparency = async (file) => {
     return new Promise((resolve) => {
         if (!file || typeof file !== 'object') {
@@ -2476,6 +2666,7 @@ export const checkImageTransparency = async (file) => {
                                 return;
                             }
                         } catch (error) {
+                            // Continue to next area
                         }
                     }
 
@@ -2546,6 +2737,13 @@ export const checkImageTransparency = async (file) => {
     });
 };
 
+/**
+ * Checks transparency by sampling image data.
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {number} width - Image width
+ * @param {number} height - Image height
+ * @returns {boolean} Whether image has transparency
+ */
 const checkTransparencyBySampling = (ctx, width, height) => {
     try {
         const sampleWidth = Math.min(100, width);
@@ -2571,6 +2769,12 @@ const checkTransparencyBySampling = (ctx, width, height) => {
     }
 };
 
+/**
+ * Checks image transparency with detailed information.
+ * @async
+ * @param {File} file - Image file to check
+ * @returns {Promise<Object>} Detailed transparency information
+ */
 export const checkImageTransparencyDetailed = async (file) => {
     return new Promise((resolve) => {
         const nonTransparentFormats = [
@@ -2732,6 +2936,12 @@ export const checkImageTransparencyDetailed = async (file) => {
     });
 };
 
+/**
+ * Quickly checks image transparency.
+ * @async
+ * @param {File} file - Image file to check
+ * @returns {Promise<boolean>} Whether image has transparency
+ */
 export const checkImageTransparencyQuick = async (file) => {
     const nonTransparentFormats = [
         'image/jpeg', 'image/jpg', 'image/bmp',
@@ -2808,6 +3018,12 @@ export const checkImageTransparencyQuick = async (file) => {
     return checkImageTransparency(file);
 };
 
+/**
+ * Generates processing summary.
+ * @param {Object} summaryData - Summary data
+ * @param {Function} t - Translation function
+ * @returns {Object} Processing summary
+ */
 export const generateProcessingSummary = (summaryData, t) => {
     const summary = {
         mode: summaryData.mode,
@@ -2820,38 +3036,43 @@ export const generateProcessingSummary = (summaryData, t) => {
     };
 
     if (summaryData.resizeDimension) {
-        summary.operations.push(t('operations.resized', { dimension: summaryData.resizeDimension }));
+        summary.operations.push(`${OPERATION_NAMES.RESIZED} to ${summaryData.resizeDimension}`);
         summary.upscalingUsed = true;
     }
     if (summaryData.cropWidth && summaryData.cropHeight) {
-        const cropType = summaryData.cropMode === CROP_MODES.SMART ? t('operations.aiCrop') : t('operations.standardCrop');
+        const cropType = summaryData.cropMode === CROP_MODES.SMART ? OPERATION_NAMES.AI_CROPPED : OPERATION_NAMES.CROPPED;
         summary.operations.push(`${cropType} ${summaryData.cropWidth}x${summaryData.cropHeight}`);
         summary.upscalingUsed = true;
     }
     if (summaryData.compressionQuality < 100) {
-        summary.operations.push(t('operations.compressed', { quality: summaryData.compressionQuality }));
+        summary.operations.push(`${OPERATION_NAMES.COMPRESSED} (${summaryData.compressionQuality}%)`);
     }
     if (summaryData.rename && summaryData.newFileName) {
-        summary.operations.push(t('operations.renamed', { pattern: summaryData.newFileName }));
+        summary.operations.push(`${OPERATION_NAMES.RENAMED}: ${summaryData.newFileName}`);
     }
 
     if (summary.upscalingUsed) {
-        summary.operations.push(t('operations.autoUpscaling'));
+        summary.operations.push(OPERATION_NAMES.AUTO_UPSCALED);
     }
 
     if (summaryData.mode === PROCESSING_MODES.TEMPLATES) {
         summary.templatesApplied = summaryData.templatesApplied;
         summary.categoriesApplied = summaryData.categoriesApplied;
         summary.operations = [
-            t('operations.templatesApplied', { count: summary.templatesApplied }),
-            t('operations.autoUpscaling'),
-            t('operations.aiSmartCropping')
+            `${OPERATION_NAMES.TEMPLATES_APPLIED} (${summary.templatesApplied})`,
+            OPERATION_NAMES.AUTO_UPSCALED,
+            OPERATION_NAMES.AI_CROPPED
         ];
     }
 
     return summary;
 };
 
+/**
+ * Validates image files.
+ * @param {Array<File>} files - Array of files to validate
+ * @returns {Array<File>} Validated image files
+ */
 export const validateImageFiles = (files) => {
     return Array.from(files).filter(file => {
         const mimeType = file.type.toLowerCase();
@@ -2861,6 +3082,11 @@ export const validateImageFiles = (files) => {
     });
 };
 
+/**
+ * Gets processing configuration from options.
+ * @param {Object} processingOptions - Processing options
+ * @returns {Object} Processing configuration
+ */
 export const getProcessingConfiguration = (processingOptions) => {
     const config = {
         compression: {
@@ -2895,10 +3121,21 @@ export const getProcessingConfiguration = (processingOptions) => {
     return config;
 };
 
+/**
+ * Gets available output formats.
+ * @returns {Array<string>} Available formats
+ */
 export const getAvailableFormats = () => {
     return OUTPUT_FORMATS;
 };
 
+/**
+ * Generates file name based on options.
+ * @param {string} originalName - Original file name
+ * @param {Object} options - Processing options
+ * @param {number} index - File index
+ * @returns {string} Generated file name
+ */
 export const generateFileName = (originalName, options, index = 0) => {
     const baseName = originalName.replace(/\.[^/.]+$/, '');
     const originalExtension = originalName.split('.').pop();
@@ -2942,6 +3179,13 @@ export const generateFileName = (originalName, options, index = 0) => {
     }
 };
 
+/**
+ * Creates processing summary.
+ * @param {Object} result - Processing result
+ * @param {Object} options - Processing options
+ * @param {Function} t - Translation function
+ * @returns {Object} Processing summary
+ */
 export const createProcessingSummary = (result, options, t) => {
     const summary = {
         mode: options.templates?.mode || PROCESSING_MODES.CUSTOM,
@@ -2952,49 +3196,49 @@ export const createProcessingSummary = (result, options, t) => {
         totalFiles: result.totalFiles || 0,
         success: result.success || false,
         errors: result.errors || [],
-        // Calculate categories properly
         templatesApplied: result.templatesApplied || 0,
         categoriesApplied: result.categoriesApplied || 0,
-        // Collect all formats from processed images
-        formatsExported: result.formatsExported || ['WEBP', 'PNG', 'JPG'] // Default formats
+        formatsExported: result.formatsExported || ['WEBP', 'PNG', 'JPG']
     };
 
-    // Add operations based on what was done
     if (options.compression && options.compression.quality < 1) {
         const qualityPercent = Math.round(options.compression.quality * 100);
-        summary.operations.push(t('operations.compressed', { quality: qualityPercent }));
+        summary.operations.push(`${OPERATION_NAMES.COMPRESSED} (${qualityPercent}%)`);
     }
 
-    // Add AI operations if used
     if (options.crop && options.crop.enabled && options.crop.mode === CROP_MODES.SMART) {
-        summary.operations.push('AI Smart Cropped');
+        summary.operations.push(OPERATION_NAMES.AI_CROPPED);
         summary.aiUsed = true;
     }
 
     if (summary.upscalingUsed) {
-        summary.operations.push('AI Upscaled');
+        summary.operations.push(OPERATION_NAMES.AUTO_UPSCALED);
         summary.aiUsed = true;
     }
 
-    // Add favicon/screenshot operations if they were generated
     if (options.includeFavicon) {
-        summary.operations.push('Favicons Generated');
+        summary.operations.push(OPERATION_NAMES.FAVICONS_GENERATED);
     }
 
     if (options.includeScreenshots && options.screenshotUrl) {
-        summary.operations.push(`Screenshots Generated for ${options.screenshotUrl}`);
+        summary.operations.push(`${OPERATION_NAMES.SCREENSHOTS_GENERATED} for ${options.screenshotUrl}`);
     }
 
-    // For templates mode, add template-specific operations
     if (summary.mode === PROCESSING_MODES.TEMPLATES) {
         if (summary.templatesApplied > 0) {
-            summary.operations.push(t('operations.templatesApplied', { count: summary.templatesApplied }));
+            summary.operations.push(`${OPERATION_NAMES.TEMPLATES_APPLIED} (${summary.templatesApplied})`);
         }
     }
 
     return summary;
 };
 
+/**
+ * Handles file selection event.
+ * @param {Event} e - File input event
+ * @param {Function} onUpload - Upload callback
+ * @param {Object} options - Additional options
+ */
 export const handleFileSelect = (e, onUpload, options = {}) => {
     const files = Array.from(e.target.files).filter(file => {
         const mimeType = file.type.toLowerCase();
@@ -3014,6 +3258,12 @@ export const handleFileSelect = (e, onUpload, options = {}) => {
     if (files.length > 0) onUpload(files);
 };
 
+/**
+ * Handles image drop event.
+ * @param {Event} e - Drag and drop event
+ * @param {Function} onUpload - Upload callback
+ * @param {Object} options - Additional options
+ */
 export const handleImageDrop = (e, onUpload, options = {}) => {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files).filter(file => {
@@ -3034,6 +3284,14 @@ export const handleImageDrop = (e, onUpload, options = {}) => {
     if (files.length > 0) onUpload(files);
 };
 
+/**
+ * Calculates upscale factor.
+ * @param {number} originalWidth - Original width
+ * @param {number} originalHeight - Original height
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @returns {number} Upscale factor
+ */
 const calculateUpscaleFactor = (originalWidth, originalHeight, targetWidth, targetHeight) => {
     const widthScale = targetWidth / originalWidth;
     const heightScale = targetHeight / originalHeight;
@@ -3052,6 +3310,13 @@ const calculateUpscaleFactor = (originalWidth, originalHeight, targetWidth, targ
     return 1;
 };
 
+/**
+ * Calculates safe dimensions for upscaling.
+ * @param {number} originalWidth - Original width
+ * @param {number} originalHeight - Original height
+ * @param {number} scale - Scale factor
+ * @returns {Object} Safe dimensions
+ */
 const calculateSafeDimensions = (originalWidth, originalHeight, scale) => {
     let targetWidth = Math.round(originalWidth * scale);
     let targetHeight = Math.round(originalHeight * scale);
@@ -3079,6 +3344,14 @@ const calculateSafeDimensions = (originalWidth, originalHeight, scale) => {
     return { width: targetWidth, height: targetHeight, scale: scale, wasAdjusted: false };
 };
 
+/**
+ * Upscales image with AI.
+ * @async
+ * @param {File} imageFile - Image file to upscale
+ * @param {number} scale - Scale factor
+ * @param {string} originalName - Original file name
+ * @returns {Promise<File>} Upscaled image file
+ */
 const upscaleImageWithAI = async (imageFile, scale, originalName) => {
     if (aiUpscalingDisabled) {
         return upscaleImageEnhancedFallback(imageFile, scale, originalName);
@@ -3156,7 +3429,7 @@ const upscaleImageWithAI = async (imageFile, scale, originalName) => {
             canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
         });
 
-        if (!blob) throw new Error('Failed to create blob from upscaled canvas');
+        if (!blob) throw new Error(ERROR_MESSAGES.UPSCALING_FAILED);
 
         const extension = originalName.split('.').pop();
         const newName = originalName.replace(
@@ -3193,6 +3466,12 @@ const upscaleImageWithAI = async (imageFile, scale, originalName) => {
     }
 };
 
+/**
+ * Loads upscaler for specific scale.
+ * @async
+ * @param {number} scale - Scale factor
+ * @returns {Promise<Object>} Upscaler instance
+ */
 const loadUpscalerForScale = async (scale) => {
     if (upscalerInstances[scale] && upscalerUsageCount[scale] !== undefined) {
         upscalerUsageCount[scale]++;
@@ -3259,6 +3538,11 @@ const loadUpscalerForScale = async (scale) => {
     }
 };
 
+/**
+ * Loads upscaler from CDN.
+ * @async
+ * @returns {Promise<void>}
+ */
 const loadUpscalerFromCDN = () => {
     return new Promise((resolve) => {
         if (window.Upscaler) {
@@ -3274,6 +3558,12 @@ const loadUpscalerFromCDN = () => {
     });
 };
 
+/**
+ * Loads upscaler model script.
+ * @async
+ * @param {string} src - Script source URL
+ * @returns {Promise<void>}
+ */
 const loadUpscalerModelScript = (src) => {
     return new Promise((resolve, reject) => {
         const scriptId = `upscaler-model-${src.split('/').pop()}`;
@@ -3291,6 +3581,10 @@ const loadUpscalerModelScript = (src) => {
     });
 };
 
+/**
+ * Releases upscaler for specific scale.
+ * @param {number} scale - Scale factor
+ */
 const releaseUpscalerForScale = (scale) => {
     if (upscalerUsageCount[scale]) {
         upscalerUsageCount[scale]--;
@@ -3312,13 +3606,21 @@ const releaseUpscalerForScale = (scale) => {
     }
 };
 
+/**
+ * Safely upscales image.
+ * @async
+ * @param {Object} upscaler - Upscaler instance
+ * @param {HTMLImageElement} img - Image element
+ * @param {number} scale - Scale factor
+ * @returns {Promise<Object>} Upscale result
+ */
 const safeUpscale = async (upscaler, img, scale) => {
     if (upscalerUsageCount[scale]) upscalerUsageCount[scale]++;
 
     return new Promise((resolve, reject) => {
         const timeoutId = setTimeout(() => {
             releaseUpscalerForScale(scale);
-            reject(new Error('Upscaling timeout'));
+            reject(new Error(ERROR_MESSAGES.UPSCALING_FAILED));
         }, UPSCALING_TIMEOUT);
 
         try {
@@ -3343,6 +3645,11 @@ const safeUpscale = async (upscaler, img, scale) => {
     });
 };
 
+/**
+ * Creates enhanced fallback upscaler.
+ * @param {number} scale - Scale factor
+ * @returns {Object} Fallback upscaler
+ */
 const createEnhancedFallbackUpscaler = (scale) => {
     return {
         scale,
@@ -3371,6 +3678,12 @@ const createEnhancedFallbackUpscaler = (scale) => {
     };
 };
 
+/**
+ * Applies smart sharpening to canvas.
+ * @param {HTMLCanvasElement} canvas - Canvas element
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {number} scale - Scale factor
+ */
 const applySmartSharpening = (canvas, ctx, scale) => {
     try {
         const width = canvas.width;
@@ -3406,9 +3719,18 @@ const applySmartSharpening = (canvas, ctx, scale) => {
 
         ctx.putImageData(imageData, 0, 0);
     } catch (error) {
+        // Ignore sharpening errors
     }
 };
 
+/**
+ * Upscales image with enhanced fallback method.
+ * @async
+ * @param {File} imageFile - Image file to upscale
+ * @param {number} scale - Scale factor
+ * @param {string} originalName - Original file name
+ * @returns {Promise<File>} Upscaled image file
+ */
 const upscaleImageEnhancedFallback = async (imageFile, scale, originalName) => {
     const img = document.createElement('img');
     const objectUrl = URL.createObjectURL(imageFile);
@@ -3455,6 +3777,15 @@ const upscaleImageEnhancedFallback = async (imageFile, scale, originalName) => {
     return new File([blob], newName, { type: 'image/webp' });
 };
 
+/**
+ * Upscales image using tiled approach.
+ * @async
+ * @param {HTMLImageElement} img - Image element
+ * @param {number} scale - Scale factor
+ * @param {string} originalName - Original file name
+ * @param {string} objectUrl - Object URL (optional)
+ * @returns {Promise<File>} Upscaled image file
+ */
 const upscaleImageTiled = async (img, scale, originalName, objectUrl) => {
     const originalWidth = img.naturalWidth;
     const originalHeight = img.naturalHeight;
@@ -3511,6 +3842,14 @@ const upscaleImageTiled = async (img, scale, originalName, objectUrl) => {
     return new File([blob], newName, { type: 'image/webp' });
 };
 
+/**
+ * Processes SVG crop operation.
+ * @async
+ * @param {File} svgFile - SVG file to crop
+ * @param {number} width - Target width
+ * @param {number} height - Target height
+ * @returns {Promise<File>} Cropped image file
+ */
 const processSVGCrop = async (svgFile, width, height) => {
     const img = new Image();
     const svgUrl = URL.createObjectURL(svgFile);
@@ -3558,6 +3897,14 @@ const processSVGCrop = async (svgFile, width, height) => {
     return croppedFile;
 };
 
+/**
+ * Resizes image for crop operation.
+ * @async
+ * @param {File} imageFile - Image file to resize
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @returns {Promise<Object>} Resized image information
+ */
 const resizeImageForCrop = async (imageFile, targetWidth, targetHeight) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -3597,13 +3944,19 @@ const resizeImageForCrop = async (imageFile, targetWidth, targetHeight) => {
 
         img.onerror = () => {
             URL.revokeObjectURL(url);
-            reject(new Error('Failed to load image'));
+            reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
         };
 
         img.src = url;
     });
 };
 
+/**
+ * Loads image from file.
+ * @async
+ * @param {File} file - Image file
+ * @returns {Promise<Object>} Loaded image information
+ */
 const loadImage = (file) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -3611,7 +3964,7 @@ const loadImage = (file) => {
 
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(url);
-            reject(new Error('Image load timeout'));
+            reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
         }, IMAGE_LOAD_TIMEOUT);
 
         img.onload = () => {
@@ -3627,13 +3980,19 @@ const loadImage = (file) => {
         img.onerror = () => {
             clearTimeout(timeout);
             URL.revokeObjectURL(url);
-            reject(new Error('Failed to load image'));
+            reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
         };
 
         img.src = url;
     });
 };
 
+/**
+ * Loads image with performance monitoring.
+ * @async
+ * @param {File} file - Image file
+ * @returns {Promise<Object>} Loaded image information with performance data
+ */
 const loadImageWithPerformance = (file) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -3643,7 +4002,7 @@ const loadImageWithPerformance = (file) => {
 
         const timeout = setTimeout(() => {
             URL.revokeObjectURL(url);
-            reject(new Error('Image load timeout'));
+            reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
         }, UPSCALING_TIMEOUT);
 
         const onLoad = () => {
@@ -3667,7 +4026,7 @@ const loadImageWithPerformance = (file) => {
             URL.revokeObjectURL(url);
 
             Promise.resolve().then(() => {
-                reject(new Error(`Failed to load image: ${file.name}`));
+                reject(new Error(`${ERROR_MESSAGES.IMAGE_LOAD_FAILED}: ${file.name}`));
             });
         };
 
@@ -3681,6 +4040,15 @@ const loadImageWithPerformance = (file) => {
     });
 };
 
+/**
+ * Calculates crop offset based on position.
+ * @param {number} srcWidth - Source width
+ * @param {number} srcHeight - Source height
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {string} position - Crop position
+ * @returns {Object} Crop offset coordinates
+ */
 const calculateCropOffset = (srcWidth, srcHeight, targetWidth, targetHeight, position) => {
     let offsetX, offsetY;
 
@@ -3729,6 +4097,16 @@ const calculateCropOffset = (srcWidth, srcHeight, targetWidth, targetHeight, pos
     return { offsetX, offsetY };
 };
 
+/**
+ * Crops from resized image.
+ * @async
+ * @param {Object} resized - Resized image information
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {string|Object} position - Crop position or subject information
+ * @param {File} originalFile - Original file
+ * @returns {Promise<File>} Cropped image file
+ */
 const cropFromResized = async (resized, targetWidth, targetHeight, position, originalFile) => {
     const img = await loadImage(resized.file);
 
@@ -3800,11 +4178,24 @@ const cropFromResized = async (resized, targetWidth, targetHeight, position, ori
     return new File([blob], newName, { type: 'image/webp' });
 };
 
+/**
+ * Gets luminance value from image data.
+ * @param {Uint8ClampedArray} data - Image data
+ * @param {number} idx - Index in data array
+ * @returns {number} Luminance value
+ */
 const getLuminance = (data, idx) => {
     if (idx < 0 || idx >= data.length) return 0;
     return 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
 };
 
+/**
+ * Finds main subject in predictions.
+ * @param {Array<Object>} predictions - AI predictions
+ * @param {number} imgWidth - Image width
+ * @param {number} imgHeight - Image height
+ * @returns {Object|null} Main subject information
+ */
 const findMainSubject = (predictions, imgWidth, imgHeight) => {
     if (!predictions || predictions.length === 0) return null;
 
@@ -3852,6 +4243,14 @@ const findMainSubject = (predictions, imgWidth, imgHeight) => {
     return scoredPredictions[0];
 };
 
+/**
+ * Detects focal point using simple edge detection.
+ * @async
+ * @param {HTMLImageElement} imgElement - Image element
+ * @param {number} width - Image width
+ * @param {number} height - Image height
+ * @returns {Promise<Object>} Focal point coordinates
+ */
 const detectFocalPointSimple = async (imgElement, width, height) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -3896,6 +4295,14 @@ const detectFocalPointSimple = async (imgElement, width, height) => {
     };
 };
 
+/**
+ * Adjusts crop position based on focal point.
+ * @param {string} position - Original crop position
+ * @param {Object} focalPoint - Focal point coordinates
+ * @param {number} width - Image width
+ * @param {number} height - Image height
+ * @returns {string} Adjusted crop position
+ */
 const adjustCropPositionForFocalPoint = (position, focalPoint, width, height) => {
     const THRESHOLD = 0.3;
 
@@ -3924,6 +4331,12 @@ const adjustCropPositionForFocalPoint = (position, focalPoint, width, height) =>
     return position;
 };
 
+/**
+ * Converts tensor to canvas.
+ * @async
+ * @param {Object} tensor - Tensor object
+ * @returns {Promise<HTMLCanvasElement>} Canvas element
+ */
 const tensorToCanvas = async (tensor) => {
     return new Promise((resolve) => {
         const [height, width, channels] = tensor.shape;
@@ -3954,6 +4367,12 @@ const tensorToCanvas = async (tensor) => {
     });
 };
 
+/**
+ * Converts data URL to canvas.
+ * @async
+ * @param {string} dataURL - Data URL
+ * @returns {Promise<HTMLCanvasElement>} Canvas element
+ */
 const dataURLToCanvas = (dataURL) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -3970,6 +4389,9 @@ const dataURLToCanvas = (dataURL) => {
     });
 };
 
+/**
+ * Cleans up all resources.
+ */
 export const cleanupAllResources = () => {
     if (memoryCleanupInterval) {
         clearInterval(memoryCleanupInterval);
@@ -3999,17 +4421,13 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
     try {
         const processedImages = [];
 
-        // Your processing logic here...
         for (const image of images) {
-            // Process each image based on processingConfig
-            // Apply resize, crop, compression, etc.
             const processedImage = await processSingleImage(image, processingConfig, aiModelLoaded);
             processedImages.push(processedImage);
         }
 
         return processedImages;
     } catch (error) {
-        console.error('Error in orchestrateCustomProcessing:', error);
         throw error;
     }
 };

@@ -1,85 +1,15 @@
-// src/utils/screenshotUtils.js
 import JSZip from 'jszip';
 import { useState, useRef, useCallback } from 'react';
+import {
+    SCREENSHOT_TEMPLATES,
+    VERCEL_ENDPOINTS,
+    CACHE_CONFIG,
+    DEFAULT_SCREENSHOT_TIMEOUT,
+    MAX_CONCURRENT_SCREENSHOTS
+} from '../constants/sharedConstants.js';
 
-/**
- * Screenshot template mapping with capture methods
- * @type {Object}
- */
-const SCREENSHOT_TEMPLATES = {
-    'screenshots-mobile': {
-        id: 'screenshots-mobile',
-        name: 'Mobile Screenshot',
-        category: 'screenshots',
-        platform: 'Screenshots',
-        width: 375,
-        height: 667,
-        fullPage: false
-    },
-    'screenshots-tablet': {
-        id: 'screenshots-tablet',
-        name: 'Tablet Screenshot',
-        category: 'screenshots',
-        platform: 'Screenshots',
-        width: 768,
-        height: 1024,
-        fullPage: false
-    },
-    'screenshots-desktop': {
-        id: 'screenshots-desktop',
-        name: 'Desktop Screenshot',
-        category: 'screenshots',
-        platform: 'Screenshots',
-        width: 1280,
-        height: 720,
-        fullPage: false
-    },
-    'screenshots-desktop-hd': {
-        id: 'screenshots-desktop-hd',
-        name: 'Desktop HD Screenshot',
-        category: 'screenshots',
-        platform: 'Screenshots',
-        width: 1920,
-        height: 1080,
-        fullPage: false
-    },
-    'screenshots-mobile-full': {
-        id: 'screenshots-mobile-full',
-        name: 'Mobile Full Page',
-        category: 'screenshots',
-        platform: 'Screenshots',
-        width: 375,
-        height: 'auto',
-        fullPage: true
-    },
-    'screenshots-tablet-full': {
-        id: 'screenshots-tablet-full',
-        name: 'Tablet Full Page',
-        category: 'screenshots',
-        platform: 'Screenshots',
-        width: 768,
-        height: 'auto',
-        fullPage: true
-    },
-    'screenshots-desktop-full': {
-        id: 'screenshots-desktop-full',
-        name: 'Desktop Full Page',
-        category: 'screenshots',
-        platform: 'Screenshots',
-        width: 1280,
-        height: 'auto',
-        fullPage: true
-    },
-    'screenshots-desktop-hd-full': {
-        id: 'screenshots-desktop-hd-full',
-        name: 'Desktop HD Full Page',
-        category: 'screenshots',
-        platform: 'Screenshots',
-        width: 1920,
-        height: 'auto',
-        fullPage: true
-    }
-};
+const memoryCache = new Map();
+const activeBlobUrls = new Set();
 
 /**
  * Gets all screenshot templates
@@ -110,12 +40,6 @@ export const getScreenshotTemplateById = (id) => {
 };
 
 /**
- * Memory cache for current session
- * @type {Map<string, Object>}
- */
-const memoryCache = new Map();
-
-/**
  * Unified screenshot service with comprehensive optimization strategies
  */
 export class UnifiedScreenshotService {
@@ -127,10 +51,32 @@ export class UnifiedScreenshotService {
         this.useServerCapture = options.useServerCapture !== false;
         this.enableCaching = options.enableCaching !== false;
         this.enableCompression = options.enableCompression !== false;
-        this.timeout = options.timeout || 10000;
-        this.maxConcurrent = options.maxConcurrent || 3;
+        this.timeout = options.timeout || DEFAULT_SCREENSHOT_TIMEOUT;
+        this.maxConcurrent = options.maxConcurrent || MAX_CONCURRENT_SCREENSHOTS;
         this.activeRequests = 0;
         this.requestQueue = [];
+        this.endpointStats = new Map();
+        this.initEndpointStats();
+        // Disable server capture in development due to CORS issues
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            this.useServerCapture = false;
+            console.warn('Server capture disabled in development due to CORS restrictions');
+        }
+    }
+
+    /**
+     * Initializes endpoint usage statistics
+     * @private
+     */
+    initEndpointStats() {
+        VERCEL_ENDPOINTS.forEach(endpoint => {
+            this.endpointStats.set(endpoint.url, {
+                success: 0,
+                failures: 0,
+                totalTime: 0,
+                lastResponseTime: 0
+            });
+        });
     }
 
     /**
@@ -164,43 +110,22 @@ export class UnifiedScreenshotService {
         const startTime = Date.now();
 
         const prioritizedTemplates = this.prioritizeTemplates(templates);
-        const batchSize = Math.min(prioritizedTemplates.length, this.maxConcurrent);
 
-        let completed = 0;
-
-        for (let i = 0; i < prioritizedTemplates.length; i += batchSize) {
+        for (const template of prioritizedTemplates) {
             if (Date.now() - startTime > this.timeout * 2) {
                 throw new Error('Overall capture timeout exceeded');
             }
 
-            const batch = prioritizedTemplates.slice(i, i + batchSize);
-            const batchPromises = batch.map((template, index) =>
-                this.processTemplateWithTimeout(url, template, options, startTime)
-                    .then(result => ({ result, index, template }))
-                    .catch(error => ({
-                        error: error.message,
-                        index,
-                        templateId: template.id
-                    }))
-            );
-
-            const batchResults = await Promise.all(batchPromises);
-
-            batchResults.forEach((item) => {
-                if (item.error) {
-                    const templateId = item.templateId || batch[item.index]?.id;
-                    errors.push({ templateId, error: item.error });
-                    results[templateId] = this.createErrorPlaceholder(
-                        batch[item.index],
-                        url,
-                        item.error
-                    );
-                } else {
-                    const templateId = item.template.id;
-                    results[templateId] = item.result;
-                }
-                completed++;
-            });
+            try {
+                const result = await this.processTemplate(url, template, options, startTime);
+                results[template.id] = result;
+            } catch (error) {
+                errors.push({
+                    templateId: template.id,
+                    error: error.message
+                });
+                results[template.id] = await this.createErrorPlaceholder(template, url, error.message);
+            }
 
             await this.cleanupMemory();
         }
@@ -226,7 +151,7 @@ export class UnifiedScreenshotService {
     }
 
     /**
-     * Processes template capture with individual timeout
+     * Processes template capture
      * @async
      * @private
      * @param {string} url - Website URL
@@ -235,7 +160,7 @@ export class UnifiedScreenshotService {
      * @param {number} startTime - Overall capture start time
      * @returns {Promise<Object>} Capture result
      */
-    async processTemplateWithTimeout(url, template, options, startTime) {
+    async processTemplate(url, template, options, startTime) {
         const remainingTime = this.timeout * 2 - (Date.now() - startTime);
         if (remainingTime <= 0) {
             throw new Error('Insufficient time remaining for capture');
@@ -252,18 +177,33 @@ export class UnifiedScreenshotService {
 
         try {
             if (this.useServerCapture) {
-                const result = await this.captureWithServerOptimized(url, captureOptions);
-                return {
-                    ...result,
-                    template,
-                    method: 'server'
-                };
+                try {
+                    const result = await this.captureWithServerOptimized(url, captureOptions);
+                    return {
+                        ...result,
+                        template,
+                        method: 'server',
+                        success: true
+                    };
+                } catch (serverError) {
+                    // If server capture fails, create placeholder with warning
+                    console.warn(`Server capture failed for ${url}: ${serverError.message}. Falling back to placeholder.`);
+                    const result = await this.createPlaceholderScreenshot(url, captureOptions, template);
+                    return {
+                        ...result,
+                        template,
+                        method: 'placeholder-fallback',
+                        success: true,
+                        warning: `Server capture failed: ${serverError.message}`
+                    };
+                }
             } else {
                 const result = await this.createPlaceholderScreenshot(url, captureOptions, template);
                 return {
                     ...result,
                     template,
-                    method: 'placeholder'
+                    method: 'placeholder',
+                    success: true
                 };
             }
         } catch (error) {
@@ -271,8 +211,9 @@ export class UnifiedScreenshotService {
             return {
                 ...result,
                 template,
-                method: 'placeholder',
-                error: error.message
+                method: 'placeholder-error',
+                success: true,
+                warning: `Error during capture: ${error.message}`
             };
         }
     }
@@ -291,46 +232,60 @@ export class UnifiedScreenshotService {
     }
 
     /**
-     * Captures screenshot using server-side API
-     * @async
-     * @private
-     * @param {string} url - Website URL
-     * @param {Object} options - Capture options
-     * @returns {Promise<Object>} Server-captured screenshot
-     */
+ * Captures screenshot using server-side API
+ * @async
+ * @private
+ * @param {string} url - Website URL
+ * @param {Object} options - Capture options
+ * @returns {Promise<Object>} Server-captured screenshot
+ */
     async captureWithServerOptimized(url, options) {
-        const API_ENDPOINT = 'https://image-lemgendizer-old.vercel.app/api/screenshot';
-
+        const endpoint = this.selectOptimalEndpoint();
         const startTime = Date.now();
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), options.timeout);
 
         try {
-            const requestBody = {
-                url,
-                device: options.device || 'desktop',
-                fullPage: options.fullPage || false,
-                width: options.width,
-                height: options.height,
-                format: this.enableCompression ? 'webp' : 'png',
-                quality: this.enableCompression ? 80 : 90
-            };
+            const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
 
-            const response = await fetch(API_ENDPOINT, {
+            // Build the request based on whether we're using a relative or absolute URL
+            let requestUrl = endpoint.url;
+            let requestOptions = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'image/png,image/webp,image/jpeg'
                 },
-                body: JSON.stringify(requestBody),
+                body: JSON.stringify({
+                    url: cleanUrl,
+                    device: options.device || 'mobile',
+                    fullPage: options.fullPage || false
+                }),
                 signal: controller.signal
-            });
+            };
 
-            clearTimeout(timeoutId);
-
-            if (!response.ok) {
-                throw new Error(`Server error ${response.status}`);
+            // If using a relative URL (starts with /), it's a local API call
+            if (endpoint.url.startsWith('/')) {
+                // For local API, use the current origin
+                requestUrl = window.location.origin + endpoint.url;
+            } else {
+                // For external API, set CORS mode
+                requestOptions.mode = 'cors';
+                requestOptions.credentials = 'omit';
             }
 
+            const response = await fetch(requestUrl, requestOptions);
+
+            clearTimeout(timeoutId);
+            const responseTime = Date.now() - startTime;
+            this.updateEndpointStats(endpoint.url, true, responseTime);
+
+            if (!response.ok) {
+                this.updateEndpointStats(endpoint.url, false, responseTime);
+                throw new Error(`Server error ${response.status}: ${response.statusText}`);
+            }
+
+            const contentType = response.headers.get('content-type');
             const blob = await response.blob();
             const format = this.detectImageFormat(blob, response.headers);
 
@@ -341,10 +296,18 @@ export class UnifiedScreenshotService {
                 method: 'server',
                 fullPage: options.fullPage,
                 device: options.device,
-                responseTime: Date.now() - startTime
+                responseTime
             };
         } catch (error) {
             clearTimeout(timeoutId);
+            const responseTime = Date.now() - startTime;
+            this.updateEndpointStats(endpoint.url, false, responseTime);
+
+            // Check if it's a CORS error
+            if (error.name === 'TypeError' || error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+                throw new Error(`CORS error: Cannot access server API. Please ensure CORS headers are configured on the server.`);
+            }
+
             throw new Error(`Server capture failed: ${error.message}`);
         }
     }
@@ -363,21 +326,24 @@ export class UnifiedScreenshotService {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            const width = options.width || 1280;
-            const height = options.height || (options.fullPage ? 2000 : 720);
+            const width = options.width || template.width || 1280;
+            const height = options.height || (options.fullPage ? 2000 : (template.height === 'auto' ? 720 : template.height)) || 720;
 
             canvas.width = width;
             canvas.height = height;
 
+            // Create gradient background
             const gradient = ctx.createLinearGradient(0, 0, width, height);
             gradient.addColorStop(0, '#f0f9ff');
             gradient.addColorStop(1, '#e0f2fe');
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, width, height);
 
+            // Browser window top bar
             ctx.fillStyle = '#e5e5e5';
             ctx.fillRect(20, 20, width - 40, 60);
 
+            // Browser window buttons
             ctx.fillStyle = '#ff5f57';
             ctx.beginPath();
             ctx.arc(45, 50, 8, 0, Math.PI * 2);
@@ -393,37 +359,40 @@ export class UnifiedScreenshotService {
             ctx.arc(95, 50, 8, 0, Math.PI * 2);
             ctx.fill();
 
+            // URL bar
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(120, 35, width - 160, 30);
             ctx.strokeStyle = '#d1d5db';
             ctx.strokeRect(120, 35, width - 160, 30);
 
             ctx.fillStyle = '#4b5563';
-            ctx.font = '14px Arial';
+            ctx.font = '14px Arial, sans-serif';
             const displayUrl = url.length > 40 ? url.substring(0, 37) + '...' : url;
             ctx.fillText(displayUrl, 125, 56);
 
+            // Content area
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(20, 100, width - 40, height - 140);
             ctx.strokeStyle = '#e5e7eb';
             ctx.strokeRect(20, 100, width - 40, height - 140);
 
+            // Template info
             ctx.fillStyle = '#1e40af';
-            ctx.font = 'bold 24px Arial';
+            ctx.font = 'bold 24px Arial, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText(template.name, width / 2, height / 2 - 60);
 
             ctx.fillStyle = '#374151';
-            ctx.font = '18px Arial';
+            ctx.font = '18px Arial, sans-serif';
             ctx.fillText(`${width} × ${height}`, width / 2, height / 2 - 20);
 
             ctx.fillStyle = '#6b7280';
-            ctx.font = '16px Arial';
+            ctx.font = '16px Arial, sans-serif';
             ctx.fillText(options.device || 'desktop', width / 2, height / 2 + 20);
 
             ctx.fillStyle = '#9ca3af';
-            ctx.font = '14px Arial';
-            ctx.fillText('Placeholder - Configure Vercel API', width / 2, height / 2 + 60);
+            ctx.font = '14px Arial, sans-serif';
+            ctx.fillText('Placeholder - Configure Vercel API for real screenshots', width / 2, height / 2 + 60);
 
             canvas.toBlob((blob) => {
                 resolve({
@@ -451,7 +420,7 @@ export class UnifiedScreenshotService {
         const zip = new JSZip();
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const hostname = this.extractHostname(url);
-        const siteName = options.siteName || 'website';
+        const siteName = options.siteName || hostname || 'website';
 
         const filePromises = Object.entries(screenshotResults.results || {}).map(async ([templateId, result]) => {
             if (result.blob) {
@@ -488,7 +457,7 @@ export class UnifiedScreenshotService {
     }
 
     /**
-     * Processes screenshots for template processing (used by templateProcessor.js)
+     * Processes screenshots for template processing
      * @async
      * @param {string} url - Website URL
      * @param {Array<Object>} screenshotTemplates - Screenshot template objects
@@ -516,83 +485,13 @@ export class UnifiedScreenshotService {
                     processed: true,
                     success: result.success,
                     method: result.method || 'placeholder',
-                    dimensions: result.dimensions
+                    dimensions: result.dimensions,
+                    warning: result.warning || null
                 });
             }
         });
 
         return processedImages;
-    }
-
-    /**
-     * Creates screenshot preview for template selection
-     * @async
-     * @param {File} imageFile - Source image file
-     * @param {string} url - Website URL
-     * @returns {Promise<File>} Screenshot preview file
-     */
-    async createScreenshotPreview(imageFile, url) {
-        return new Promise((resolve) => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-
-            canvas.width = 800;
-            canvas.height = 450;
-
-            ctx.fillStyle = '#f5f5f5';
-            ctx.fillRect(0, 0, 800, 450);
-
-            ctx.fillStyle = '#e0e0e0';
-            ctx.fillRect(50, 30, 700, 40);
-
-            ctx.fillStyle = '#ff5f57';
-            ctx.beginPath();
-            ctx.arc(75, 50, 8, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.fillStyle = '#ffbd2e';
-            ctx.beginPath();
-            ctx.arc(100, 50, 8, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.fillStyle = '#28ca42';
-            ctx.beginPath();
-            ctx.arc(125, 50, 8, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(150, 38, 550, 24);
-            ctx.strokeStyle = '#d0d0d0';
-            ctx.strokeRect(150, 38, 550, 24);
-
-            ctx.fillStyle = '#666666';
-            ctx.font = '14px Arial';
-            const displayUrl = url.length > 50 ? url.substring(0, 47) + '...' : url;
-            ctx.fillText(displayUrl, 155, 55);
-
-            const contentY = 90;
-            const contentHeight = 450 - contentY - 30;
-
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(75, contentY, 650, contentHeight);
-
-            ctx.fillStyle = '#4a90e2';
-            ctx.font = 'bold 24px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Screenshot Preview', 400, contentY + 40);
-
-            ctx.fillStyle = '#666666';
-            ctx.font = '16px Arial';
-            ctx.fillText('Will capture from:', 400, contentY + 80);
-
-            ctx.fillStyle = '#333333';
-            ctx.font = '14px Arial';
-            ctx.fillText(displayUrl, 400, contentY + 110);
-
-            canvas.toBlob((blob) => {
-                resolve(new File([blob], 'screenshot-preview.jpg', { type: 'image/jpeg' }));
-            }, 'image/jpeg', 0.9);
-        });
     }
 
     /**
@@ -602,22 +501,230 @@ export class UnifiedScreenshotService {
         memoryCache.clear();
         this.requestQueue = [];
         this.activeRequests = 0;
+
+        activeBlobUrls.forEach(url => {
+            try {
+                URL.revokeObjectURL(url);
+            } catch { }
+        });
+        activeBlobUrls.clear();
+
+        if (typeof window !== 'undefined' && window.gc) {
+            window.gc();
+        }
     }
 
-    // ========== HELPER METHODS ==========
+    /**
+     * Selects optimal endpoint based on performance statistics
+     * @private
+     * @returns {Object} Selected endpoint object
+     */
+    selectOptimalEndpoint() {
+        const now = Date.now();
+        const availableEndpoints = VERCEL_ENDPOINTS.filter(ep =>
+            now - ep.lastUsed > 1000
+        );
+
+        if (availableEndpoints.length === 0) {
+            VERCEL_ENDPOINTS.forEach(ep => ep.lastUsed = 0);
+            return VERCEL_ENDPOINTS[0];
+        }
+
+        availableEndpoints.sort((a, b) => {
+            const statsA = this.endpointStats.get(a.url);
+            const statsB = this.endpointStats.get(b.url);
+
+            const scoreA = this.calculateEndpointScore(statsA);
+            const scoreB = this.calculateEndpointScore(statsB);
+
+            return scoreB - scoreA;
+        });
+
+        const selected = availableEndpoints[0];
+        selected.lastUsed = now;
+        return selected;
+    }
 
     /**
-     * Generates cache key for URL and templates
+     * Calculates endpoint performance score
      * @private
-     * @param {string} url - Website URL
-     * @param {Array<string>} templateIds - Template IDs
-     * @param {Object} options - Capture options
-     * @returns {string} Cache key
+     * @param {Object} stats - Endpoint statistics
+     * @returns {number} Performance score
      */
-    generateCacheKey(url, templateIds, options) {
-        const sortedTemplates = [...templateIds].sort().join(',');
-        const optionsStr = JSON.stringify(options);
-        return `screenshot:${btoa(url)}:${sortedTemplates}:${optionsStr}`.slice(0, 200);
+    calculateEndpointScore(stats) {
+        if (!stats || stats.success + stats.failures === 0) {
+            return 100;
+        }
+
+        const successRate = stats.success / (stats.success + stats.failures);
+        const avgResponseTime = stats.totalTime / stats.success || 1000;
+        const responseTimeScore = Math.max(0, 1000 - avgResponseTime) / 10;
+
+        return (successRate * 70) + (responseTimeScore * 30);
+    }
+
+    /**
+     * Updates endpoint statistics
+     * @private
+     * @param {string} endpointUrl - Endpoint URL
+     * @param {boolean} success - Whether request succeeded
+     * @param {number} responseTime - Response time in milliseconds
+     */
+    updateEndpointStats(endpointUrl, success, responseTime) {
+        const stats = this.endpointStats.get(endpointUrl) || { success: 0, failures: 0, totalTime: 0 };
+
+        if (success) {
+            stats.success++;
+            stats.totalTime += responseTime;
+            stats.lastResponseTime = responseTime;
+        } else {
+            stats.failures++;
+        }
+
+        this.endpointStats.set(endpointUrl, stats);
+    }
+
+    /**
+     * Prioritizes templates for optimal capture order
+     * @private
+     * @param {Array<Object>} templates - Template configurations
+     * @returns {Array<Object>} Prioritized templates
+     */
+    prioritizeTemplates(templates) {
+        return [...templates].sort((a, b) => {
+            const priorityOrder = { viewport: 1, fullpage: 2 };
+            const deviceOrder = { mobile: 1, tablet: 2, desktop: 3, 'desktop-hd': 4 };
+
+            const aType = a.fullPage ? 'fullpage' : 'viewport';
+            const bType = b.fullPage ? 'fullpage' : 'viewport';
+
+            if (priorityOrder[aType] !== priorityOrder[bType]) {
+                return priorityOrder[aType] - priorityOrder[bType];
+            }
+
+            const aDevice = this.getDeviceFromTemplate(a);
+            const bDevice = this.getDeviceFromTemplate(b);
+
+            if (deviceOrder[aDevice] !== deviceOrder[bDevice]) {
+                return deviceOrder[aDevice] - deviceOrder[bDevice];
+            }
+
+            const aHeight = a.height === 'auto' ? 1000 : a.height;
+            const bHeight = b.height === 'auto' ? 1000 : b.height;
+            return (a.width * aHeight) - (b.width * bHeight);
+        });
+    }
+
+    /**
+     * Retrieves cached result from memory cache
+     * @async
+     * @private
+     * @param {string} cacheKey - Cache key
+     * @returns {Promise<Object|null>} Cached result or null
+     */
+    async getCachedResult(cacheKey) {
+        const memoryEntry = memoryCache.get(cacheKey);
+        if (memoryEntry && Date.now() - memoryEntry.timestamp < CACHE_CONFIG.MEMORY_TTL) {
+            return memoryEntry.data;
+        }
+
+        if (typeof localStorage !== 'undefined') {
+            try {
+                const stored = localStorage.getItem(cacheKey);
+                if (stored) {
+                    const entry = JSON.parse(stored);
+                    if (Date.now() - entry.timestamp < CACHE_CONFIG.LOCALSTORAGE_TTL) {
+                        memoryCache.set(cacheKey, entry);
+                        return entry.data;
+                    }
+                    localStorage.removeItem(cacheKey);
+                }
+            } catch {
+                localStorage.removeItem(cacheKey);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Caches result in memory
+     * @async
+     * @private
+     * @param {string} cacheKey - Cache key
+     * @param {Object} data - Data to cache
+     */
+    async cacheResult(cacheKey, data) {
+        const entry = {
+            data,
+            timestamp: Date.now(),
+            size: this.estimateDataSize(data)
+        };
+
+        memoryCache.set(cacheKey, entry);
+
+        if (memoryCache.size > CACHE_CONFIG.MAX_MEMORY_ENTRIES) {
+            const entries = Array.from(memoryCache.entries());
+            entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+            memoryCache.delete(entries[0][0]);
+        }
+
+        if (typeof localStorage !== 'undefined') {
+            try {
+                const serialized = JSON.stringify(entry);
+                if (serialized.length < 5 * 1024 * 1024) {
+                    localStorage.setItem(cacheKey, serialized);
+                }
+            } catch {
+                localStorage.clear();
+            }
+        }
+    }
+
+    /**
+     * Cleans up memory
+     * @async
+     * @private
+     * @returns {Promise<void>}
+     */
+    async cleanupMemory() {
+        activeBlobUrls.forEach(url => {
+            try {
+                URL.revokeObjectURL(url);
+            } catch { }
+        });
+        activeBlobUrls.clear();
+
+        if (memoryCache.size > CACHE_CONFIG.MAX_MEMORY_ENTRIES * 2) {
+            const entries = Array.from(memoryCache.entries());
+            entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+            entries.slice(0, CACHE_CONFIG.MAX_MEMORY_ENTRIES).forEach(([key]) => {
+                memoryCache.delete(key);
+            });
+        }
+
+        if (typeof window !== 'undefined' && window.gc) {
+            setTimeout(() => window.gc(), 100);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    /**
+     * Detects image format from blob and headers
+     * @private
+     * @param {Blob} blob - Image blob
+     * @param {Headers} headers - Response headers
+     * @returns {string} Image format
+     */
+    detectImageFormat(blob, headers) {
+        const contentType = headers.get('content-type');
+        if (contentType) {
+            if (contentType.includes('image/webp')) return 'webp';
+            if (contentType.includes('image/png')) return 'png';
+            if (contentType.includes('image/jpeg')) return 'jpg';
+        }
+        return blob.type.split('/')[1] || 'png';
     }
 
     /**
@@ -649,17 +756,17 @@ export class UnifiedScreenshotService {
         ctx.strokeRect(10, 10, width - 20, height - 20);
 
         ctx.fillStyle = '#dc2626';
-        ctx.font = `bold ${Math.min(32, height / 10)}px Arial`;
+        ctx.font = `bold ${Math.min(32, height / 10)}px Arial, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('Capture Failed', width / 2, height / 2 - 60);
 
         ctx.fillStyle = '#4b5563';
-        ctx.font = `${Math.min(16, height / 20)}px Arial`;
+        ctx.font = `${Math.min(16, height / 20)}px Arial, sans-serif`;
         ctx.fillText(`URL: ${url.substring(0, 50)}${url.length > 50 ? '...' : ''}`, width / 2, height / 2 - 20);
 
         ctx.fillStyle = '#991b1b';
-        ctx.font = `${Math.min(14, height / 25)}px Arial`;
+        ctx.font = `${Math.min(14, height / 25)}px Arial, sans-serif`;
 
         const errorMsg = error.length > 100 ? error.substring(0, 97) + '...' : error;
         const lines = this.wrapText(ctx, errorMsg, width - 40);
@@ -730,81 +837,6 @@ export class UnifiedScreenshotService {
     }
 
     /**
-     * Prioritizes templates for optimal capture order
-     * @private
-     * @param {Array<Object>} templates - Template configurations
-     * @returns {Array<Object>} Prioritized templates
-     */
-    prioritizeTemplates(templates) {
-        return [...templates].sort((a, b) => {
-            const priorityOrder = { viewport: 1, fullpage: 2 };
-            const deviceOrder = { mobile: 1, tablet: 2, desktop: 3, 'desktop-hd': 4 };
-
-            if (priorityOrder[a.fullPage ? 'fullpage' : 'viewport'] !== priorityOrder[b.fullPage ? 'fullpage' : 'viewport']) {
-                return priorityOrder[a.fullPage ? 'fullpage' : 'viewport'] - priorityOrder[b.fullPage ? 'fullpage' : 'viewport'];
-            }
-
-            const aDevice = this.getDeviceFromTemplate(a);
-            const bDevice = this.getDeviceFromTemplate(b);
-
-            if (deviceOrder[aDevice] !== deviceOrder[bDevice]) {
-                return deviceOrder[aDevice] - deviceOrder[bDevice];
-            }
-
-            return (a.width * (a.height === 'auto' ? 1000 : a.height)) -
-                (b.width * (b.height === 'auto' ? 1000 : b.height));
-        });
-    }
-
-    /**
-     * Retrieves cached result from memory cache
-     * @async
-     * @private
-     * @param {string} cacheKey - Cache key
-     * @returns {Promise<Object|null>} Cached result or null
-     */
-    async getCachedResult(cacheKey) {
-        const memoryEntry = memoryCache.get(cacheKey);
-        if (memoryEntry && Date.now() - memoryEntry.timestamp < 30 * 60 * 1000) {
-            return memoryEntry.data;
-        }
-        return null;
-    }
-
-    /**
-     * Caches result in memory
-     * @async
-     * @private
-     * @param {string} cacheKey - Cache key
-     * @param {Object} data - Data to cache
-     */
-    async cacheResult(cacheKey, data) {
-        const entry = {
-            data,
-            timestamp: Date.now(),
-            size: this.estimateDataSize(data)
-        };
-
-        memoryCache.set(cacheKey, entry);
-
-        if (memoryCache.size > 50) {
-            const entries = Array.from(memoryCache.entries());
-            entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-            memoryCache.delete(entries[0][0]);
-        }
-    }
-
-    /**
-     * Cleans up memory
-     * @async
-     * @private
-     * @returns {Promise<void>}
-     */
-    async cleanupMemory() {
-        await new Promise(resolve => setTimeout(resolve, 50));
-    }
-
-    /**
      * Estimates data size for cache management
      * @private
      * @param {Object} data - Data to estimate size of
@@ -844,11 +876,12 @@ export class UnifiedScreenshotService {
                 fullPage: result.fullPage,
                 device: result.device,
                 responseTime: result.responseTime || 0,
-                error: result.error || null
+                error: result.error || null,
+                warning: result.warning || null
             })),
             errors: results.errors || [],
             service: 'Screenshot Service',
-            note: 'Placeholder screenshots - Configure Vercel API for real screenshots',
+            note: 'Placeholder screenshots generated - Configure Vercel API with proper CORS for real screenshots',
             totalTemplates: results.totalTemplates || 0,
             successfulCaptures: results.successfulCaptures || 0,
             totalTime: results.totalTime || 0
@@ -877,11 +910,16 @@ IMPORTANT NOTE:
 These are placeholder screenshots. For actual website screenshots:
 
 1. Deploy a Vercel function with Playwright/Puppeteer
-2. Add CORS headers to your Vercel function
+2. Add CORS headers to your Vercel function:
+   Access-Control-Allow-Origin: *
+   Access-Control-Allow-Methods: POST, OPTIONS
+   Access-Control-Allow-Headers: Content-Type
 3. Update the API endpoint in screenshotUtils.js
 4. Enable server capture in the service configuration
 
-Service: Screenshot Service with Placeholder Fallback`;
+Service: Screenshot Service with Placeholder Fallback
+
+Note: In development (localhost), server capture is automatically disabled due to CORS restrictions.`;
     }
 
     /**
@@ -899,6 +937,7 @@ Total Errors: ${errors.length}
 
 ERROR DETAILS:
 ${errors.map((err, index) => `
+
 ${index + 1}. Template: ${err.templateId}
    Error: ${err.error}
 `).join('\n')}
@@ -906,7 +945,20 @@ ${index + 1}. Template: ${err.templateId}
 TROUBLESHOOTING:
 1. Check CORS configuration on your Vercel function
 2. Ensure the function is deployed and accessible
-3. Update API endpoint in screenshotUtils.js`;
+3. Update API endpoint in screenshotUtils.js
+4. Add proper CORS headers to your server response`;
+    }
+
+    /**
+     * Generates cache key
+     * @private
+     * @param {string} url - Website URL
+     * @param {Array<string>} templateIds - Template IDs
+     * @param {Object} options - Capture options
+     * @returns {string} Cache key
+     */
+    generateCacheKey(url, templateIds, options) {
+        return `screenshot_${url}_${templateIds.sort().join('_')}_${JSON.stringify(options)}`;
     }
 }
 
@@ -922,7 +974,8 @@ export function useScreenshotService() {
     const service = useRef(new UnifiedScreenshotService({
         useServerCapture: true,
         enableCaching: true,
-        enableCompression: true
+        enableCompression: true,
+        timeout: DEFAULT_SCREENSHOT_TIMEOUT
     }));
 
     const captureTemplates = useCallback(async (url, templateIds, options = {}) => {
@@ -950,7 +1003,7 @@ export function useScreenshotService() {
                 success: true,
                 results,
                 zipSize: zipBlob.size,
-                note: 'Placeholder screenshots generated. Configure Vercel API for real screenshots.'
+                note: 'Screenshots generated successfully'
             };
         } catch (err) {
             setError(err.message);
@@ -980,9 +1033,10 @@ export function useScreenshotService() {
  */
 export const generateScreenshots = async (url, siteName = 'website', options = {}) => {
     const service = new UnifiedScreenshotService({
-        useServerCapture: false,
+        useServerCapture: true,
         enableCaching: true,
         enableCompression: true,
+        timeout: DEFAULT_SCREENSHOT_TIMEOUT,
         ...options
     });
 

@@ -1,238 +1,106 @@
 // ================================
+// Import template constants from templateConfigs.js
+// ================================
+import {
+    TEMPLATE_CATEGORIES_CONST,
+    PLATFORM_NAMES,
+    TEMPLATE_NAMES,
+    EXPORT_FOLDERS,
+    FAVICON_TEMPLATE_ID,
+    SCREENSHOT_TEMPLATE_ID,
+    DEFAULT_FAVICON_SITE_NAME,
+    DEFAULT_FAVICON_THEME_COLOR,
+    DEFAULT_FAVICON_BACKGROUND_COLOR,
+    FAVICON_SIZE_LIST,
+    FAVICON_PREVIEW_SIZE,
+    SCREENSHOT_TEMPLATES
+} from '../configs/templateConfigs.js';
+
+// ================================
 // Image Processing Constants
 // ================================
 
-/**
- * Maximum texture size supported by GPU in pixels
- * @constant {number}
- * @default 16384
- */
 export const MAX_TEXTURE_SIZE = 16384;
-
-/**
- * Maximum safe dimension for processing in pixels
- * Used to prevent memory overflow during image operations
- * @constant {number}
- * @default 4096
- */
 export const MAX_SAFE_DIMENSION = 4096;
-
-/**
- * Maximum total pixels for safe processing
- * Prevents processing images that would consume too much memory
- * @constant {number}
- * @default 16000000
- */
-export const MAX_TOTAL_PIXELS = 16000000;
-
-/**
- * Maximum total pixels for AI processing (8 megapixels)
- * Limits AI operations to maintain performance
- * @constant {number}
- * @default 8000000
- */
+export const MAX_TOTAL_PIXELS = 16777216;
 export const MAX_TOTAL_PIXELS_FOR_AI = 8000000;
-
-/**
- * Maximum scale factor for upscaling operations
- * Prevents excessive upscaling that could cause quality issues
- * @constant {number}
- * @default 4
- */
 export const MAX_SCALE_FACTOR = 4;
-
-/**
- * Maximum pixels for smart sharpening operations
- * Prevents performance issues with large images
- * @constant {number}
- * @default 4000000
- */
-export const MAX_PIXELS_FOR_SMART_SHARPENING = 4000000;
-
-/**
- * Maximum dimension for AI processing in pixels
- * Increased from 2000 to 3000 for better AI performance
- * @constant {number}
- * @default 3000
- */
+export const MAX_PIXELS_FOR_SMART_SHARPENING = 4194304;
 export const MAX_DIMENSION_FOR_AI = 3000;
-
-/**
- * Large image threshold for template processing
- * Images larger than this will use simpler processing
- * @constant {number}
- * @default 4000000
- */
 export const LARGE_IMAGE_THRESHOLD = 4000000;
+export const MIN_IMAGE_SIZE = 1;
+export const MAX_IMAGE_SIZE = 10000000;
 
-/**
- * Supported input image MIME types and formats
- * @constant {string[]}
- */
 export const SUPPORTED_INPUT_FORMATS = [
     'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
     'image/svg+xml', 'image/avif', 'image/tiff', 'image/bmp',
     'image/x-icon', 'image/vnd.microsoft.icon',
-    'image/tif', 'application/tif', 'application/tiff'
+    'image/tif', 'application/tif', 'application/tiff',
+    'image/apng'
 ];
 
-/**
- * Legacy image formats that require conversion to modern formats
- * Includes TIFF, BMP, and ICO formats
- * @constant {string[]}
- */
 export const LEGACY_FORMATS = ['image/tiff', 'image/bmp', 'image/x-icon', 'image/vnd.microsoft.icon'];
-
-/**
- * TIFF format identifiers for detection
- * @constant {string[]}
- */
 export const TIFF_FORMATS = ['image/tiff', 'image/tif', 'application/tif', 'application/tiff'];
 
-/**
- * Maximum texture failures before disabling AI upscaling
- * Prevents repeated failures from degrading user experience
- * @constant {number}
- * @default 3
- */
 export const MAX_TEXTURE_FAILURES = 3;
 
 // ================================
 // AI/GPU Constants
 // ================================
 
-/**
- * Available upscale factors for AI upscaling
- * Supported scales: 2x, 3x, 4x
- * @constant {number[]}
- */
-export const AVAILABLE_UPSCALE_FACTORS = [2, 3, 4];
-
-/**
- * Tile size in pixels for processing large images
- * Used to prevent memory overflow when processing very large images
- * @constant {number}
- * @default 2048
- */
+export const AVAILABLE_UPSCALE_FACTORS = [2, 3, 4, 8];
 export const TILE_SIZE = 2048;
 
-/**
- * AI model settings
- * @constant {Object}
- */
 export const AI_SETTINGS = {
     MIN_CONFIDENCE: 0.3,
     FACE_DETECTION_ENABLED: true,
     OBJECT_DETECTION_ENABLED: true,
-    DEFAULT_CROP_STRATEGY: 'balanced'
+    DEFAULT_CROP_STRATEGY: 'balanced',
+    MAX_OBJECTS: 10,
+    MODEL_TYPE: 'lite_mobilenet_v2',
+    TENSORFLOW_VERSION: '4.10.0',
+    COCO_SSD_VERSION: '2.2.3'
 };
 
 // ================================
 // Performance Constants
 // ================================
 
-/**
- * Image loading timeout in milliseconds
- * Prevents hanging on corrupted or extremely large images
- * @constant {number}
- * @default 30000
- */
 export const IMAGE_LOAD_TIMEOUT = 30000;
+export const UPSCALING_TIMEOUT = 60000;
+export const MEMORY_CLEANUP_INTERVAL = 60000;
+export const UPSCALER_IDLE_TIMEOUT = 300000;
 
-/**
- * AI upscaling timeout in milliseconds
- * Longer timeout for complex AI operations
- * @constant {number}
- * @default 45000
- */
-export const UPSCALING_TIMEOUT = 45000;
-
-/**
- * Memory cleanup interval in milliseconds
- * How often to check and clean up GPU memory
- * @constant {number}
- * @default 10000
- */
-export const MEMORY_CLEANUP_INTERVAL = 10000;
-
-/**
- * Upscaler idle timeout in milliseconds before cleanup
- * Removes unused upscaler models from memory
- * @constant {number}
- * @default 30000
- */
-export const UPSCALER_IDLE_TIMEOUT = 30000;
-
-/**
- * Processing delays for better UI responsiveness
- * @constant {Object}
- */
 export const PROCESSING_DELAYS = {
+    MEMORY_CLEANUP: 50,
     BETWEEN_IMAGES: 100,
     BETWEEN_BATCHES: 500,
-    MEMORY_CLEANUP: 50
+    AI_MODEL_LOAD: 500,
+    SCREENSHOT_CAPTURE: 2000
 };
 
 // ================================
 // Quality Constants
 // ================================
 
-/**
- * Default compression quality (0-1 scale)
- * Used when no specific quality is provided
- * @constant {number}
- * @default 0.85
- */
 export const DEFAULT_QUALITY = 0.85;
-
-/**
- * Default compression quality percentage (1-100 scale)
- * Used in UI components
- * @constant {number}
- * @default 85
- */
 export const DEFAULT_COMPRESSION_QUALITY = 85;
+export const DEFAULT_WEBP_QUALITY = 0.85;
+export const DEFAULT_PNG_QUALITY = 0.9;
+export const DEFAULT_JPG_QUALITY = 0.95;
 
-/**
- * Compression quality range
- * @constant {Object}
- */
 export const COMPRESSION_QUALITY_RANGE = {
     MIN: 1,
     MAX: 100,
     DEFAULT: 85
 };
 
-/**
- * Default WebP compression quality (0-1 scale)
- * Optimized for good quality/size ratio
- * @constant {number}
- * @default 0.85
- */
-export const DEFAULT_WEBP_QUALITY = 0.85;
-
-/**
- * Default PNG compression quality (0-1 scale)
- * Higher quality for lossless format
- * @constant {number}
- * @default 0.9
- */
-export const DEFAULT_PNG_QUALITY = 0.9;
-
 // ================================
 // Format Constants
 // ================================
 
-/**
- * Default output formats
- * @constant {string[]}
- */
 export const DEFAULT_OUTPUT_FORMATS = ['webp'];
 
-/**
- * Available output formats with descriptions for UI display
- * @constant {Array<{id: string, name: string, description: string}>}
- */
 export const OUTPUT_FORMATS = [
     { id: 'webp', name: 'WebP', description: 'Modern format with excellent compression' },
     { id: 'avif', name: 'AVIF', description: 'Next-gen format with superior compression' },
@@ -241,10 +109,6 @@ export const OUTPUT_FORMATS = [
     { id: 'original', name: 'Original', description: 'Keep original format' }
 ];
 
-/**
- * Output format options for UI selection
- * @constant {Array<{id: string, name: string}>}
- */
 export const OUTPUT_FORMAT_OPTIONS = [
     { id: 'webp', name: 'WebP' },
     { id: 'avif', name: 'AVIF' },
@@ -253,11 +117,8 @@ export const OUTPUT_FORMAT_OPTIONS = [
     { id: 'original', name: 'Original' }
 ];
 
-/**
- * MIME type mappings for file extensions
- * Used for proper content-type headers and format detection
- * @constant {Object.<string, string>}
- */
+export const ALL_OUTPUT_FORMATS = ['webp', 'avif', 'jpg', 'png', 'original'];
+
 export const MIME_TYPE_MAP = {
     'jpg': 'image/jpeg',
     'jpeg': 'image/jpeg',
@@ -269,41 +130,30 @@ export const MIME_TYPE_MAP = {
     'tiff': 'image/tiff',
     'tif': 'image/tiff',
     'bmp': 'image/bmp',
-    'ico': 'image/x-icon'
+    'ico': 'image/x-icon',
+    'apng': 'image/apng'
+};
+
+export const IMAGE_FORMATS = {
+    WEBP: 'webp',
+    AVIF: 'avif',
+    JPG: 'jpg',
+    JPEG: 'jpeg',
+    PNG: 'png',
+    ORIGINAL: 'original',
+    TIFF: 'tiff'
 };
 
 // ================================
 // Validation Constants
 // ================================
 
-/**
- * Maximum filename length in characters
- * Prevents excessively long filenames
- * @constant {number}
- * @default 100
- */
 export const MAX_FILENAME_LENGTH = 100;
-
-/**
- * Maximum target file size in kilobytes (100MB)
- * Safety limit for file size operations
- * @constant {number}
- * @default 100000
- */
 export const MAX_TARGET_FILESIZE_KB = 100000;
-
-/**
- * Maximum crop dimension in pixels
- * Prevents unrealistic crop sizes
- * @constant {number}
- * @default 10000
- */
 export const MAX_CROP_DIMENSION = 10000;
+export const MAX_RESIZE_DIMENSION = 10000;
+export const FILE_NAME_MAX_LENGTH = 255;
 
-/**
- * Crop dimension range
- * @constant {Object}
- */
 export const CROP_DIMENSION_RANGE = {
     MIN: 1,
     MAX: MAX_CROP_DIMENSION,
@@ -311,185 +161,294 @@ export const CROP_DIMENSION_RANGE = {
     DEFAULT_HEIGHT: 1080
 };
 
-/**
- * Maximum resize dimension in pixels
- * Prevents unrealistic resize operations
- * @constant {number}
- * @default 10000
- */
-export const MAX_RESIZE_DIMENSION = 10000;
-
-/**
- * Resize dimension range
- * @constant {Object}
- */
 export const RESIZE_DIMENSION_RANGE = {
     MIN: 1,
     MAX: MAX_RESIZE_DIMENSION,
     DEFAULT: 1080
 };
 
-/**
- * Regex pattern for invalid filename characters
- * Matches characters not allowed in filenames
- * @constant {RegExp}
- */
+export const CROP_MIN_SIZE = 50;
+
 export const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\x00-\x1F]/g;
 
 // ================================
 // UI/Display Constants
 // ================================
 
-/**
- * Default language code for the application
- * @constant {string}
- * @default 'en'
- */
 export const DEFAULT_LANGUAGE = 'en';
 
-/**
- * Available languages for the application UI
- * @constant {Array<{code: string, name: string, flag: string}>}
- */
 export const AVAILABLE_LANGUAGES = [
-    { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'hr', name: 'Hrvatski', flag: '🇭🇷' }
+    { code: 'en', name: 'English' },
+    { code: 'hr', name: 'Hrvatski' }
 ];
 
 // ================================
 // Processing Mode Constants
 // ================================
 
-/**
- * Processing mode enumeration
- * @constant {Object}
- * @property {string} CUSTOM - Custom image processing
- * @property {string} TEMPLATES - Template-based processing
- */
 export const PROCESSING_MODES = {
     CUSTOM: 'custom',
     TEMPLATES: 'templates'
 };
 
-/**
- * Crop mode enumeration
- * @constant {Object}
- * @property {string} SMART - AI-powered smart cropping
- * @property {string} STANDARD - Standard rule-based cropping
- */
 export const CROP_MODES = {
     SMART: 'smart',
     STANDARD: 'standard'
 };
 
-/**
- * Available crop positions for manual cropping
- * @constant {string[]}
- */
 export const CROP_POSITIONS = [
     'center', 'top-left', 'top', 'top-right', 'left',
     'right', 'bottom-left', 'bottom', 'bottom-right'
 ];
 
-/**
- * Default margin for crop operations in pixels
- * Prevents cropping too close to image edges
- * @constant {number}
- * @default 10
- */
 export const CROP_MARGIN = 10;
 
 // ================================
-// Export Constants
+// Template Constants (Imported from templateConfigs.js)
 // ================================
 
-/**
- * Export folder names for organized file structure
- * @constant {Object}
- */
-export const EXPORT_FOLDERS = {
-    ORIGINAL_IMAGES: 'OriginalImages',
-    OPTIMIZED_IMAGES: 'OptimizedImages',
-    WEB_IMAGES: 'WebImages',
-    LOGO_IMAGES: 'LogoImages',
-    SOCIAL_MEDIA_IMAGES: 'SocialMediaImages'
+export {
+    TEMPLATE_CATEGORIES_CONST as TEMPLATE_CATEGORIES,
+    PLATFORM_NAMES,
+    TEMPLATE_NAMES,
+    EXPORT_FOLDERS,
+    FAVICON_TEMPLATE_ID,
+    SCREENSHOT_TEMPLATE_ID,
+    DEFAULT_FAVICON_SITE_NAME,
+    DEFAULT_FAVICON_THEME_COLOR,
+    DEFAULT_FAVICON_BACKGROUND_COLOR,
+    FAVICON_SIZE_LIST,
+    FAVICON_PREVIEW_SIZE,
+    SCREENSHOT_TEMPLATES
 };
 
-/**
- * Social media platform names for organized export
- * @constant {Object}
- */
-export const PLATFORM_NAMES = {
-    INSTAGRAM: 'Instagram',
-    FACEBOOK: 'Facebook',
-    TWITTER_X: 'Twitter/X',
-    LINKEDIN: 'LinkedIn',
-    YOUTUBE: 'YouTube',
-    PINTEREST: 'Pinterest',
-    TIKTOK: 'TikTok'
+// ================================
+// App-specific Constants
+// ================================
+
+export const DEFAULT_CROP_POSITION = 'center';
+
+export const MODAL_TYPES = {
+    INFO: 'info',
+    SUCCESS: 'success',
+    ERROR: 'error',
+    SUMMARY: 'summary'
 };
 
-/**
- * Template names for different social media platforms
- * @constant {Object}
- */
-export const TEMPLATE_NAMES = {
-    FAVICON_SET: 'FaviconSet',
-    SCREENSHOTS_DESKTOP: 'ScreenshotsDesktop',
-    SCREENSHOTS_MOBILE: 'ScreenshotsMobile',
-    INSTAGRAM: [
-        'InstagramProfile',
-        'InstagramSquare',
-        'InstagramPortrait',
-        'InstagramLandscape',
-        'InstagramStoriesReels'
-    ],
-    FACEBOOK: [
-        'FacebookProfile',
-        'FacebookCoverBanner',
-        'FacebookSharedImage',
-        'FacebookSquarePost',
-        'FacebookStories'
-    ],
-    TWITTER_X: [
-        'XProfile',
-        'XHeaderBanner',
-        'XLandscapePost',
-        'XSquarePost',
-        'XPortraitPost'
-    ],
-    LINKEDIN: [
-        'LinkedInProfile',
-        'LinkedInPersonalCover',
-        'LinkedInLandscapePost',
-        'LinkedInSquarePost',
-        'LinkedInPortraitPost'
-    ],
-    YOUTUBE: [
-        'YouTubeChannelIcon',
-        'YouTubeBanner',
-        'YouTubeThumbnail'
-    ],
-    PINTEREST: [
-        'PinterestProfile',
-        'PinterestStandardPin',
-        'PinterestSquarePin',
-        'PinterestStoryPin'
-    ],
-    TIKTOK: [
-        'TikTokProfile',
-        'TikTokVideoCover'
-    ]
+export const DEFAULT_PROCESSING_CONFIG = {
+    compression: {
+        quality: 85,
+        fileSize: ''
+    },
+    output: {
+        formats: ['webp'],
+        rename: false,
+        newFileName: ''
+    },
+    resizeDimension: '',
+    cropWidth: '',
+    cropHeight: '',
+    showResize: true,
+    showCrop: false,
+    showTemplates: false,
+    selectedTemplates: [],
+    processingMode: 'custom',
+    templateSelectedImage: null,
+    smartCrop: false,
+    cropMode: 'smart',
+    cropPosition: 'center',
+    faviconSiteName: 'My Website',
+    faviconThemeColor: '#ffffff',
+    faviconBackgroundColor: '#ffffff'
 };
 
-/**
- * Template categories for organization
- * @constant {Object}
- */
-export const TEMPLATE_CATEGORIES = {
-    WEB: 'web',
-    LOGO: 'logo',
-    SOCIAL_MEDIA: 'social_media',
-    FAVICON: 'favicon',
-    SCREENSHOTS: 'screenshots'
+export const EXPORT_SETTINGS = {
+    CUSTOM: 'custom',
+    TEMPLATES: 'templates',
+    DEFAULT_ZIP_NAME_CUSTOM: 'LemGendizedImages',
+    DEFAULT_ZIP_NAME_TEMPLATES: 'LemGendizedTemplates'
+};
+
+export const URL_CONSTANTS = {
+    DEFAULT_PROTOCOL: 'https://',
+    MAX_URL_LENGTH: 2048
+};
+
+export const NUMBER_INPUT_CONSTANTS = {
+    DEFAULT_INCREMENT: 1,
+    LARGE_INCREMENT: 10,
+    MIN_VALUE: 1,
+    MAX_VALUE: 10000
+};
+
+// ================================
+// Screenshot Constants
+// ================================
+
+export const VERCEL_ENDPOINTS = [
+    {
+        url: 'https://image-lemgendizer-old.vercel.app/api/screenshot',
+        priority: 1,
+        lastUsed: 0
+    },
+    {
+        url: 'http://localhost:3000/api/screenshot',
+        priority: 2,
+        lastUsed: 0
+    }
+];
+
+export const CACHE_CONFIG = {
+    LOCALSTORAGE_TTL: 7 * 24 * 60 * 60 * 1000,
+    MEMORY_TTL: 30 * 60 * 1000,
+    MAX_MEMORY_ENTRIES: 50
+};
+
+export const DEFAULT_SCREENSHOT_TIMEOUT = 20000;
+export const MAX_CONCURRENT_SCREENSHOTS = 2;
+export const MAX_SCREENSHOT_SIZE = 800;
+
+// ================================
+// Color Constants
+// ================================
+
+export const DEFAULT_THEME_COLOR = '#ffffff';
+export const DEFAULT_BACKGROUND_COLOR = '#ffffff';
+export const ERROR_BACKGROUND_COLOR = '#f8d7da';
+export const ERROR_BORDER_COLOR = '#f5c6cb';
+export const ERROR_TEXT_COLOR = '#721c24';
+export const WARNING_TEXT_COLOR = '#856404';
+export const PLACEHOLDER_BACKGROUND = '#f8f9fa';
+export const PLACEHOLDER_BORDER = '#dee2e6';
+export const PLACEHOLDER_TEXT = '#495057';
+export const SUCCESS_COLOR = '#28a745';
+export const INFO_COLOR = '#4a90e2';
+
+// ================================
+// Font Constants
+// ================================
+
+export const DEFAULT_FONT_FAMILY = 'Arial, sans-serif';
+export const HEADLINE_FONT_SIZE = 24;
+export const BODY_FONT_SIZE = 16;
+export const CAPTION_FONT_SIZE = 12;
+
+// ================================
+// SVG Constants
+// ================================
+
+export const SVG_DEFAULT_WIDTH = 100;
+export const SVG_DEFAULT_HEIGHT = 100;
+export const SVG_MIN_SIZE = 1;
+export const SVG_MAX_SIZE = 4096;
+
+// ================================
+// Operation Names
+// ================================
+
+export const OPERATION_NAMES = {
+    RESIZED: 'Resized',
+    CROPPED: 'Cropped',
+    AI_CROPPED: 'AI Smart Cropped',
+    COMPRESSED: 'Compressed',
+    RENAMED: 'Renamed',
+    AUTO_UPSCALED: 'Auto-upscaled',
+    TEMPLATES_APPLIED: 'Templates Applied',
+    FAVICONS_GENERATED: 'Favicons Generated',
+    SCREENSHOTS_GENERATED: 'Screenshots Generated'
+};
+
+// ================================
+// Error Messages
+// ================================
+
+export const ERROR_MESSAGES = {
+    NO_IMAGE_SELECTED: 'No image selected for processing',
+    NO_TEMPLATES_SELECTED: 'No templates selected',
+    NO_VALID_TEMPLATES: 'No valid templates found after filtering',
+    INVALID_IMAGE_FILE: 'Invalid image file provided',
+    IMAGE_LOAD_FAILED: 'Failed to load image',
+    IMAGE_LOAD_TIMEOUT: 'Image load timeout',
+    PROCESSING_ERROR: 'Processing error',
+    UPSCALING_FAILED: 'Upscaling failed',
+    TIFF_CONVERSION_FAILED: 'TIFF conversion failed',
+    SVG_CONVERSION_FAILED: 'SVG conversion failed',
+    SCREENSHOT_CAPTURE_FAILED: 'Screenshot capture failed',
+    FAVICON_GENERATION_FAILED: 'Favicon generation failed'
+};
+
+// ================================
+// Default Settings
+// ================================
+
+export const DEFAULT_SETTINGS = {
+    processing: {
+        mode: 'custom',
+        quality: 0.85,
+        format: 'webp',
+        preserveMetadata: true,
+        autoUpscale: true,
+        smartCrop: true
+    },
+    export: {
+        createFolders: true,
+        includeOriginals: true,
+        includeProcessed: true
+    }
+};
+
+// ================================
+// Device Presets
+// ================================
+
+export const DEVICE_PRESETS = {
+    mobile: {
+        name: 'Mobile',
+        viewport: { width: 375, height: 667 },
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15',
+        deviceScaleFactor: 2,
+        isMobile: true,
+        hasTouch: true
+    },
+    tablet: {
+        name: 'Tablet',
+        viewport: { width: 768, height: 1024 },
+        userAgent: 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X) AppleWebKit/605.1.15',
+        deviceScaleFactor: 2,
+        isMobile: true,
+        hasTouch: true
+    },
+    desktop: {
+        name: 'Desktop',
+        viewport: { width: 1280, height: 720 },
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        deviceScaleFactor: 1,
+        isMobile: false,
+        hasTouch: false
+    }
+};
+
+// ================================
+// Browser Launch Arguments
+// ================================
+
+export const BROWSER_LAUNCH_ARGS = [
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--single-process',
+    '--no-zygote',
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-features=VizDisplayCompositor',
+    '--max-old-space-size=512'
+];
+
+// ================================
+// Screenshot Quality Settings
+// ================================
+
+export const SCREENSHOT_QUALITY = {
+    JPEG_QUALITY: 80,
+    TIMEOUT: 15000,
+    PAGE_LOAD_TIMEOUT: 10000
 };

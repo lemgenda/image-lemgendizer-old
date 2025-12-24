@@ -1,7 +1,8 @@
 import {
     MAX_FILENAME_LENGTH,
     INVALID_FILENAME_CHARS,
-    MIME_TYPE_MAP
+    MIME_TYPE_MAP,
+    MAX_SCREENSHOT_SIZE
 } from '../constants/sharedConstants.js';
 
 /**
@@ -60,9 +61,7 @@ export const isFilenameTooLong = (filename) => {
  */
 export const checkAVIFSupport = async () => {
     return new Promise((resolve) => {
-        // Create test image to check AVIF decoding support
         const avif = new Image();
-
         const timeout = setTimeout(() => {
             resolve(false);
         }, 2000);
@@ -113,21 +112,22 @@ export const ensureFileObject = async (image) => {
 
 /**
  * Create a placeholder file for TIFF when conversion fails
+ * @async
+ * @param {File} tiffFile - TIFF file
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @returns {Promise<File>} Placeholder PNG file
  */
 export const createTIFFPlaceholderFile = async (tiffFile, targetWidth = null, targetHeight = null) => {
     return new Promise((resolve) => {
         const canvas = document.createElement('canvas');
-
-        // Try to get original dimensions from the file name or metadata
         let originalWidth = 800;
         let originalHeight = 600;
 
-        // Check if we have target dimensions
         if (targetWidth && targetHeight) {
             originalWidth = targetWidth;
             originalHeight = targetHeight;
         } else {
-            // Try to parse dimensions from filename (common pattern: image-1920x1080.tiff)
             const fileName = tiffFile.name || '';
             const dimensionMatch = fileName.match(/(\d+)x(\d+)/);
             if (dimensionMatch) {
@@ -136,61 +136,44 @@ export const createTIFFPlaceholderFile = async (tiffFile, targetWidth = null, ta
             }
         }
 
-        // Set canvas to original aspect ratio
-        const maxSize = 800;
         let canvasWidth, canvasHeight;
-
         if (originalWidth > originalHeight) {
-            canvasWidth = Math.min(maxSize, originalWidth);
+            canvasWidth = Math.min(MAX_SCREENSHOT_SIZE, originalWidth);
             canvasHeight = Math.round((originalHeight / originalWidth) * canvasWidth);
         } else {
-            canvasHeight = Math.min(maxSize, originalHeight);
+            canvasHeight = Math.min(MAX_SCREENSHOT_SIZE, originalHeight);
             canvasWidth = Math.round((originalWidth / originalHeight) * canvasHeight);
         }
 
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
         const ctx = canvas.getContext('2d');
-
-        // Draw background with gradient
         const gradient = ctx.createLinearGradient(0, 0, canvasWidth, canvasHeight);
         gradient.addColorStop(0, '#f8f9fa');
         gradient.addColorStop(1, '#e9ecef');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-        // Draw border
         ctx.strokeStyle = '#007bff';
         ctx.lineWidth = 2;
         ctx.strokeRect(10, 10, canvasWidth - 20, canvasHeight - 20);
-
-        // Calculate text position based on canvas size
         const centerX = canvasWidth / 2;
         const centerY = canvasHeight / 2;
-
-        // Draw icon
         ctx.fillStyle = '#6c757d';
         ctx.font = `bold ${Math.min(48, canvasHeight / 8)}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('🖼️', centerX, centerY - (canvasHeight / 10));
-
-        // Draw text
+        ctx.fillText('Image', centerX, centerY - (canvasHeight / 10));
         ctx.fillStyle = '#343a40';
         ctx.font = `bold ${Math.min(24, canvasHeight / 12)}px Arial`;
         ctx.fillText('TIFF Image', centerX, centerY);
-
         ctx.fillStyle = '#6c757d';
         ctx.font = `${Math.min(14, canvasHeight / 20)}px Arial`;
         const fileName = tiffFile.name || 'TIFF File';
         const displayName = fileName.length > 30 ? fileName.substring(0, 30) + '...' : fileName;
         ctx.fillText(displayName, centerX, centerY + (canvasHeight / 10));
-
         ctx.fillStyle = '#28a745';
         ctx.font = `${Math.min(12, canvasHeight / 25)}px Arial`;
         ctx.fillText(`Original: ${originalWidth}×${originalHeight}`, centerX, centerY + (canvasHeight / 5));
-
-        // Convert to PNG
         canvas.toBlob((blob) => {
             const newName = tiffFile.name ?
                 tiffFile.name.replace(/\.(tiff|tif)$/i, '.png') :

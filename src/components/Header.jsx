@@ -2,6 +2,10 @@ import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from './LanguageSwitcher';
 import LemGendaIcon from './LemGendaIcon';
 
+/**
+ * Header component displaying application logo and language switcher
+ * @returns {JSX.Element} Header component
+ */
 function Header() {
     const { t } = useTranslation();
 
@@ -56,7 +60,6 @@ function Header() {
                     align-items: center;
                 }
 
-                /* Mobile adjustments */
                 @media (max-width: 768px) {
                     .app-header {
                         flex-direction: column;

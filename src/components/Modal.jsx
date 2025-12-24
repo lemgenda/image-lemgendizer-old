@@ -1,10 +1,19 @@
 import { useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { MODAL_TYPES } from '../constants/sharedConstants';
 
 /**
  * A reusable modal dialog component with click-outside-to-close functionality.
+ * @param {Object} props - Component props
+ * @param {boolean} props.isOpen - Whether the modal is open
+ * @param {Function} props.onClose - Close handler function
+ * @param {string} props.title - Modal title
+ * @param {React.ReactNode} props.children - Modal content
+ * @param {React.ReactNode} props.actions - Modal action buttons
+ * @param {string} props.type - Modal type (info, success, error, summary)
+ * @returns {JSX.Element|null} Modal component or null if not open
  */
-function Modal({ isOpen, onClose, title, children, actions, type = 'info' }) {
+function Modal({ isOpen, onClose, title, children, actions, type = MODAL_TYPES.INFO }) {
     const { t } = useTranslation();
     const modalRef = useRef(null);
     const overlayRef = useRef(null);
@@ -39,25 +48,20 @@ function Modal({ isOpen, onClose, title, children, actions, type = 'info' }) {
      */
     useEffect(() => {
         if (isOpen) {
-            // Add click outside listener
             document.addEventListener('mousedown', handleClickOutside);
-            // Add ESC key listener
             document.addEventListener('keydown', handleEscKey);
-            // Prevent body scrolling
             document.body.style.overflow = 'hidden';
         }
 
-        // Cleanup function
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('keydown', handleEscKey);
             document.body.style.overflow = 'auto';
         };
-    }, [isOpen]); // Only re-run if isOpen changes
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
-    // Determine modal class based on type
     const modalClass = `modal ${type}`;
 
     return (
@@ -155,7 +159,6 @@ function Modal({ isOpen, onClose, title, children, actions, type = 'info' }) {
                     animation: fadeInUp 0.4s ease-out 0.2s both;
                 }
 
-                /* Modal Types */
                 .modal.success .modal-header {
                     border-bottom-color: var(--success);
                 }
@@ -188,7 +191,6 @@ function Modal({ isOpen, onClose, title, children, actions, type = 'info' }) {
                     color: var(--primary);
                 }
 
-                /* Animations */
                 @keyframes fadeIn {
                     from {
                         opacity: 0;
@@ -220,7 +222,6 @@ function Modal({ isOpen, onClose, title, children, actions, type = 'info' }) {
                     }
                 }
 
-                /* Responsive Design */
                 @media (max-width: 768px) {
                     .modal-content {
                         padding: var(--space-lg);
@@ -268,13 +269,11 @@ function Modal({ isOpen, onClose, title, children, actions, type = 'info' }) {
                     }
                 }
 
-                /* Focus styles for accessibility */
                 .modal-close:focus {
                     outline: 2px solid var(--primary);
                     outline-offset: 2px;
                 }
 
-                /* Prevent content from being hidden behind keyboard on mobile */
                 @media (max-height: 600px) {
                     .modal-overlay {
                         align-items: flex-start;

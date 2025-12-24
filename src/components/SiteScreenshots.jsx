@@ -1,7 +1,6 @@
-// src/components/SiteScreenshots.jsx (simplified)
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useScreenshotService } from '../utils/screenshotUtils';
+import { URL_CONSTANTS, ERROR_MESSAGES } from '../constants/sharedConstants';
 
 /**
  * Site Screenshots Component
@@ -16,8 +15,13 @@ import { useScreenshotService } from '../utils/screenshotUtils';
 const SiteScreenshots = ({ isSelected, onToggle, onUrlChange, screenshotUrl = '', validation = null }) => {
     const { t } = useTranslation();
     const [url, setUrl] = useState(screenshotUrl);
-    const { captureTemplates, isLoading, progress, error } = useScreenshotService();
+    const [isLoading, setIsLoading] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [error, setError] = useState(null);
 
+    /**
+     * Updates local URL state when prop changes
+     */
     useEffect(() => {
         setUrl(screenshotUrl);
     }, [screenshotUrl]);
@@ -68,12 +72,15 @@ const SiteScreenshots = ({ isSelected, onToggle, onUrlChange, screenshotUrl = ''
         }
     };
 
-    // Clean up on unmount
-    useEffect(() => {
-        return () => {
-            // Cleanup handled by service
-        };
-    }, []);
+    /**
+     * Tests the URL by opening in a new tab
+     */
+    const testUrl = () => {
+        if (validation?.isValid && url.trim()) {
+            const fullUrl = url.startsWith('http') ? url : `${URL_CONSTANTS.DEFAULT_PROTOCOL}${url}`;
+            window.open(fullUrl, '_blank', 'noopener,noreferrer');
+        }
+    };
 
     return (
         <>
@@ -217,14 +224,9 @@ const SiteScreenshots = ({ isSelected, onToggle, onUrlChange, screenshotUrl = ''
                                 <button
                                     type="button"
                                     className={`test-url-button ${validation?.isValid ? 'enabled' : 'disabled'}`}
-                                    onClick={() => {
-                                        if (validation?.isValid && url.trim()) {
-                                            const fullUrl = url.startsWith('http') ? url : `https://${url}`;
-                                            window.open(fullUrl, '_blank', 'noopener,noreferrer');
-                                        }
-                                    }}
+                                    onClick={testUrl}
                                     disabled={!validation?.isValid || !url.trim()}
-                                    title={validation?.isValid ? `${t('button.test')} ${url}` : t('message.errorScreenshotUrl')}
+                                    title={validation?.isValid ? `${t('button.test')} ${url}` : ERROR_MESSAGES.SCREENSHOT_CAPTURE_FAILED}
                                 >
                                     <i className="fas fa-external-link-alt"></i>
                                 </button>
@@ -249,7 +251,7 @@ const SiteScreenshots = ({ isSelected, onToggle, onUrlChange, screenshotUrl = ''
                         <div className="screenshot-warning">
                             <i className="fas fa-exclamation-triangle text-warning mr-1"></i>
                             <span className="text-sm text-warning">
-                                {t('screenshots.warning', 'Note: Some websites block screenshot capture due to security settings. If this happens, you\'ll still get informative error images.')}
+                                {t('screenshots.warning', 'Note: Some websites block screenshot capture due to security settings.')}
                             </span>
                         </div>
                     </div>

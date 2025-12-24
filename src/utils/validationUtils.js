@@ -4,7 +4,8 @@ import {
     MAX_RESIZE_DIMENSION,
     PROCESSING_MODES,
     CROP_MODES,
-    CROP_POSITIONS
+    CROP_POSITIONS,
+    URL_CONSTANTS
 } from '../constants/sharedConstants.js';
 
 /**
@@ -15,7 +16,6 @@ import {
 export const validateProcessingOptions = (processingOptions) => {
     const errors = [];
 
-    // Validate compression quality
     if (processingOptions.compression?.quality) {
         const quality = parseInt(processingOptions.compression.quality);
         if (isNaN(quality) || quality < 1 || quality > 100) {
@@ -23,7 +23,6 @@ export const validateProcessingOptions = (processingOptions) => {
         }
     }
 
-    // Validate file size target if provided
     if (processingOptions.compression?.fileSize && processingOptions.compression.fileSize !== '') {
         const fileSize = parseInt(processingOptions.compression.fileSize);
         if (isNaN(fileSize) || fileSize < 1) {
@@ -33,7 +32,6 @@ export const validateProcessingOptions = (processingOptions) => {
         }
     }
 
-    // Validate resize dimension
     if (processingOptions.resizeDimension && processingOptions.resizeDimension !== '') {
         const dimension = parseInt(processingOptions.resizeDimension);
         if (isNaN(dimension) || dimension < 1) {
@@ -43,7 +41,6 @@ export const validateProcessingOptions = (processingOptions) => {
         }
     }
 
-    // Validate crop dimensions
     if (processingOptions.cropWidth && processingOptions.cropWidth !== '') {
         const width = parseInt(processingOptions.cropWidth);
         if (isNaN(width) || width < 1) {
@@ -62,13 +59,11 @@ export const validateProcessingOptions = (processingOptions) => {
         }
     }
 
-    // Validate that if one crop dimension is provided, both should be provided
     if ((processingOptions.cropWidth && processingOptions.cropWidth !== '') !==
         (processingOptions.cropHeight && processingOptions.cropHeight !== '')) {
         errors.push('Both crop width and height must be provided together, or leave both empty to skip cropping');
     }
 
-    // Validate crop aspect ratio
     if (processingOptions.cropWidth && processingOptions.cropWidth !== '' &&
         processingOptions.cropHeight && processingOptions.cropHeight !== '') {
         const width = parseInt(processingOptions.cropWidth);
@@ -82,7 +77,6 @@ export const validateProcessingOptions = (processingOptions) => {
         }
     }
 
-    // Validate output formats
     if (processingOptions.output?.formats) {
         const validFormats = ['webp', 'avif', 'jpg', 'jpeg', 'png', 'original'];
         const invalidFormats = processingOptions.output.formats.filter(f => !validFormats.includes(f));
@@ -96,37 +90,31 @@ export const validateProcessingOptions = (processingOptions) => {
         }
     }
 
-    // Validate rename options
     if (processingOptions.output?.rename) {
         const newFileName = processingOptions.output?.newFileName || '';
 
         if (!newFileName.trim()) {
             errors.push('New file name cannot be empty when rename is enabled');
         } else {
-            // Check for invalid characters
             const invalidChars = /[<>:"/\\|?*\x00-\x1F]/g;
             if (invalidChars.test(newFileName)) {
                 errors.push('New file name contains invalid characters');
             }
 
-            // Check length
             if (newFileName.length > 100) {
                 errors.push('New file name cannot exceed 100 characters');
             }
         }
     }
 
-    // Validate crop mode if provided
     if (processingOptions.cropMode && !Object.values(CROP_MODES).includes(processingOptions.cropMode)) {
         errors.push('Crop mode must be either "smart" or "standard"');
     }
 
-    // Validate crop position if provided
     if (processingOptions.cropPosition && !CROP_POSITIONS.includes(processingOptions.cropPosition)) {
         errors.push('Invalid crop position');
     }
 
-    // Validate template mode specific options
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
         if (!processingOptions.templateSelectedImage) {
             errors.push('No image selected for template processing');
@@ -137,7 +125,6 @@ export const validateProcessingOptions = (processingOptions) => {
         }
     }
 
-    // Validate processing mode
     if (processingOptions.processingMode && !Object.values(PROCESSING_MODES).includes(processingOptions.processingMode)) {
         errors.push('Invalid processing mode');
     }
@@ -162,16 +149,12 @@ export const validateScreenshotUrl = (url) => {
     }
 
     try {
-        // Add protocol if missing
         let formattedUrl = url;
         if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-            formattedUrl = `https://${formattedUrl}`;
+            formattedUrl = `${URL_CONSTANTS.DEFAULT_PROTOCOL}${formattedUrl}`;
         }
 
-        // Basic URL validation
         new URL(formattedUrl);
-
-        // Basic domain validation
         const hostname = new URL(formattedUrl).hostname;
         if (!hostname || hostname === '') {
             return {

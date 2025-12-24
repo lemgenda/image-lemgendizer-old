@@ -1,41 +1,17 @@
 import {
     MEMORY_CLEANUP_INTERVAL,
     UPSCALER_IDLE_TIMEOUT
-} from '../constants/sharedConstants';
+} from '../constants/sharedConstants.js';
 
-// ================================
-// Constants and State Management
-// ================================
-
-/** AI model instance */
 let aiModel = null;
-
-/** Upscaler instances by scale */
 let upscalerInstances = {};
-
-/** Upscaler usage count by scale */
 let upscalerUsageCount = {};
-
-/** Last used timestamps for upscalers */
 let upscalerLastUsed = {};
-
-/** Current GPU memory usage in MB */
 let currentMemoryUsage = 0;
-
-/** Memory cleanup interval reference */
 let memoryCleanupInterval = null;
-
-/** Whether AI upscaling is disabled */
 let aiUpscalingDisabled = false;
-
-/** Texture manager failure count */
 let textureManagerFailures = 0;
-
-/** Whether cleanup is in progress */
 let cleanupInProgress = false;
-// ================================
-// GPU Memory Management
-// ================================
 
 /**
  * Initializes GPU memory monitoring system.

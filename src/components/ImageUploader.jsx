@@ -1,21 +1,78 @@
-import { useCallback } from 'react'
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { handleImageDrop, handleFileSelect } from '../processors';
+import { SUPPORTED_INPUT_FORMATS, ERROR_MESSAGES } from '../constants/sharedConstants';
+
+/**
+ * Handles the drop event for drag-and-drop file upload
+ * @param {DragEvent} e - Drag event
+ * @param {Function} onUpload - Upload callback function
+ */
+export const handleImageDrop = (e, onUpload) => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files);
+    const imageFiles = files.filter(file =>
+        SUPPORTED_INPUT_FORMATS.some(format =>
+            file.type === format ||
+            file.name.toLowerCase().endsWith(format.split('/')[1]?.split('+')[0])
+        )
+    );
+
+    if (imageFiles.length > 0) {
+        onUpload(imageFiles);
+    } else if (onUpload) {
+        onUpload([], ERROR_MESSAGES.INVALID_IMAGE_FILE);
+    }
+};
+
+/**
+ * Handles file selection from input
+ * @param {Event} e - Change event
+ * @param {Function} onUpload - Upload callback function
+ */
+export const handleFileSelect = (e, onUpload) => {
+    const files = Array.from(e.target.files);
+    const imageFiles = files.filter(file =>
+        SUPPORTED_INPUT_FORMATS.some(format =>
+            file.type === format ||
+            file.name.toLowerCase().endsWith(format.split('/')[1]?.split('+')[0])
+        )
+    );
+
+    if (imageFiles.length > 0) {
+        onUpload(imageFiles);
+        e.target.value = '';
+    } else if (onUpload) {
+        onUpload([], ERROR_MESSAGES.INVALID_IMAGE_FILE);
+    }
+};
 
 /**
  * A drag-and-drop and file selection component for uploading images.
+ * @param {Object} props - Component props
+ * @param {Function} props.onUpload - Upload callback function
+ * @param {Object} props.fileInputRef - Reference to file input element
+ * @returns {JSX.Element} ImageUploader component
  */
 function ImageUploader({ onUpload, fileInputRef }) {
     const { t } = useTranslation();
 
+    /**
+     * Handles drop event
+     */
     const handleDrop = useCallback((e) => {
         handleImageDrop(e, onUpload);
     }, [onUpload]);
 
+    /**
+     * Handles drag over event
+     */
     const handleDragOver = useCallback((e) => {
         e.preventDefault();
     }, []);
 
+    /**
+     * Handles file input change event
+     */
     const handleFileChange = (e) => {
         handleFileSelect(e, onUpload);
     };
@@ -114,4 +171,4 @@ function ImageUploader({ onUpload, fileInputRef }) {
     )
 }
 
-export default ImageUploader
+export default ImageUploader;

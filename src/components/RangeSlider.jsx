@@ -1,8 +1,42 @@
 import { useTranslation } from 'react-i18next';
-import { calculatePercentage, generateTicks } from '../utils';
+
+/**
+ * Calculates the percentage value for the slider
+ * @param {number} min - Minimum value
+ * @param {number} max - Maximum value
+ * @param {number} value - Current value
+ * @returns {number} Percentage value
+ */
+const calculatePercentage = (min, max, value) => {
+  return ((value - min) / (max - min)) * 100;
+};
+
+/**
+ * Generates tick marks for the slider
+ * @param {number} min - Minimum value
+ * @param {number} max - Maximum value
+ * @returns {Array} Array of tick values
+ */
+const generateTicks = (min, max) => {
+  const ticks = [min];
+  const mid = Math.round((min + max) / 2);
+  ticks.push(mid);
+  ticks.push(max);
+  return ticks;
+};
 
 /**
  * A customizable range slider component with visual feedback and tick marks.
+ * @param {Object} props - Component props
+ * @param {number} props.min - Minimum slider value
+ * @param {number} props.max - Maximum slider value
+ * @param {number} props.step - Step value
+ * @param {number} props.value - Current slider value
+ * @param {Function} props.onChange - Change handler function
+ * @param {string} props.label - Slider label
+ * @param {string} props.unit - Value unit
+ * @param {boolean} props.showTicks - Whether to show tick marks
+ * @returns {JSX.Element} RangeSlider component
  */
 function RangeSlider({
   min = 0,
@@ -57,7 +91,6 @@ function RangeSlider({
           );
         }
 
-        /* WebKit thumb */
         .range-input::-webkit-slider-thumb {
           -webkit-appearance: none;
           width: 22px;
@@ -73,7 +106,6 @@ function RangeSlider({
           transform: scale(1.1);
         }
 
-        /* Firefox thumb */
         .range-input::-moz-range-thumb {
           width: 22px;
           height: 22px;
@@ -83,7 +115,6 @@ function RangeSlider({
           box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
 
-        /* Firefox track normalization */
         .range-input::-moz-range-track {
           background: transparent;
           height: 8px;
@@ -93,12 +124,10 @@ function RangeSlider({
           background: transparent;
         }
 
-        /* Keyboard focus */
         .range-input:focus-visible {
           box-shadow: 0 0 0 3px rgba(59,130,246,0.25);
         }
 
-        /* Tick marks */
         .range-ticks {
           display: flex;
           justify-content: space-between;
@@ -150,4 +179,4 @@ function RangeSlider({
   )
 }
 
-export default RangeSlider
+export default RangeSlider;

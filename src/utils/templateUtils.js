@@ -1,4 +1,4 @@
-import { TEMPLATE_NAMES, PLATFORM_NAMES } from '../constants/sharedConstants.js';
+import { TEMPLATE_CATEGORIES } from '../constants/sharedConstants.js';
 
 /**
  * Gets template by ID.
@@ -34,9 +34,9 @@ export const calculateTotalTemplateFiles = (selectedTemplates, SOCIAL_MEDIA_TEMP
     const templates = SOCIAL_MEDIA_TEMPLATES.filter(t => templateIds.includes(t.id));
 
     templates.forEach(template => {
-        if (template.category === 'web') {
+        if (template.category === TEMPLATE_CATEGORIES.WEB) {
             totalFiles += 2;
-        } else if (template.category === 'logo') {
+        } else if (template.category === TEMPLATE_CATEGORIES.LOGO) {
             totalFiles += 1;
         } else {
             totalFiles += 1;

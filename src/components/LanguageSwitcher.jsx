@@ -1,9 +1,35 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getLanguages, getCurrentLanguage } from '../utils';
+import { DEFAULT_LANGUAGE, AVAILABLE_LANGUAGES } from '../constants/sharedConstants';
+
+/**
+ * Gets the list of available languages with flags
+ * @returns {Array} Array of language objects with code, name, and flag
+ */
+const getLanguages = () => {
+    return AVAILABLE_LANGUAGES.map(lang => ({
+        ...lang,
+        flag: lang.code === 'en' ? '🇺🇸' : '🇭🇷'
+    }));
+};
+
+/**
+ * Gets the current language object based on language code
+ * @param {string} languageCode - The language code (e.g., 'en', 'hr')
+ * @returns {Object} Current language object with code, name, and flag
+ */
+const getCurrentLanguage = (languageCode) => {
+    const lang = AVAILABLE_LANGUAGES.find(l => l.code === languageCode) ||
+        AVAILABLE_LANGUAGES.find(l => l.code === DEFAULT_LANGUAGE);
+    return {
+        ...lang,
+        flag: lang.code === 'en' ? '🇺🇸' : '🇭🇷'
+    };
+};
 
 /**
  * A dropdown component for switching between application languages.
+ * @returns {JSX.Element} LanguageSwitcher component
  */
 function LanguageSwitcher() {
     const { i18n } = useTranslation();
@@ -13,7 +39,9 @@ function LanguageSwitcher() {
     const languages = getLanguages();
     const currentLanguage = getCurrentLanguage(i18n.language);
 
-    // Close dropdown when clicking outside
+    /**
+     * Closes dropdown when clicking outside
+     */
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -128,7 +156,6 @@ function LanguageSwitcher() {
                     border-bottom: 1px solid var(--border-color);
                 }
 
-                /* Mobile adjustments */
                 @media (max-width: 768px) {
                     .language-switcher-relative {
                         top: 15px;

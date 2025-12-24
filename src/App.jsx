@@ -1,4 +1,3 @@
-// src/App.jsx
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -17,15 +16,28 @@ import {
 import {
   validateProcessingOptions,
   calculateTotalTemplateFiles,
-  validateScreenshotUrl,
   formatFileSize
 } from './utils';
 import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './configs/templateConfigs';
 import {
   PROCESSING_MODES,
-  DEFAULT_COMPRESSION_QUALITY,
-  DEFAULT_OUTPUT_FORMATS,
-  COMPRESSION_QUALITY_RANGE
+  COMPRESSION_QUALITY_RANGE,
+  CROP_MODES,
+  ALL_OUTPUT_FORMATS,
+  FAVICON_TEMPLATE_ID,
+  SCREENSHOT_TEMPLATE_ID,
+  DEFAULT_FAVICON_SITE_NAME,
+  DEFAULT_FAVICON_THEME_COLOR,
+  DEFAULT_FAVICON_BACKGROUND_COLOR,
+  DEFAULT_PROCESSING_CONFIG,
+  MODAL_TYPES,
+  EXPORT_SETTINGS,
+  URL_CONSTANTS,
+  NUMBER_INPUT_CONSTANTS,
+  IMAGE_FORMATS,
+  CROP_POSITIONS,
+  RESIZE_DIMENSION_RANGE,
+  CROP_DIMENSION_RANGE
 } from './constants/sharedConstants';
 import {
   ImageUploader,
@@ -53,37 +65,22 @@ function App() {
     isOpen: false,
     title: '',
     message: '',
-    type: 'info'
+    type: MODAL_TYPES.INFO
   });
   const [isLoading, setIsLoading] = useState(false);
   const [aiModelLoaded, setAiModelLoaded] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [processingSummary, setProcessingSummary] = useState(null);
   const [processingOptions, setProcessingOptions] = useState({
+    ...DEFAULT_PROCESSING_CONFIG,
     compression: {
-      quality: DEFAULT_COMPRESSION_QUALITY,
-      fileSize: ''
+      ...DEFAULT_PROCESSING_CONFIG.compression,
+      quality: COMPRESSION_QUALITY_RANGE.DEFAULT
     },
     output: {
-      formats: DEFAULT_OUTPUT_FORMATS,
-      rename: false,
-      newFileName: ''
-    },
-    resizeDimension: '',
-    cropWidth: '',
-    cropHeight: '',
-    showResize: true,
-    showCrop: false,
-    showTemplates: false,
-    selectedTemplates: [],
-    processingMode: PROCESSING_MODES.CUSTOM,
-    templateSelectedImage: null,
-    smartCrop: false,
-    cropMode: 'smart',
-    cropPosition: 'center',
-    faviconSiteName: 'My Website',
-    faviconThemeColor: '#ffffff',
-    faviconBackgroundColor: '#ffffff'
+      ...DEFAULT_PROCESSING_CONFIG.output,
+      formats: [IMAGE_FORMATS.WEBP]
+    }
   });
 
   const fileInputRef = useRef(null);
@@ -109,8 +106,8 @@ function App() {
    */
   useEffect(() => {
     const loadAIModelAsync = async () => {
-      const needsAI = (processingOptions.cropMode === 'smart' && !aiModelLoaded) ||
-        (processingOptions.processingMode === 'templates' && !aiModelLoaded);
+      const needsAI = (processingOptions.cropMode === CROP_MODES.SMART && !aiModelLoaded) ||
+        (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && !aiModelLoaded);
 
       if (needsAI) {
         try {
@@ -120,10 +117,10 @@ function App() {
           setAiLoading(false);
         } catch (error) {
           setAiLoading(false);
-          showModal(t('message.error'), t('message.aiFailed'), 'error');
+          showModal(t('message.error'), t('message.aiFailed'), MODAL_TYPES.ERROR);
 
-          if (processingOptions.cropMode === 'smart') {
-            setProcessingOptions(prev => ({ ...prev, cropMode: 'standard' }));
+          if (processingOptions.cropMode === CROP_MODES.SMART) {
+            setProcessingOptions(prev => ({ ...prev, cropMode: CROP_MODES.STANDARD }));
           }
         }
       }
@@ -172,7 +169,7 @@ function App() {
         return [...prev, ...newImages];
       });
 
-      if (processingOptions.processingMode === 'custom') {
+      if (processingOptions.processingMode === PROCESSING_MODES.CUSTOM) {
         if (selectedImages.length === 0) {
           setSelectedImages(newImages.map(img => img.id));
         } else {
@@ -180,7 +177,7 @@ function App() {
         }
       }
 
-      if ((processingOptions.processingMode === 'templates' || processingOptions.showTemplates) &&
+      if ((processingOptions.processingMode === PROCESSING_MODES.TEMPLATES || processingOptions.showTemplates) &&
         !processingOptions.templateSelectedImage &&
         newImages.length > 0) {
         setProcessingOptions(prev => ({
@@ -189,10 +186,10 @@ function App() {
         }));
       }
 
-      showModal(t('message.success'), t('message.successUpload', { count: files.length }), 'success');
+      showModal(t('message.success'), t('message.successUpload', { count: files.length }), MODAL_TYPES.SUCCESS);
 
     } catch (error) {
-      showModal(t('message.error'), t('message.errorUpload'), 'error');
+      showModal(t('message.error'), t('message.errorUpload'), MODAL_TYPES.ERROR);
     } finally {
       setIsLoading(false);
     }
@@ -204,7 +201,7 @@ function App() {
    * @returns {void}
    */
   const handleImageSelect = (imageId) => {
-    if (processingOptions.processingMode === 'templates') {
+    if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
       setProcessingOptions(prev => ({
         ...prev,
         templateSelectedImage: imageId
@@ -224,7 +221,7 @@ function App() {
    * @returns {void}
    */
   const handleSelectAll = () => {
-    if (processingOptions.processingMode === 'templates') return;
+    if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) return;
 
     if (selectedImages.length === images.length) {
       setSelectedImages([]);
@@ -238,7 +235,7 @@ function App() {
    * @returns {void}
    */
   const handleRemoveSelected = () => {
-    const imagesToRemove = processingOptions.processingMode === 'templates'
+    const imagesToRemove = processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
       ? [processingOptions.templateSelectedImage].filter(Boolean)
       : selectedImages;
 
@@ -248,14 +245,14 @@ function App() {
     setImages(images.filter(img => !imagesToRemove.includes(img.id)));
     setSelectedImages([]);
 
-    if (processingOptions.processingMode === 'templates') {
+    if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
       setProcessingOptions(prev => ({
         ...prev,
         templateSelectedImage: null
       }));
     }
 
-    showModal(t('message.removed'), t('message.removedImages'), 'success');
+    showModal(t('message.removed'), t('message.removedImages'), MODAL_TYPES.SUCCESS);
   };
 
   /**
@@ -266,21 +263,18 @@ function App() {
   const handleFaviconToggle = (selected) => {
     setIsFaviconSelected(selected);
 
-    // Find favicon template ID from your templateConfigs
-    const faviconTemplateId = 'favicon-set'; // or whatever the ID is
-
     if (selected) {
-      if (!processingOptions.selectedTemplates.includes(faviconTemplateId)) {
+      if (!processingOptions.selectedTemplates.includes(FAVICON_TEMPLATE_ID)) {
         setProcessingOptions(prev => ({
           ...prev,
-          selectedTemplates: [...prev.selectedTemplates, faviconTemplateId],
+          selectedTemplates: [...prev.selectedTemplates, FAVICON_TEMPLATE_ID],
           includeFavicon: true
         }));
       }
     } else {
       setProcessingOptions(prev => ({
         ...prev,
-        selectedTemplates: prev.selectedTemplates.filter(id => id !== faviconTemplateId),
+        selectedTemplates: prev.selectedTemplates.filter(id => id !== FAVICON_TEMPLATE_ID),
         includeFavicon: false
       }));
     }
@@ -294,18 +288,17 @@ function App() {
   const handleScreenshotToggle = (selected) => {
     setIsScreenshotSelected(selected);
 
-    const screenshotTemplateId = 'screenshots-desktop';
     if (selected) {
-      if (!processingOptions.selectedTemplates.includes(screenshotTemplateId)) {
+      if (!processingOptions.selectedTemplates.includes(SCREENSHOT_TEMPLATE_ID)) {
         setProcessingOptions(prev => ({
           ...prev,
-          selectedTemplates: [...prev.selectedTemplates, screenshotTemplateId]
+          selectedTemplates: [...prev.selectedTemplates, SCREENSHOT_TEMPLATE_ID]
         }));
       }
     } else {
       setProcessingOptions(prev => ({
         ...prev,
-        selectedTemplates: prev.selectedTemplates.filter(id => id !== screenshotTemplateId)
+        selectedTemplates: prev.selectedTemplates.filter(id => id !== SCREENSHOT_TEMPLATE_ID)
       }));
       setScreenshotUrl('');
       setScreenshotValidation(null);
@@ -322,7 +315,7 @@ function App() {
 
     if (url.trim()) {
       try {
-        new URL(url.startsWith('http') ? url : `https://${url}`);
+        new URL(url.startsWith('http') ? url : `${URL_CONSTANTS.DEFAULT_PROTOCOL}${url}`);
         setScreenshotValidation({
           isValid: true,
           message: 'Valid URL format'
@@ -345,7 +338,7 @@ function App() {
    * @param {string} type - Modal type ('info', 'success', 'error', 'summary')
    * @returns {void}
    */
-  const showModal = (title, message, type = 'info') => {
+  const showModal = (title, message, type = MODAL_TYPES.INFO) => {
     setModal({ isOpen: true, title, message, type });
   };
 
@@ -360,7 +353,7 @@ function App() {
       isOpen: true,
       title: t('summary.title'),
       message: '',
-      type: 'summary'
+      type: MODAL_TYPES.SUMMARY
     });
   };
 
@@ -369,7 +362,7 @@ function App() {
    * @returns {void}
    */
   const closeModal = () => {
-    setModal({ isOpen: false, title: '', message: '', type: 'info' });
+    setModal({ isOpen: false, title: '', message: '', type: MODAL_TYPES.INFO });
     setProcessingSummary(null);
   };
 
@@ -392,7 +385,7 @@ function App() {
   const toggleCropMode = () => {
     setProcessingOptions(prev => ({
       ...prev,
-      cropMode: prev.cropMode === 'smart' ? 'standard' : 'smart'
+      cropMode: prev.cropMode === CROP_MODES.SMART ? CROP_MODES.STANDARD : CROP_MODES.SMART
     }));
   };
 
@@ -425,12 +418,11 @@ function App() {
    * @returns {void}
    */
   const handleSelectAllFormats = () => {
-    const allFormats = ['webp', 'avif', 'jpg', 'png'];
     setProcessingOptions(prev => ({
       ...prev,
       output: {
         ...prev.output,
-        formats: allFormats
+        formats: ALL_OUTPUT_FORMATS
       }
     }));
   };
@@ -444,7 +436,7 @@ function App() {
       ...prev,
       output: {
         ...prev.output,
-        formats: ['original']
+        formats: [IMAGE_FORMATS.ORIGINAL]
       }
     }));
   };
@@ -455,9 +447,9 @@ function App() {
    * @returns {void}
    */
   const toggleProcessingMode = (mode) => {
-    const newMode = mode === 'templates' ? 'templates' : 'custom';
+    const newMode = mode === PROCESSING_MODES.TEMPLATES ? PROCESSING_MODES.TEMPLATES : PROCESSING_MODES.CUSTOM;
 
-    if (newMode === 'templates') {
+    if (newMode === PROCESSING_MODES.TEMPLATES) {
       let firstImageId = null;
 
       if (selectedImages.length > 0) {
@@ -478,7 +470,7 @@ function App() {
       setProcessingOptions(prev => ({
         ...prev,
         processingMode: newMode,
-        showTemplates: newMode === 'templates',
+        showTemplates: newMode === PROCESSING_MODES.TEMPLATES,
         templateSelectedImage: null
       }));
     }
@@ -578,7 +570,7 @@ function App() {
    * @returns {Array<Object>} Array of selected image objects
    */
   const getSelectedImagesForProcessing = () => {
-    if (processingOptions.processingMode === 'templates') {
+    if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
       return processingOptions.templateSelectedImage
         ? images.filter(img => img.id === processingOptions.templateSelectedImage)
         : [];
@@ -595,18 +587,18 @@ function App() {
   const processCustomImages = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing();
     if (selectedImagesForProcessing.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectImages'), 'error');
+      showModal(t('message.error'), t('message.errorSelectImages'), MODAL_TYPES.ERROR);
       return;
     }
 
     const validation = validateProcessingOptions(processingOptions);
     if (!validation.isValid) {
-      showModal(t('message.error'), validation.errors.join('\n'), 'error');
+      showModal(t('message.error'), validation.errors.join('\n'), MODAL_TYPES.ERROR);
       return;
     }
 
     setIsLoading(true);
-    showModal(t('message.processingImages', { count: selectedImagesForProcessing.length }), t('message.processingImages', { count: selectedImagesForProcessing.length }), 'info');
+    showModal(t('message.processingImages', { count: selectedImagesForProcessing.length }), t('message.processingImages', { count: selectedImagesForProcessing.length }), MODAL_TYPES.INFO);
 
     try {
       const processingConfig = getProcessingConfiguration(processingOptions);
@@ -616,16 +608,16 @@ function App() {
         aiModelLoaded,
       );
 
-      const settings = generateExportSettings('custom');
+      const settings = generateExportSettings(EXPORT_SETTINGS.CUSTOM);
       const zipBlob = await createExportZip(
         selectedImagesForProcessing,
         processedImages,
         settings,
-        'custom',
+        EXPORT_SETTINGS.CUSTOM,
         processingOptions.output.formats
       );
 
-      downloadZip(zipBlob, 'custom-processed-images');
+      downloadZip(zipBlob, EXPORT_SETTINGS.DEFAULT_ZIP_NAME_CUSTOM);
 
       const summary = createProcessingSummary({
         imagesProcessed: selectedImagesForProcessing.length,
@@ -639,7 +631,7 @@ function App() {
       showSummaryModal(summary);
 
     } catch (error) {
-      showModal(t('message.error'), t('message.errorProcessing'), 'error');
+      showModal(t('message.error'), t('message.errorProcessing'), MODAL_TYPES.ERROR);
     } finally {
       setIsLoading(false);
     }
@@ -653,50 +645,51 @@ function App() {
   const processTemplates = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing();
     if (selectedImagesForProcessing.length === 0) {
-      showModal(t('message.error'), t('message.errorSelectImage'), 'error');
+      showModal(t('message.error'), t('message.errorSelectImage'), MODAL_TYPES.ERROR);
       return;
     }
 
     if ((isFaviconSelected || isScreenshotSelected) && !processingOptions.templateSelectedImage) {
-      showModal(t('message.error'), t('message.errorSelectImageForFavicon'), 'error');
+      showModal(t('message.error'), t('message.errorSelectImageForFavicon'), MODAL_TYPES.ERROR);
       return;
     }
 
     if (isScreenshotSelected && !screenshotUrl.trim()) {
-      showModal(t('message.error'), t('message.errorScreenshotUrl'), 'error');
+      showModal(t('message.error'), t('message.errorScreenshotUrl'), MODAL_TYPES.ERROR);
       return;
     }
 
     if (isScreenshotSelected && screenshotUrl.trim()) {
       try {
-        new URL(screenshotUrl.startsWith('http') ? screenshotUrl : `https://${screenshotUrl}`);
+        new URL(screenshotUrl.startsWith('http') ? screenshotUrl : `${URL_CONSTANTS.DEFAULT_PROTOCOL}${screenshotUrl}`);
       } catch (error) {
-        showModal(t('message.error'), t('message.errorInvalidUrl'), 'error');
+        showModal(t('message.error'), t('message.errorInvalidUrl'), MODAL_TYPES.ERROR);
         return;
       }
     }
 
     if (processingOptions.selectedTemplates.length === 0 && !isFaviconSelected && !isScreenshotSelected) {
-      showModal(t('message.error'), t('message.errorSelectTemplate'), 'error');
+      showModal(t('message.error'), t('message.errorSelectTemplate'), MODAL_TYPES.ERROR);
       return;
     }
 
     setIsLoading(true);
-    showModal(t('message.processingImages', { count: processingOptions.selectedTemplates.length }), t('message.processingImages', { count: processingOptions.selectedTemplates.length }), 'info');
+    showModal(t('message.processingImages', { count: processingOptions.selectedTemplates.length }), t('message.processingImages', { count: processingOptions.selectedTemplates.length }), MODAL_TYPES.INFO);
 
     try {
       const processingConfig = getProcessingConfiguration(processingOptions);
 
       const processingOptionsWithExtras = {
         ...processingConfig,
-        faviconSiteName: processingOptions.faviconSiteName || 'My Website',
-        faviconThemeColor: processingOptions.faviconThemeColor || '#ffffff',
-        faviconBackgroundColor: processingOptions.faviconBackgroundColor || '#ffffff',
+        useServerCapture: true,
+        faviconSiteName: processingOptions.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
+        faviconThemeColor: processingOptions.faviconThemeColor || DEFAULT_FAVICON_THEME_COLOR,
+        faviconBackgroundColor: processingOptions.faviconBackgroundColor || DEFAULT_FAVICON_BACKGROUND_COLOR,
         screenshotUrl: isScreenshotSelected && screenshotUrl ? screenshotUrl : '',
         includeFavicon: isFaviconSelected,
         includeScreenshots: isScreenshotSelected,
         selectedTemplates: processingOptions.selectedTemplates,
-        ...(isFaviconSelected && { faviconTemplateIds: ['favicon-set'] })
+        ...(isFaviconSelected && { faviconTemplateIds: [FAVICON_TEMPLATE_ID] })
       };
 
       const processedImages = await orchestrateTemplateProcessing(
@@ -709,10 +702,10 @@ function App() {
         processingOptionsWithExtras
       );
 
-      const settings = generateExportSettings('templates', {
-        faviconSiteName: processingOptions.faviconSiteName || 'My Website',
-        faviconThemeColor: processingOptions.faviconThemeColor || '#ffffff',
-        faviconBackgroundColor: processingOptions.faviconBackgroundColor || '#ffffff',
+      const settings = generateExportSettings(EXPORT_SETTINGS.TEMPLATES, {
+        faviconSiteName: processingOptions.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
+        faviconThemeColor: processingOptions.faviconThemeColor || DEFAULT_FAVICON_THEME_COLOR,
+        faviconBackgroundColor: processingOptions.faviconBackgroundColor || DEFAULT_FAVICON_BACKGROUND_COLOR,
         screenshotUrl: isScreenshotSelected ? screenshotUrl : '',
         includeFavicon: isFaviconSelected,
         includeScreenshots: isScreenshotSelected,
@@ -728,10 +721,10 @@ function App() {
         [selectedImagesForProcessing[0]],
         processedImages,
         settings,
-        'templates'
+        EXPORT_SETTINGS.TEMPLATES
       );
 
-      downloadZip(zipBlob, 'template-images');
+      downloadZip(zipBlob, EXPORT_SETTINGS.DEFAULT_ZIP_NAME_TEMPLATES);
 
       const summary = createProcessingSummary({
         imagesProcessed: 1,
@@ -743,7 +736,7 @@ function App() {
       showSummaryModal(summary);
 
     } catch (error) {
-      showModal(t('message.error'), `${t('message.errorApplying')}: ${error.message}`, 'error');
+      showModal(t('message.error'), `${t('message.errorApplying')}: ${error.message}`, MODAL_TYPES.ERROR);
     } finally {
       setIsLoading(false);
     }
@@ -764,9 +757,9 @@ function App() {
    * @param {number} increment - Amount to increment by
    * @returns {void}
    */
-  const incrementValue = (key, increment = 1) => {
+  const incrementValue = (key, increment = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
     const currentValue = parseInt(processingOptions[key] || '0');
-    const newValue = Math.max(1, currentValue + increment);
+    const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue + increment);
     handleSingleOptionChange(key, String(newValue));
   };
 
@@ -776,9 +769,9 @@ function App() {
    * @param {number} decrement - Amount to decrement by
    * @returns {void}
    */
-  const decrementValue = (key, decrement = 1) => {
+  const decrementValue = (key, decrement = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
     const currentValue = parseInt(processingOptions[key] || '1');
-    const newValue = Math.max(1, currentValue - decrement);
+    const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue - decrement);
     handleSingleOptionChange(key, String(newValue));
   };
 
@@ -820,7 +813,7 @@ function App() {
             <i className="fas fa-spinner fa-spin fa-3x"></i>
             <p>{t('loading.preparing')}</p>
             <p className="text-muted text-sm mt-2">
-              {processingOptions.processingMode === 'templates' && aiModelLoaded
+              {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && aiModelLoaded
                 ? t('loading.aiCropping')
                 : t('loading.upscalingWhenNeeded')}
             </p>
@@ -835,7 +828,7 @@ function App() {
             <p>{t('loading.aiModel')}</p>
             <p className="text-muted">{t('loading.oncePerSession')}</p>
             <p className="text-sm mt-2">
-              {processingOptions.processingMode === 'templates'
+              {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
                 ? t('loading.aiForTemplates')
                 : t('loading.aiForSmartCrop')}
             </p>
@@ -860,13 +853,13 @@ function App() {
                 </h2>
                 <div className="card-actions">
                   <button
-                    className={`btn ${processingOptions.processingMode === 'custom' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                    className={`btn ${processingOptions.processingMode === PROCESSING_MODES.CUSTOM ? 'btn-primary' : 'btn-secondary'} btn-sm`}
                     onClick={() => toggleProcessingMode('custom')}
                   >
                     <i className="fas fa-sliders-h"></i> {t('mode.custom')}
                   </button>
                   <button
-                    className={`btn ${processingOptions.processingMode === 'templates' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                    className={`btn ${processingOptions.processingMode === PROCESSING_MODES.TEMPLATES ? 'btn-primary' : 'btn-secondary'} btn-sm`}
                     onClick={() => toggleProcessingMode('templates')}
                   >
                     <i className="fas fa-th-large"></i> {t('mode.templates')}
@@ -876,13 +869,13 @@ function App() {
 
               <div className="alert alert-info">
                 <i className="fas fa-info-circle"></i>
-                {processingOptions.processingMode === 'templates'
+                {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
                   ? t('mode.templatesInfo')
                   : t('mode.customInfo')
                 }
               </div>
 
-              {processingOptions.processingMode === 'custom' ? (
+              {processingOptions.processingMode === PROCESSING_MODES.CUSTOM ? (
                 <>
                   <div className="grid grid-cols-auto gap-lg mb-lg">
                     <div className="card">
@@ -911,20 +904,20 @@ function App() {
                             value={processingOptions.compression.fileSize}
                             onChange={(e) => handleOptionChange('compression', 'fileSize', e.target.value)}
                             placeholder={t('compression.auto')}
-                            min="1"
+                            min={NUMBER_INPUT_CONSTANTS.MIN_VALUE}
                           />
                           <div className="number-input-spinner">
                             <button
                               type="button"
                               className="number-input-button"
-                              onClick={() => handleOptionChange('compression', 'fileSize', String(parseInt(processingOptions.compression.fileSize || 0) + 10))}
+                              onClick={() => handleOptionChange('compression', 'fileSize', String(parseInt(processingOptions.compression.fileSize || 0) + NUMBER_INPUT_CONSTANTS.LARGE_INCREMENT))}
                             >
                               <i className="fas fa-chevron-up"></i>
                             </button>
                             <button
                               type="button"
                               className="number-input-button"
-                              onClick={() => handleOptionChange('compression', 'fileSize', String(Math.max(1, parseInt(processingOptions.compression.fileSize || 10) - 10)))}>
+                              onClick={() => handleOptionChange('compression', 'fileSize', String(Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, parseInt(processingOptions.compression.fileSize || 10) - NUMBER_INPUT_CONSTANTS.LARGE_INCREMENT)))}>
                               <i className="fas fa-chevron-down"></i>
                             </button>
                           </div>
@@ -945,8 +938,8 @@ function App() {
                               <input
                                 type="checkbox"
                                 className="checkbox-input"
-                                checked={processingOptions.output.formats.includes('webp')}
-                                onChange={() => handleFormatToggle('webp')}
+                                checked={processingOptions.output.formats.includes(IMAGE_FORMATS.WEBP)}
+                                onChange={() => handleFormatToggle(IMAGE_FORMATS.WEBP)}
                               />
                               <span className="checkbox-custom"></span>
                               <span className="checkbox-label">
@@ -957,8 +950,8 @@ function App() {
                               <input
                                 type="checkbox"
                                 className="checkbox-input"
-                                checked={processingOptions.output.formats.includes('avif')}
-                                onChange={() => handleFormatToggle('avif')}
+                                checked={processingOptions.output.formats.includes(IMAGE_FORMATS.AVIF)}
+                                onChange={() => handleFormatToggle(IMAGE_FORMATS.AVIF)}
                               />
                               <span className="checkbox-custom"></span>
                               <span className="checkbox-label">
@@ -969,8 +962,8 @@ function App() {
                               <input
                                 type="checkbox"
                                 className="checkbox-input"
-                                checked={processingOptions.output.formats.includes('jpg')}
-                                onChange={() => handleFormatToggle('jpg')}
+                                checked={processingOptions.output.formats.includes(IMAGE_FORMATS.JPG)}
+                                onChange={() => handleFormatToggle(IMAGE_FORMATS.JPG)}
                               />
                               <span className="checkbox-custom"></span>
                               <span className="checkbox-label">{t('output.format.jpg')}</span>
@@ -979,8 +972,8 @@ function App() {
                               <input
                                 type="checkbox"
                                 className="checkbox-input"
-                                checked={processingOptions.output.formats.includes('png')}
-                                onChange={() => handleFormatToggle('png')}
+                                checked={processingOptions.output.formats.includes(IMAGE_FORMATS.PNG)}
+                                onChange={() => handleFormatToggle(IMAGE_FORMATS.PNG)}
                               />
                               <span className="checkbox-custom"></span>
                               <span className="checkbox-label">{t('output.format.png')}</span>
@@ -989,8 +982,8 @@ function App() {
                               <input
                                 type="checkbox"
                                 className="checkbox-input"
-                                checked={processingOptions.output.formats.includes('original')}
-                                onChange={() => handleFormatToggle('original')}
+                                checked={processingOptions.output.formats.includes(IMAGE_FORMATS.ORIGINAL)}
+                                onChange={() => handleFormatToggle(IMAGE_FORMATS.ORIGINAL)}
                               />
                               <span className="checkbox-custom"></span>
                               <span className="checkbox-label">{t('output.format.original')}</span>
@@ -1048,7 +1041,7 @@ function App() {
                           </>
                         ) : (
                           <>
-                            <i className="fas fa-crop-alt"></i> {processingOptions.cropMode === 'smart' ? t('crop.switchToSmart') : t('crop.switchToStandard')}
+                            <i className="fas fa-crop-alt"></i> {processingOptions.cropMode === CROP_MODES.SMART ? t('crop.switchToStandard') : t('crop.switchToSmart')}
                           </>
                         )}
                       </h3>
@@ -1078,21 +1071,22 @@ function App() {
                               className="input-field"
                               value={processingOptions.resizeDimension}
                               onChange={(e) => handleSingleOptionChange('resizeDimension', e.target.value)}
-                              placeholder="e.g., 1080"
-                              min="1"
+                              placeholder={`e.g., ${RESIZE_DIMENSION_RANGE.DEFAULT}`}
+                              min={RESIZE_DIMENSION_RANGE.MIN}
+                              max={RESIZE_DIMENSION_RANGE.MAX}
                             />
                             <div className="number-input-spinner">
                               <button
                                 type="button"
                                 className="number-input-button"
-                                onClick={() => incrementValue('resizeDimension', 10)}
+                                onClick={() => incrementValue('resizeDimension', NUMBER_INPUT_CONSTANTS.LARGE_INCREMENT)}
                               >
                                 <i className="fas fa-chevron-up"></i>
                               </button>
                               <button
                                 type="button"
                                 className="number-input-button"
-                                onClick={() => decrementValue('resizeDimension', 10)}
+                                onClick={() => decrementValue('resizeDimension', NUMBER_INPUT_CONSTANTS.LARGE_INCREMENT)}
                               >
                                 <i className="fas fa-chevron-down"></i>
                               </button>
@@ -1108,11 +1102,11 @@ function App() {
                             <div className="toggle-btn">
                               <button
                                 type="button"
-                                className={`btn ${processingOptions.cropMode === 'smart' ? 'btn-primary' : 'btn-secondary'}`}
+                                className={`btn ${processingOptions.cropMode === CROP_MODES.SMART ? 'btn-primary' : 'btn-secondary'}`}
                                 onClick={toggleCropMode}
                                 disabled={aiLoading}
                               >
-                                {processingOptions.cropMode === 'smart' ? (
+                                {processingOptions.cropMode === CROP_MODES.SMART ? (
                                   <>
                                     <i className="fas fa-crop-alt"></i> {t('crop.switchToStandard')}
                                     {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
@@ -1125,7 +1119,7 @@ function App() {
                                 )}
                               </button>
                             </div>
-                            {processingOptions.cropMode === 'smart' && (
+                            {processingOptions.cropMode === CROP_MODES.SMART && (
                               <p className="text-sm text-muted mt-1">
                                 <i className="fas fa-info-circle mr-1"></i>
                                 {t('crop.smartBest')}
@@ -1142,16 +1136,17 @@ function App() {
                                   className="input-field"
                                   value={processingOptions.cropWidth}
                                   onChange={(e) => handleSingleOptionChange('cropWidth', e.target.value)}
-                                  placeholder="Width"
-                                  min="1"
-                                  disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                  placeholder={`Width (${CROP_DIMENSION_RANGE.DEFAULT_WIDTH})`}
+                                  min={CROP_DIMENSION_RANGE.MIN}
+                                  max={CROP_DIMENSION_RANGE.MAX}
+                                  disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
                                 />
                                 <div className="number-input-spinner">
                                   <button
                                     type="button"
                                     className="number-input-button"
                                     onClick={() => incrementValue('cropWidth')}
-                                    disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                    disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
                                   >
                                     <i className="fas fa-chevron-up"></i>
                                   </button>
@@ -1159,7 +1154,7 @@ function App() {
                                     type="button"
                                     className="number-input-button"
                                     onClick={() => decrementValue('cropWidth')}
-                                    disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                    disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
                                   >
                                     <i className="fas fa-chevron-down"></i>
                                   </button>
@@ -1174,16 +1169,17 @@ function App() {
                                   className="input-field"
                                   value={processingOptions.cropHeight}
                                   onChange={(e) => handleSingleOptionChange('cropHeight', e.target.value)}
-                                  placeholder="Height"
-                                  min="1"
-                                  disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                  placeholder={`Height (${CROP_DIMENSION_RANGE.DEFAULT_HEIGHT})`}
+                                  min={CROP_DIMENSION_RANGE.MIN}
+                                  max={CROP_DIMENSION_RANGE.MAX}
+                                  disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
                                 />
                                 <div className="number-input-spinner">
                                   <button
                                     type="button"
                                     className="number-input-button"
                                     onClick={() => incrementValue('cropHeight')}
-                                    disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                    disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
                                   >
                                     <i className="fas fa-chevron-up"></i>
                                   </button>
@@ -1191,7 +1187,7 @@ function App() {
                                     type="button"
                                     className="number-input-button"
                                     onClick={() => decrementValue('cropHeight')}
-                                    disabled={aiLoading && processingOptions.cropMode === 'smart'}
+                                    disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
                                   >
                                     <i className="fas fa-chevron-down"></i>
                                   </button>
@@ -1200,7 +1196,7 @@ function App() {
                             </div>
                           </div>
 
-                          {processingOptions.cropMode === 'standard' && (
+                          {processingOptions.cropMode === CROP_MODES.STANDARD && (
                             <div className="form-group">
                               <label className="form-label">{t('crop.position')}</label>
                               <select
@@ -1208,15 +1204,11 @@ function App() {
                                 onChange={(e) => handleSingleOptionChange('cropPosition', e.target.value)}
                                 className="select-field"
                               >
-                                <option value="center">{t('crop.position.center')}</option>
-                                <option value="top-left">{t('crop.position.topLeft')}</option>
-                                <option value="top">{t('crop.position.top')}</option>
-                                <option value="top-right">{t('crop.position.topRight')}</option>
-                                <option value="left">{t('crop.position.left')}</option>
-                                <option value="right">{t('crop.position.right')}</option>
-                                <option value="bottom-left">{t('crop.position.bottomLeft')}</option>
-                                <option value="bottom">{t('crop.position.bottom')}</option>
-                                <option value="bottom-right">{t('crop.position.bottomRight')}</option>
+                                {CROP_POSITIONS.map(position => (
+                                  <option key={position} value={position}>
+                                    {t(`crop.position.${position}`)}
+                                  </option>
+                                ))}
                               </select>
                               <p className="form-helper">
                                 {t('crop.helper')}
@@ -1231,14 +1223,14 @@ function App() {
                   <div className="text-center">
                     <button
                       className="btn btn-primary btn-lg"
-                      disabled={selectedImagesForProcessing.length === 0 || isLoading || (processingOptions.cropMode === 'smart' && aiLoading) || !processingOptions.output.formats || processingOptions.output.formats.length === 0}
+                      disabled={selectedImagesForProcessing.length === 0 || isLoading || (processingOptions.cropMode === CROP_MODES.SMART && aiLoading) || !processingOptions.output.formats || processingOptions.output.formats.length === 0}
                       onClick={processCustomImages}
                     >
                       {isLoading ? (
                         <>
                           <i className="fas fa-spinner fa-spin"></i> {t('button.processing')}
                         </>
-                      ) : processingOptions.cropMode === 'smart' && aiLoading ? (
+                      ) : processingOptions.cropMode === CROP_MODES.SMART && aiLoading ? (
                         <>
                           <i className="fas fa-spinner fa-spin"></i> {t('button.loadingAI')}
                         </>
@@ -1506,14 +1498,14 @@ function App() {
               <div className="card-header">
                 <h3 className="card-title">
                   <i className="fas fa-images"></i> {t('gallery.title')} ({images.length})
-                  {processingOptions.processingMode === 'templates' && (
+                  {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && (
                     <span className="text-muted font-normal ml-md">
                       {t('gallery.templatesMode')}
                     </span>
                   )}
                 </h3>
                 <div className="card-actions">
-                  {processingOptions.processingMode === 'custom' && (
+                  {processingOptions.processingMode === PROCESSING_MODES.CUSTOM && (
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={handleSelectAll}
@@ -1525,7 +1517,7 @@ function App() {
                     className="btn btn-danger btn-sm"
                     onClick={handleRemoveSelected}
                     disabled={
-                      processingOptions.processingMode === 'templates'
+                      processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
                         ? !processingOptions.templateSelectedImage
                         : selectedImages.length === 0
                     }
@@ -1537,7 +1529,7 @@ function App() {
 
               <div className="image-grid">
                 {images.map(image => {
-                  const isSelected = processingOptions.processingMode === 'templates'
+                  const isSelected = processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
                     ? image.id === processingOptions.templateSelectedImage
                     : selectedImages.includes(image.id);
 
@@ -1552,7 +1544,7 @@ function App() {
                       <div className="image-checkbox">
                         <i className={`fas fa-${isSelected ? 'check-circle' : 'circle'}`}></i>
                       </div>
-                      {processingOptions.processingMode === 'templates' && isSelected && (
+                      {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && isSelected && (
                         <div className="absolute top-2 left-2 bg-primary text-white text-xs font-semibold px-2 py-1 rounded">
                           <i className="fas fa-th-large mr-1"></i> {t('gallery.templateImage')}
                         </div>
@@ -1623,7 +1615,7 @@ function App() {
       <Footer />
 
       <Modal
-        isOpen={modal.isOpen && modal.type !== 'summary'}
+        isOpen={modal.isOpen && modal.type !== MODAL_TYPES.SUMMARY}
         onClose={closeModal}
         title={modal.title}
         type={modal.type}
@@ -1632,10 +1624,10 @@ function App() {
       </Modal>
 
       <Modal
-        isOpen={modal.isOpen && modal.type === 'summary'}
+        isOpen={modal.isOpen && modal.type === MODAL_TYPES.SUMMARY}
         onClose={closeModal}
         title={modal.title}
-        type="summary"
+        type={MODAL_TYPES.SUMMARY}
         actions={
           <button className="btn btn-primary" onClick={closeModal}>
             {t('button.ok')}

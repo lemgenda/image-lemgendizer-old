@@ -1,6 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import LemGendaLogo from './LemGendaLogo';
 
+/**
+ * Footer component displaying application information and logo
+ * @returns {JSX.Element} Footer component
+ */
 function Footer() {
     const { t } = useTranslation();
 
@@ -40,7 +44,7 @@ function Footer() {
                     height: 30px;
                     opacity: 0.8;
                     transition: opacity var(--transition-fast);
-                    color: var(--color-primary); /* Color controlled here */
+                    color: var(--color-primary);
                 }
 
                 .footer-logo:hover {
@@ -71,7 +75,6 @@ function Footer() {
                     display: inline-block;
                 }
 
-                /* Mobile adjustments */
                 @media (max-width: 768px) {
                     .app-footer {
                         flex-direction: column;

@@ -1,4 +1,3 @@
-// api/screenshot/index.js - MUST be CommonJS, not ES modules
 const playwright = require('playwright-core');
 const chromium = require('@sparticuz/chromium-min');
 const { createCanvas } = require('canvas');
@@ -27,25 +26,43 @@ const DEVICE_PRESETS = {
     }
 };
 
+const BROWSER_LAUNCH_ARGS = [
+    ...chromium.args,
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--single-process',
+    '--no-zygote',
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-features=VizDisplayCompositor',
+    '--max-old-space-size=512'
+];
+
+const SCREENSHOT_QUALITY = {
+    JPEG_QUALITY: 80,
+    TIMEOUT: 15000,
+    PAGE_LOAD_TIMEOUT: 10000
+};
+
+/**
+ * Launches and returns a browser instance
+ * @returns {Promise<Object>} Browser instance
+ */
 async function getBrowser() {
     return await playwright.chromium.launch({
-        args: [
-            ...chromium.args,
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--single-process',
-            '--no-zygote',
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-features=VizDisplayCompositor',
-            '--max-old-space-size=512'
-        ],
+        args: BROWSER_LAUNCH_ARGS,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
         timeout: 8000,
     });
 }
 
+/**
+ * Captures a screenshot of the specified URL
+ * @param {string} url - The URL to capture
+ * @param {string} device - Device type (mobile, tablet, desktop)
+ * @returns {Promise<Object>} Screenshot result object
+ */
 async function captureScreenshot(url, device = 'mobile') {
     let browser = null;
     let page = null;
@@ -71,12 +88,10 @@ async function captureScreenshot(url, device = 'mobile') {
 
         page = await context.newPage();
 
-        // Block unnecessary resources for speed
         await page.route('**/*', (route) => {
             const request = route.request();
             const resourceType = request.resourceType();
 
-            // Allow only essential resources
             if (['document', 'stylesheet', 'script'].includes(resourceType)) {
                 route.continue();
             } else {
@@ -84,9 +99,8 @@ async function captureScreenshot(url, device = 'mobile') {
             }
         });
 
-        // Add timeout for the entire operation
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout after 15 seconds')), 15000)
+            setTimeout(() => reject(new Error('Timeout after 15 seconds')), SCREENSHOT_QUALITY.TIMEOUT)
         );
 
         const fullUrl = url.startsWith('http') ? url : `https://${url}`;
@@ -94,17 +108,16 @@ async function captureScreenshot(url, device = 'mobile') {
         await Promise.race([
             page.goto(fullUrl, {
                 waitUntil: 'networkidle',
-                timeout: 10000,
+                timeout: SCREENSHOT_QUALITY.PAGE_LOAD_TIMEOUT,
             }),
             timeoutPromise
         ]);
 
-        // Wait for page to stabilize
         await page.waitForLoadState('networkidle');
 
         const screenshotBuffer = await page.screenshot({
             type: 'jpeg',
-            quality: 80,
+            quality: SCREENSHOT_QUALITY.JPEG_QUALITY,
             omitBackground: true,
         });
 
@@ -117,7 +130,6 @@ async function captureScreenshot(url, device = 'mobile') {
         };
 
     } catch (error) {
-        console.error('Screenshot error:', error);
         const errorImage = await createErrorPlaceholder(
             url,
             device,
@@ -134,27 +146,31 @@ async function captureScreenshot(url, device = 'mobile') {
         };
 
     } finally {
-        // Cleanup
         if (page) await page.close().catch(() => { });
         if (context) await context.close().catch(() => { });
         if (browser) await browser.close().catch(() => { });
     }
 }
 
+/**
+ * Creates an error placeholder image
+ * @param {string} url - The URL that failed
+ * @param {string} device - Device type
+ * @param {string} errorMessage - Error message
+ * @param {Object} viewport - Viewport dimensions
+ * @returns {Buffer} Error placeholder image buffer
+ */
 async function createErrorPlaceholder(url, device, errorMessage, viewport) {
     const canvas = createCanvas(viewport.width, viewport.height);
     const ctx = canvas.getContext('2d');
 
-    // Background
     ctx.fillStyle = '#f8f9fa';
     ctx.fillRect(0, 0, viewport.width, viewport.height);
 
-    // Border
     ctx.strokeStyle = '#dc3545';
     ctx.lineWidth = 2;
     ctx.strokeRect(10, 10, viewport.width - 20, viewport.height - 20);
 
-    // Error text
     ctx.fillStyle = '#343a40';
     ctx.font = 'bold 16px Arial';
     ctx.textAlign = 'center';
@@ -168,8 +184,13 @@ async function createErrorPlaceholder(url, device, errorMessage, viewport) {
     return canvas.toBuffer('image/png');
 }
 
+/**
+ * Main API handler for screenshot capture
+ * @param {Object} req - HTTP request object
+ * @param {Object} res - HTTP response object
+ * @returns {Promise<void>}
+ */
 module.exports = async (req, res) => {
-    // CORS headers
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
@@ -213,7 +234,6 @@ module.exports = async (req, res) => {
         return res.send(result.buffer);
 
     } catch (error) {
-        console.error('API error:', error);
         return res.status(500).json({
             error: 'Internal server error',
             message: error.message

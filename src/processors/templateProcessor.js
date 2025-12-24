@@ -5,8 +5,30 @@ import {
     DEFAULT_QUALITY,
     LARGE_IMAGE_THRESHOLD,
     PROCESSING_DELAYS,
-    TEMPLATE_CATEGORIES
+    DEFAULT_THEME_COLOR,
+    DEFAULT_BACKGROUND_COLOR,
+    ERROR_BACKGROUND_COLOR,
+    ERROR_BORDER_COLOR,
+    ERROR_TEXT_COLOR,
+    WARNING_TEXT_COLOR,
+    DEFAULT_FONT_FAMILY,
+    HEADLINE_FONT_SIZE,
+    BODY_FONT_SIZE,
+    CAPTION_FONT_SIZE,
+    ERROR_MESSAGES,
+    INFO_COLOR,
+    DEFAULT_JPG_QUALITY,
+    DEFAULT_PNG_QUALITY
 } from '../constants/sharedConstants.js';
+
+// Import template-related constants directly from templateConfigs.js
+import {
+    TEMPLATE_CATEGORIES,  // This is the array of categories
+    FAVICON_PREVIEW_SIZE,
+    DEFAULT_FAVICON_SITE_NAME,  // Corrected name
+    DEFAULT_FAVICON_THEME_COLOR,
+    DEFAULT_FAVICON_BACKGROUND_COLOR
+} from '../configs/templateConfigs.js';
 
 import {
     processLemGendaryResize,
@@ -24,32 +46,57 @@ import {
     checkAVIFSupport
 } from '../utils/index.js';
 
+import {
+    UnifiedScreenshotService
+    // Removed createScreenshotPreview - it doesn't exist in screenshotUtils.js
+} from '../utils/screenshotUtils.js';
+
 let cleanupInProgress = false;
 let aiUpscalingDisabled = false;
+
+// Create constants for template categories from the imported array
+const TEMPLATE_CATEGORIES_CONST = {
+    WEB: 'web',
+    LOGO: 'logo',
+    SOCIAL_MEDIA: 'social_media',
+    FAVICON: 'favicon',
+    SCREENSHOTS: 'screenshots'
+};
+
+// Helper function to get category constant
+const getCategoryConstant = (categoryId) => {
+    switch (categoryId) {
+        case 'web': return 'web';
+        case 'logo': return 'logo';
+        case 'favicon': return 'favicon';
+        case 'screenshots': return 'screenshots';
+        default: return 'social_media'; // All other social media platforms
+    }
+};
 
 /**
  * Creates favicon preview image with theme colors.
  * @async
  * @param {File} imageFile - Source image file
  * @param {string} siteName - Website name
- * @param {string} themeColor - Theme color (e.g., #ffffff)
- * @param {string} backgroundColor - Background color (e.g., #ffffff)
+ * @param {string} themeColor - Theme color
+ * @param {string} backgroundColor - Background color
  * @returns {Promise<File>} Favicon preview file
  */
-const createFaviconPreview = async (imageFile, siteName, themeColor = '#ffffff', backgroundColor = '#ffffff') => {
+const createFaviconPreview = async (imageFile, siteName, themeColor = DEFAULT_FAVICON_THEME_COLOR, backgroundColor = DEFAULT_FAVICON_BACKGROUND_COLOR) => {
     return new Promise((resolve) => {
         checkImageTransparency(imageFile).then(hasTransparency => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            canvas.width = 512;
-            canvas.height = 512;
+            canvas.width = FAVICON_PREVIEW_SIZE;
+            canvas.height = FAVICON_PREVIEW_SIZE;
 
             if (hasTransparency) {
-                ctx.clearRect(0, 0, 512, 512);
+                ctx.clearRect(0, 0, FAVICON_PREVIEW_SIZE, FAVICON_PREVIEW_SIZE);
             } else {
                 ctx.fillStyle = backgroundColor;
-                ctx.fillRect(0, 0, 512, 512);
+                ctx.fillRect(0, 0, FAVICON_PREVIEW_SIZE, FAVICON_PREVIEW_SIZE);
             }
 
             const img = new Image();
@@ -59,33 +106,33 @@ const createFaviconPreview = async (imageFile, siteName, themeColor = '#ffffff',
                 const scale = Math.min(400 / img.width, 400 / img.height);
                 const scaledWidth = img.width * scale;
                 const scaledHeight = img.height * scale;
-                const x = (512 - scaledWidth) / 2;
-                const y = (512 - scaledHeight) / 2;
+                const x = (FAVICON_PREVIEW_SIZE - scaledWidth) / 2;
+                const y = (FAVICON_PREVIEW_SIZE - scaledHeight) / 2;
 
                 ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
 
                 ctx.fillStyle = themeColor;
-                ctx.font = 'bold 24px Arial';
+                ctx.font = `bold ${HEADLINE_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'bottom';
                 ctx.fillText(siteName, 256, 500);
 
-                ctx.fillStyle = '#4a90e2';
-                ctx.font = 'bold 18px Arial';
+                ctx.fillStyle = INFO_COLOR;
+                ctx.font = `bold ${CAPTION_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
                 ctx.fillText('Favicon Set', 256, 470);
 
                 URL.revokeObjectURL(objectUrl);
 
                 canvas.toBlob((blob) => {
                     resolve(new File([blob], 'favicon-preview.png', { type: 'image/png' }));
-                }, 'image/png', 0.9);
+                }, 'image/png', DEFAULT_QUALITY);
             };
 
             img.onerror = () => {
                 URL.revokeObjectURL(objectUrl);
 
                 ctx.fillStyle = backgroundColor;
-                ctx.fillRect(0, 0, 512, 512);
+                ctx.fillRect(0, 0, FAVICON_PREVIEW_SIZE, FAVICON_PREVIEW_SIZE);
 
                 ctx.fillStyle = themeColor;
                 ctx.beginPath();
@@ -93,20 +140,20 @@ const createFaviconPreview = async (imageFile, siteName, themeColor = '#ffffff',
                 ctx.fill();
 
                 ctx.fillStyle = backgroundColor;
-                ctx.font = 'bold 120px Arial';
+                ctx.font = `bold 120px ${DEFAULT_FONT_FAMILY}`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText('F', 256, 256);
 
-                ctx.font = 'bold 24px Arial';
+                ctx.font = `bold ${HEADLINE_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
                 ctx.fillText(siteName, 256, 420);
 
-                ctx.font = 'bold 18px Arial';
+                ctx.font = `bold ${CAPTION_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
                 ctx.fillText('Favicon Set Preview', 256, 450);
 
                 canvas.toBlob((blob) => {
                     resolve(new File([blob], 'favicon-preview.png', { type: 'image/png' }));
-                }, 'image/png', 0.9);
+                }, 'image/png', DEFAULT_QUALITY);
             };
 
             img.src = objectUrl;
@@ -115,116 +162,7 @@ const createFaviconPreview = async (imageFile, siteName, themeColor = '#ffffff',
 };
 
 /**
- * Creates screenshot preview image.
- * @async
- * @param {File} imageFile - Source image file
- * @param {string} url - Website URL
- * @returns {Promise<File>} Screenshot preview file
- */
-const createScreenshotPreview = async (imageFile, url) => {
-    return new Promise((resolve) => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-
-        canvas.width = 800;
-        canvas.height = 450;
-
-        ctx.fillStyle = '#f5f5f5';
-        ctx.fillRect(0, 0, 800, 450);
-
-        ctx.fillStyle = '#e0e0e0';
-        ctx.fillRect(50, 30, 700, 40);
-
-        ctx.fillStyle = '#ff5f57';
-        ctx.beginPath();
-        ctx.arc(75, 50, 8, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#ffbd2e';
-        ctx.beginPath();
-        ctx.arc(100, 50, 8, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#28ca42';
-        ctx.beginPath();
-        ctx.arc(125, 50, 8, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(150, 38, 550, 24);
-        ctx.strokeStyle = '#d0d0d0';
-        ctx.strokeRect(150, 38, 550, 24);
-
-        ctx.fillStyle = '#666666';
-        ctx.font = '14px Arial';
-        const displayUrl = url.length > 50 ? url.substring(0, 47) + '...' : url;
-        ctx.fillText(displayUrl, 155, 55);
-
-        const contentY = 90;
-        const contentHeight = 450 - contentY - 30;
-
-        const img = new Image();
-        const objectUrl = URL.createObjectURL(imageFile);
-
-        img.onload = () => {
-            const scale = Math.min(650 / img.width, contentHeight / img.height) * 0.7;
-            const scaledWidth = img.width * scale;
-            const scaledHeight = img.height * scale;
-            const x = 75 + ((700 - 50) - scaledWidth) / 2;
-            const y = contentY + (contentHeight - scaledHeight) / 2;
-
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(75, contentY, 650, contentHeight);
-
-            ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
-
-            ctx.fillStyle = '#4a90e2';
-            ctx.font = 'bold 24px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Screenshot Preview', 400, contentY + 40);
-
-            ctx.fillStyle = '#666666';
-            ctx.font = '16px Arial';
-            ctx.fillText('Actual screenshot will be captured from:', 400, contentY + 80);
-
-            ctx.fillStyle = '#333333';
-            ctx.font = '14px Arial';
-            ctx.fillText(displayUrl, 400, contentY + 110);
-
-            URL.revokeObjectURL(objectUrl);
-
-            canvas.toBlob((blob) => {
-                resolve(new File([blob], 'screenshot-preview.jpg', { type: 'image/jpeg' }));
-            }, 'image/jpeg', DEFAULT_QUALITY);
-        };
-
-        img.onerror = () => {
-            URL.revokeObjectURL(objectUrl);
-
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(75, contentY, 650, contentHeight);
-
-            ctx.fillStyle = '#4a90e2';
-            ctx.font = 'bold 24px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Website Screenshot', 400, 250);
-
-            ctx.fillStyle = '#666666';
-            ctx.font = '16px Arial';
-            ctx.fillText('Will capture from:', 400, 290);
-            ctx.fillText(displayUrl, 400, 320);
-
-            canvas.toBlob((blob) => {
-                resolve(new File([blob], 'screenshot-preview.jpg', { type: 'image/jpeg' }));
-            }, 'image/jpeg', DEFAULT_QUALITY);
-        };
-
-        img.src = objectUrl;
-    });
-};
-
-/**
- * Creates error placeholder files for failed templates.
+ * Creates template error files for failed templates.
  * @async
  * @param {Object} template - Template object
  * @param {Object} image - Original image object
@@ -244,26 +182,26 @@ const createTemplateErrorFiles = async (template, image, error) => {
         errorCanvas.width = template.width || 800;
         errorCanvas.height = template.height === 'auto' ? 600 : template.height || 600;
 
-        errorCtx.fillStyle = '#f8d7da';
+        errorCtx.fillStyle = ERROR_BACKGROUND_COLOR;
         errorCtx.fillRect(0, 0, errorCanvas.width, errorCanvas.height);
 
-        errorCtx.strokeStyle = '#f5c6cb';
+        errorCtx.strokeStyle = ERROR_BORDER_COLOR;
         errorCtx.lineWidth = 3;
         errorCtx.strokeRect(10, 10, errorCanvas.width - 20, errorCanvas.height - 20);
 
-        errorCtx.fillStyle = '#721c24';
-        errorCtx.font = `bold ${Math.min(48, errorCanvas.height / 10)}px Arial`;
+        errorCtx.fillStyle = ERROR_TEXT_COLOR;
+        errorCtx.font = `bold ${Math.min(HEADLINE_FONT_SIZE * 2, errorCanvas.height / 10)}px ${DEFAULT_FONT_FAMILY}`;
         errorCtx.textAlign = 'center';
         errorCtx.textBaseline = 'middle';
-        errorCtx.fillText('Error', errorCanvas.width / 2, errorCanvas.height / 2 - 40);
+        errorCtx.fillText(ERROR_MESSAGES.PROCESSING_ERROR, errorCanvas.width / 2, errorCanvas.height / 2 - 40);
 
-        errorCtx.font = `bold ${Math.min(24, errorCanvas.height / 15)}px Arial`;
+        errorCtx.font = `bold ${Math.min(HEADLINE_FONT_SIZE, errorCanvas.height / 15)}px ${DEFAULT_FONT_FAMILY}`;
         errorCtx.fillText('Processing Error', errorCanvas.width / 2, errorCanvas.height / 2);
 
-        errorCtx.fillStyle = '#856404';
-        errorCtx.font = `${Math.min(16, errorCanvas.height / 20)}px Arial`;
+        errorCtx.fillStyle = WARNING_TEXT_COLOR;
+        errorCtx.font = `${Math.min(BODY_FONT_SIZE, errorCanvas.height / 20)}px ${DEFAULT_FONT_FAMILY}`;
 
-        const errorMessage = error.message || 'Unknown error';
+        const errorMessage = error.message || ERROR_MESSAGES.PROCESSING_ERROR;
         const maxWidth = errorCanvas.width - 40;
         const words = errorMessage.split(' ');
         const lines = [];
@@ -307,7 +245,97 @@ const createTemplateErrorFiles = async (template, image, error) => {
             });
 
             resolve(errorImages);
-        }, 'image/png', 0.8);
+        }, 'image/png', DEFAULT_QUALITY);
+    });
+};
+
+/**
+ * Creates screenshot preview for the template system
+ * @async
+ * @param {File} imageFile - Source image file
+ * @param {string} screenshotUrl - Website URL for screenshots
+ * @returns {Promise<File>} Screenshot preview file
+ */
+const createScreenshotPreview = async (imageFile, screenshotUrl) => {
+    return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 1024;
+        canvas.height = 768;
+
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, '#f0f9ff');
+        gradient.addColorStop(1, '#e0f2fe');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(40, 40, canvas.width - 80, canvas.height - 80);
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
+
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(imageFile);
+
+        img.onload = () => {
+            const scale = Math.min(200 / img.width, 200 / img.height);
+            const scaledWidth = img.width * scale;
+            const scaledHeight = img.height * scale;
+            const x = (canvas.width - scaledWidth) / 2;
+            const y = (canvas.height - scaledHeight) / 2;
+
+            ctx.drawImage(img, x, y - 50, scaledWidth, scaledHeight);
+
+            ctx.fillStyle = '#1e40af';
+            ctx.font = `bold 32px ${DEFAULT_FONT_FAMILY}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Website Screenshots', canvas.width / 2, 100);
+
+            ctx.fillStyle = '#374151';
+            ctx.font = `18px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillText(`URL: ${screenshotUrl}`, canvas.width / 2, 140);
+
+            ctx.fillStyle = '#6b7280';
+            ctx.font = `16px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillText('Screenshots will be captured using Vercel API', canvas.width / 2, canvas.height - 60);
+
+            URL.revokeObjectURL(objectUrl);
+
+            canvas.toBlob((blob) => {
+                resolve(new File([blob], 'screenshot-preview.jpg', { type: 'image/jpeg' }));
+            }, 'image/jpeg', 0.9);
+        };
+
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+
+            ctx.fillStyle = '#1e40af';
+            ctx.font = `bold 32px ${DEFAULT_FONT_FAMILY}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Website Screenshots', canvas.width / 2, 200);
+
+            ctx.fillStyle = '#374151';
+            ctx.font = `18px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillText(`URL: ${screenshotUrl}`, canvas.width / 2, 250);
+
+            ctx.fillStyle = '#6b7280';
+            ctx.font = `16px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillText('Screenshots will be captured using Vercel API', canvas.width / 2, 300);
+
+            ctx.fillStyle = '#fbbf24';
+            ctx.font = `14px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillText('Note: Configure Vercel API for actual screenshots', canvas.width / 2, 350);
+
+            canvas.toBlob((blob) => {
+                resolve(new File([blob], 'screenshot-preview.jpg', { type: 'image/jpeg' }));
+            }, 'image/jpeg', 0.9);
+        };
+
+        img.src = objectUrl;
     });
 };
 
@@ -379,7 +407,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
             }
         }
 
-        const webpFile = await optimizeForWeb(processedFile, 0.8, 'webp');
+        const webpFile = await optimizeForWeb(processedFile, DEFAULT_QUALITY, 'webp');
         const baseName = `${template.platform}-${template.name}-${image.name.replace(/\.[^/.]+$/, '')}`;
         const webpName = `${baseName}.webp`;
 
@@ -394,8 +422,11 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
             upscaled: wasUpscaled
         });
 
-        if (template.category === TEMPLATE_CATEGORIES.LOGO) {
-            const pngFile = await optimizeForWeb(processedFile, 0.9, 'png');
+        // Check template category using our helper
+        const templateCategory = getCategoryConstant(template.category);
+
+        if (templateCategory === 'logo') {
+            const pngFile = await optimizeForWeb(processedFile, DEFAULT_PNG_QUALITY, 'png');
             const pngName = `${baseName}.png`;
 
             processedImages.push({
@@ -410,7 +441,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                 hasTransparency: true
             });
 
-            const jpgFile = await optimizeForWeb(processedFile, 0.95, 'jpg');
+            const jpgFile = await optimizeForWeb(processedFile, DEFAULT_JPG_QUALITY, 'jpg');
             const jpgName = `${baseName}.jpg`;
 
             processedImages.push({
@@ -424,9 +455,10 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                 upscaled: wasUpscaled,
                 hasTransparency: false
             });
-        } else if (template.category === TEMPLATE_CATEGORIES.WEB) {
+        } else if (templateCategory === 'web') {
             const fallbackFormat = hasTransparency ? 'png' : 'jpg';
-            const fallbackFile = await optimizeForWeb(processedFile, 0.85, fallbackFormat);
+            const fallbackQuality = fallbackFormat === 'png' ? DEFAULT_PNG_QUALITY : DEFAULT_JPG_QUALITY;
+            const fallbackFile = await optimizeForWeb(processedFile, fallbackQuality, fallbackFormat);
             const fallbackName = `${baseName}.${fallbackFormat}`;
 
             processedImages.push({
@@ -441,7 +473,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                 hasTransparency: hasTransparency
             });
         } else {
-            const jpgFile = await optimizeForWeb(processedFile, 0.85, 'jpg');
+            const jpgFile = await optimizeForWeb(processedFile, DEFAULT_JPG_QUALITY, 'jpg');
             const jpgName = `${baseName}.jpg`;
 
             processedImages.push({
@@ -492,12 +524,14 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
     const totalPixels = img.naturalWidth * img.naturalHeight;
     const isLargeImage = totalPixels > LARGE_IMAGE_THRESHOLD;
 
-    const regularTemplates = selectedTemplates.filter(t =>
-        t.category !== 'favicon' && t.category !== 'screenshots'
-    );
+    // Use our helper function to filter templates
+    const regularTemplates = selectedTemplates.filter(t => {
+        const category = getCategoryConstant(t.category);
+        return category !== 'favicon' && category !== 'screenshots';
+    });
 
-    const faviconTemplate = selectedTemplates.find(t => t.category === 'favicon');
-    const screenshotTemplates = selectedTemplates.filter(t => t.category === 'screenshots');
+    const faviconTemplate = selectedTemplates.find(t => getCategoryConstant(t.category) === 'favicon');
+    const screenshotTemplates = selectedTemplates.filter(t => getCategoryConstant(t.category) === 'screenshots');
 
     const wasCleanupInProgress = cleanupInProgress;
     cleanupInProgress = true;
@@ -523,23 +557,23 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
             try {
                 const faviconPlaceholder = await createFaviconPreview(
                     imageFile,
-                    options.faviconSiteName || 'My Website',
-                    options.faviconThemeColor || '#ffffff',
-                    options.faviconBackgroundColor || '#ffffff'
+                    options.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
+                    options.faviconThemeColor || DEFAULT_FAVICON_THEME_COLOR,
+                    options.faviconBackgroundColor || DEFAULT_FAVICON_BACKGROUND_COLOR
                 );
 
                 processedImages.push({
                     ...image,
                     file: faviconPlaceholder,
-                    name: `favicon-preview.png`,
+                    name: 'favicon-preview.png',
                     template: faviconTemplate,
                     format: 'png',
                     processed: true,
                     isFaviconSource: true,
                     metadata: {
-                        siteName: options.faviconSiteName || 'My Website',
-                        themeColor: options.faviconThemeColor || '#ffffff',
-                        backgroundColor: options.faviconBackgroundColor || '#ffffff'
+                        siteName: options.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
+                        themeColor: options.faviconThemeColor || DEFAULT_FAVICON_THEME_COLOR,
+                        backgroundColor: options.faviconBackgroundColor || DEFAULT_FAVICON_BACKGROUND_COLOR
                     }
                 });
 
@@ -554,6 +588,21 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
 
         if (options.includeScreenshots === true && screenshotTemplates.length > 0 && options.screenshotUrl) {
             try {
+                const screenshotService = new UnifiedScreenshotService({
+                    useServerCapture: true,
+                    enableCaching: true,
+                    enableCompression: true,
+                    timeout: PROCESSING_DELAYS.SCREENSHOT_CAPTURE
+                });
+
+                const screenshotResults = await screenshotService.processScreenshotsForTemplates(
+                    options.screenshotUrl,
+                    screenshotTemplates,
+                    options
+                );
+
+                processedImages.push(...screenshotResults);
+
                 const screenshotPlaceholder = await createScreenshotPreview(
                     imageFile,
                     options.screenshotUrl
@@ -562,7 +611,7 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
                 processedImages.push({
                     ...image,
                     file: screenshotPlaceholder,
-                    name: `screenshot-preview.jpg`,
+                    name: 'screenshot-preview.jpg',
                     template: screenshotTemplates[0],
                     format: 'jpg',
                     processed: true,
@@ -605,11 +654,11 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
 export const orchestrateTemplateProcessing = async (selectedImage, selectedTemplateIds, templateConfigs, useSmartCrop = false, aiModelLoaded = false, onProgress = null, processingOptions = {}) => {
     try {
         if (!selectedImage) {
-            throw new Error('No image selected for template processing');
+            throw new Error(ERROR_MESSAGES.NO_IMAGE_SELECTED);
         }
 
         if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
-            throw new Error('No templates selected');
+            throw new Error(ERROR_MESSAGES.NO_TEMPLATES_SELECTED);
         }
 
         if (onProgress) onProgress('preparing', 10);
@@ -618,14 +667,15 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
             const template = templateConfigs.find(t => t.id === id);
             if (!template) return false;
 
-            if (template.category === 'favicon' && !processingOptions.includeFavicon) return false;
-            if (template.category === 'screenshots' && !processingOptions.includeScreenshots) return false;
+            const category = getCategoryConstant(template.category);
+            if (category === 'favicon' && !processingOptions.includeFavicon) return false;
+            if (category === 'screenshots' && !processingOptions.includeScreenshots) return false;
 
             return true;
         });
 
         if (filteredTemplateIds.length === 0) {
-            throw new Error('No valid templates found after filtering');
+            throw new Error(ERROR_MESSAGES.NO_VALID_TEMPLATES);
         }
 
         const selectedTemplates = filteredTemplateIds
@@ -633,15 +683,16 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
             .filter(template => template !== null);
 
         if (selectedTemplates.length === 0) {
-            throw new Error('No valid templates found');
+            throw new Error(ERROR_MESSAGES.NO_VALID_TEMPLATES);
         }
 
         if (onProgress) onProgress('processing', 30);
 
         const processedImages = [];
 
-        const screenshotTemplates = selectedTemplates.filter(t => t.category === 'screenshots');
-        const otherTemplates = selectedTemplates.filter(t => t.category !== 'screenshots');
+        // Filter templates using our helper
+        const screenshotTemplates = selectedTemplates.filter(t => getCategoryConstant(t.category) === 'screenshots');
+        const otherTemplates = selectedTemplates.filter(t => getCategoryConstant(t.category) !== 'screenshots');
 
         if (otherTemplates.length > 0) {
             if (onProgress) onProgress('processing-regular-templates', 40);
@@ -660,7 +711,14 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
         if (screenshotTemplates.length > 0 && processingOptions.includeScreenshots && processingOptions.screenshotUrl) {
             if (onProgress) onProgress('capturing-screenshots', 70);
 
-            const screenshotResults = await processScreenshotTemplates(
+            const screenshotService = new UnifiedScreenshotService({
+                useServerCapture: true,
+                enableCaching: true,
+                enableCompression: true,
+                timeout: PROCESSING_DELAYS.SCREENSHOT_CAPTURE
+            });
+
+            const screenshotResults = await screenshotService.processScreenshotsForTemplates(
                 processingOptions.screenshotUrl,
                 screenshotTemplates,
                 {

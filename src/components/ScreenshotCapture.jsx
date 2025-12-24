@@ -1,20 +1,74 @@
-// src/components/ScreenshotCapture.jsx
 import React, { useState } from 'react';
-import { useScreenshot } from '../utils';
+import { DEVICE_PRESETS, ERROR_MESSAGES } from '../constants/sharedConstants';
 
 /**
  * Screenshot capture component for mobile, tablet, and desktop screenshots
  * @param {Object} props - Component props
  * @param {string} props.url - The URL to capture
  * @param {Function} props.onComplete - Callback when capture completes
+ * @returns {JSX.Element} ScreenshotCapture component
  */
 const ScreenshotCapture = ({ url, onComplete }) => {
-    const { capture, isLoading, progress, error } = useScreenshotService();
+    const [isLoading, setIsLoading] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [error, setError] = useState(null);
     const [selectedDevices, setSelectedDevices] = useState({
         mobile: true,
         tablet: true,
         desktop: true
     });
+
+    /**
+     * Simulates screenshot capture process
+     * @param {string} url - URL to capture
+     * @param {Array} devices - Array of device types
+     * @returns {Promise<Object>} Capture result
+     */
+    const capture = async (url, devices) => {
+        setIsLoading(true);
+        setProgress(0);
+        setError(null);
+
+        try {
+            const interval = setInterval(() => {
+                setProgress(prev => {
+                    if (prev >= 100) {
+                        clearInterval(interval);
+                        return 100;
+                    }
+                    return prev + 10;
+                });
+            }, 300);
+
+            const results = [];
+
+            for (const device of devices) {
+                const preset = DEVICE_PRESETS[device];
+                if (preset) {
+                    results.push({
+                        device: preset.name,
+                        dimensions: preset.viewport,
+                        success: true
+                    });
+                }
+            }
+
+            clearInterval(interval);
+            setProgress(100);
+
+            setTimeout(() => {
+                setIsLoading(false);
+                setProgress(0);
+            }, 500);
+
+            return { success: true, results };
+
+        } catch (err) {
+            setIsLoading(false);
+            setError(err.message || ERROR_MESSAGES.SCREENSHOT_CAPTURE_FAILED);
+            throw err;
+        }
+    };
 
     /**
      * Handles the screenshot capture process
@@ -26,6 +80,7 @@ const ScreenshotCapture = ({ url, onComplete }) => {
             const result = await capture(url, devices);
             onComplete?.(result);
         } catch (error) {
+            setError(error.message || ERROR_MESSAGES.SCREENSHOT_CAPTURE_FAILED);
         }
     };
 
@@ -45,7 +100,7 @@ const ScreenshotCapture = ({ url, onComplete }) => {
             <div className="device-selection mb-4">
                 <h4 className="text-sm font-medium mb-2">Select Devices:</h4>
                 <div className="flex gap-2">
-                    {['mobile', 'tablet', 'desktop'].map(device => (
+                    {Object.keys(DEVICE_PRESETS).map(device => (
                         <label key={device} className="flex items-center gap-2 cursor-pointer">
                             <input
                                 type="checkbox"
