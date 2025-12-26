@@ -287,7 +287,7 @@ export const NUMBER_INPUT_CONSTANTS = {
 
 export const VERCEL_ENDPOINTS = [
     {
-        url: 'https://image-lemgendizer-old.vercel.app/api/screenshot',
+        url: 'https://image-lemgendizer-old-x2qz.vercel.app/api/screenshot',
         priority: 1,
         lastUsed: 0
     },

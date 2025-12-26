@@ -1,9 +1,13 @@
-// api/screenshot.cjs
-const playwright = require('playwright-core');
-const chromium = require('@sparticuz/chromium-min');
+// api/screenshot.js
+import playwright from 'playwright-core';
+import chromiumPackage from '@sparticuz/chromium-min';
+
+const chromium = chromiumPackage.default || chromiumPackage;
 
 // Optimize for Vercel
-chromium.setGraphicsMode = false;
+if (chromium.setGraphicsMode) {
+    chromium.setGraphicsMode = false;
+}
 
 const DEVICE_PRESETS = {
     mobile: {
@@ -43,7 +47,7 @@ const BROWSER_LAUNCH_ARGS = [
 /**
  * Main API handler for screenshot capture
  */
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
     console.log('API function started');
 
     // Set CORS headers
@@ -185,4 +189,4 @@ module.exports = async (req, res) => {
             stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
-};
+}
