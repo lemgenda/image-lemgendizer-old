@@ -613,7 +613,7 @@ function App() {
         selectedImagesForProcessing,
         processedImages,
         settings,
-        EXPORT_SETTINGS.CUSTOM,
+        PROCESSING_MODES.CUSTOM,
         processingOptions.output.formats
       );
 
@@ -661,7 +661,17 @@ function App() {
 
     if (isScreenshotSelected && screenshotUrl.trim()) {
       try {
-        new URL(screenshotUrl.startsWith('http') ? screenshotUrl : `${URL_CONSTANTS.DEFAULT_PROTOCOL}${screenshotUrl}`);
+        // Clean the URL
+        let cleanUrl = screenshotUrl.trim();
+        if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+          cleanUrl = `https://${cleanUrl}`;
+        }
+        // Fix double slashes
+        cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
+
+        new URL(cleanUrl);
+        // Update the state with cleaned URL
+        setScreenshotUrl(cleanUrl);
       } catch (error) {
         showModal(t('message.error'), t('message.errorInvalidUrl'), MODAL_TYPES.ERROR);
         return;
@@ -685,10 +695,15 @@ function App() {
         faviconSiteName: processingOptions.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
         faviconThemeColor: processingOptions.faviconThemeColor || DEFAULT_FAVICON_THEME_COLOR,
         faviconBackgroundColor: processingOptions.faviconBackgroundColor || DEFAULT_FAVICON_BACKGROUND_COLOR,
-        screenshotUrl: isScreenshotSelected && screenshotUrl ? screenshotUrl : '',
+        screenshotUrl: isScreenshotSelected ? (screenshotUrl.startsWith('http') ? screenshotUrl : `https://${screenshotUrl}`).replace(/(https?:\/\/)\/+/g, '$1') : '',
         includeFavicon: isFaviconSelected,
         includeScreenshots: isScreenshotSelected,
         selectedTemplates: processingOptions.selectedTemplates,
+        // Add this to pass selected screenshot template IDs
+        selectedScreenshotTemplates: processingOptions.selectedTemplates.filter(id => {
+          const template = SOCIAL_MEDIA_TEMPLATES.find(t => t.id === id);
+          return template && template.category === 'screenshots';
+        }),
         ...(isFaviconSelected && { faviconTemplateIds: [FAVICON_TEMPLATE_ID] })
       };
 
@@ -721,7 +736,7 @@ function App() {
         [selectedImagesForProcessing[0]],
         processedImages,
         settings,
-        EXPORT_SETTINGS.TEMPLATES
+        PROCESSING_MODES.TEMPLATES
       );
 
       downloadZip(zipBlob, EXPORT_SETTINGS.DEFAULT_ZIP_NAME_TEMPLATES);

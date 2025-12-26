@@ -1,12 +1,14 @@
 import JSZip from 'jszip';
 import { useState, useRef, useCallback } from 'react';
 import {
-    SCREENSHOT_TEMPLATES,
     VERCEL_ENDPOINTS,
     CACHE_CONFIG,
     DEFAULT_SCREENSHOT_TIMEOUT,
     MAX_CONCURRENT_SCREENSHOTS
-} from '../constants/sharedConstants.js';
+} from '../constants/sharedConstants';
+
+// Import SCREENSHOT_TEMPLATES from templateConfigs
+import { SCREENSHOT_TEMPLATES } from '../configs/templateConfigs';
 
 const memoryCache = new Map();
 const activeBlobUrls = new Set();
@@ -395,15 +397,41 @@ export class UnifiedScreenshotService {
             ctx.fillText('Placeholder - Configure Vercel API for real screenshots', width / 2, height / 2 + 60);
 
             canvas.toBlob((blob) => {
-                resolve({
-                    success: true,
-                    blob,
-                    format: 'png',
-                    fullPage: options.fullPage,
-                    device: options.device,
-                    dimensions: { width, height },
-                    responseTime: 0
-                });
+                if (!blob) {
+                    // Fallback: create a simple blob if toBlob fails
+                    const errorCanvas = document.createElement('canvas');
+                    errorCanvas.width = 400;
+                    errorCanvas.height = 300;
+                    const errorCtx = errorCanvas.getContext('2d');
+                    errorCtx.fillStyle = '#f0f9ff';
+                    errorCtx.fillRect(0, 0, 400, 300);
+                    errorCtx.fillStyle = '#1e40af';
+                    errorCtx.font = 'bold 20px Arial';
+                    errorCtx.textAlign = 'center';
+                    errorCtx.fillText('Screenshot Placeholder', 200, 150);
+
+                    errorCanvas.toBlob((fallbackBlob) => {
+                        resolve({
+                            success: true,
+                            blob: fallbackBlob,
+                            format: 'png',
+                            fullPage: options.fullPage,
+                            device: options.device,
+                            dimensions: { width, height },
+                            responseTime: 0
+                        });
+                    }, 'image/png', 0.9);
+                } else {
+                    resolve({
+                        success: true,
+                        blob,
+                        format: 'png',
+                        fullPage: options.fullPage,
+                        device: options.device,
+                        dimensions: { width, height },
+                        responseTime: 0
+                    });
+                }
             }, 'image/png', 0.9);
         });
     }
@@ -423,12 +451,47 @@ export class UnifiedScreenshotService {
         const siteName = options.siteName || hostname || 'website';
 
         const filePromises = Object.entries(screenshotResults.results || {}).map(async ([templateId, result]) => {
-            if (result.blob) {
-                const extension = result.format || 'png';
-                const template = result.template || SCREENSHOT_TEMPLATES[templateId];
-                const method = template?.fullPage ? 'fullpage' : 'viewport';
-                const filename = `${siteName}-${templateId}-${method}-${timestamp}.${extension}`;
-                zip.file(filename, result.blob);
+            if (result.blob && result.blob instanceof Blob) {
+                try {
+                    const extension = result.format || 'png';
+                    const template = result.template || SCREENSHOT_TEMPLATES[templateId];
+                    const method = template?.fullPage ? 'fullpage' : 'viewport';
+                    const filename = `${siteName}-${templateId}-${method}-${timestamp}.${extension}`;
+
+                    zip.file(filename, result.blob);
+                } catch (error) {
+                    console.error(`Failed to add screenshot ${templateId}:`, error);
+                }
+            } else {
+                console.warn(`Screenshot result for ${templateId} is not a valid Blob:`, result.blob);
+                // Create a placeholder file instead
+                try {
+                    const template = result.template || SCREENSHOT_TEMPLATES[templateId];
+                    const extension = result.format || 'png';
+                    const method = template?.fullPage ? 'fullpage' : 'viewport';
+                    const filename = `${siteName}-${templateId}-${method}-${timestamp}.${extension}`;
+
+                    const errorCanvas = document.createElement('canvas');
+                    const errorCtx = errorCanvas.getContext('2d');
+                    errorCanvas.width = 400;
+                    errorCanvas.height = 300;
+
+                    errorCtx.fillStyle = '#fee2e2';
+                    errorCtx.fillRect(0, 0, 400, 300);
+                    errorCtx.fillStyle = '#dc2626';
+                    errorCtx.font = '16px Arial';
+                    errorCtx.textAlign = 'center';
+                    errorCtx.textBaseline = 'middle';
+                    errorCtx.fillText('Invalid screenshot', 200, 150);
+
+                    const blob = await new Promise(resolve => {
+                        errorCanvas.toBlob(resolve, 'image/png');
+                    });
+
+                    zip.file(filename, blob);
+                } catch (placeholderError) {
+                    console.error(`Failed to create placeholder for ${templateId}:`, placeholderError);
+                }
             }
         });
 
@@ -472,13 +535,19 @@ export class UnifiedScreenshotService {
 
         Object.entries(results.results).forEach(([templateId, result]) => {
             const template = screenshotTemplates.find(t => t.id === templateId);
-            if (template && result.blob) {
+            if (template && result.blob && result.blob instanceof Blob) {
                 const baseName = `${template.platform}-${template.name}-${Date.now()}`;
                 const extension = result.format || 'png';
                 const fileName = `${baseName}.${extension}`;
 
+                // Create a proper File object with all required properties
+                const file = new File([result.blob], fileName, {
+                    type: `image/${extension}`,
+                    lastModified: Date.now()
+                });
+
                 processedImages.push({
-                    file: new File([result.blob], fileName, { type: `image/${extension}` }),
+                    file: file,
                     name: fileName,
                     template: template,
                     format: extension,
@@ -493,7 +562,6 @@ export class UnifiedScreenshotService {
 
         return processedImages;
     }
-
     /**
      * Cleans up all resources and memory
      */
@@ -814,7 +882,6 @@ export class UnifiedScreenshotService {
                 currentLine = word;
             }
         }
-
         if (currentLine) {
             lines.push(currentLine);
         }
@@ -1031,7 +1098,7 @@ export function useScreenshotService() {
  * @param {Object} options - Additional options
  * @returns {Promise<Blob>} ZIP file containing screenshots
  */
-export const generateScreenshots = async (url, siteName = 'website', options = {}) => {
+export const generateScreenshots = async (url, siteName = 'website', templateIds = [], options = {}) => {
     const service = new UnifiedScreenshotService({
         useServerCapture: true,
         enableCaching: true,
@@ -1040,10 +1107,27 @@ export const generateScreenshots = async (url, siteName = 'website', options = {
         ...options
     });
 
-    const allTemplateIds = Object.keys(SCREENSHOT_TEMPLATES);
-    const results = await service.captureByTemplates(url, allTemplateIds);
+    // Use provided templateIds or all templates if empty
+    const templatesToCapture = templateIds.length > 0
+        ? templateIds
+        : Object.keys(SCREENSHOT_TEMPLATES);
 
-    return await service.createScreenshotZip(url, results, { siteName, ...options });
+    console.log('Generating screenshots for templates:', templatesToCapture);
+
+    const results = await service.captureByTemplates(url, templatesToCapture);
+
+    const zipBlob = await service.createScreenshotZip(url, results, { siteName, ...options });
+
+    // Make sure we're returning a proper Blob
+    if (!(zipBlob instanceof Blob)) {
+        console.error('Generated screenshot zip is not a Blob:', zipBlob);
+        // Create an error ZIP instead
+        const errorZip = new JSZip();
+        errorZip.file('error.txt', `Failed to generate screenshots for ${url}\n\nGenerated data type: ${typeof zipBlob}`);
+        return await errorZip.generateAsync({ type: 'blob' });
+    }
+
+    return zipBlob;
 };
 
 /**
@@ -1054,5 +1138,11 @@ export const generateScreenshots = async (url, siteName = 'website', options = {
  * @returns {Promise<Blob>} Screenshot ZIP blob
  */
 export const createScreenshotZip = async (url, settings = {}) => {
-    return await generateScreenshots(url, settings.faviconSiteName || 'Website Screenshots', settings);
+    const templateIds = settings.selectedScreenshotTemplates || [];
+    return await generateScreenshots(
+        url,
+        settings.faviconSiteName || 'Website Screenshots',
+        templateIds,
+        settings
+    );
 };

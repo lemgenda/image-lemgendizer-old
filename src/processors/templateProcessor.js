@@ -1,12 +1,8 @@
 // src/processors/templateProcessor.js
 import {
-    CROP_MODES,
-    MAX_SAFE_DIMENSION,
     DEFAULT_QUALITY,
     LARGE_IMAGE_THRESHOLD,
     PROCESSING_DELAYS,
-    DEFAULT_THEME_COLOR,
-    DEFAULT_BACKGROUND_COLOR,
     ERROR_BACKGROUND_COLOR,
     ERROR_BORDER_COLOR,
     ERROR_TEXT_COLOR,
@@ -19,16 +15,16 @@ import {
     INFO_COLOR,
     DEFAULT_JPG_QUALITY,
     DEFAULT_PNG_QUALITY
-} from '../constants/sharedConstants.js';
+} from '../constants/sharedConstants';
 
-// Import template-related constants directly from templateConfigs.js
+// Import template-related constants from templateConfigs.js
 import {
-    TEMPLATE_CATEGORIES,  // This is the array of categories
     FAVICON_PREVIEW_SIZE,
-    DEFAULT_FAVICON_SITE_NAME,  // Corrected name
+    DEFAULT_FAVICON_SITE_NAME,
     DEFAULT_FAVICON_THEME_COLOR,
-    DEFAULT_FAVICON_BACKGROUND_COLOR
-} from '../configs/templateConfigs.js';
+    DEFAULT_FAVICON_BACKGROUND_COLOR,
+    SCREENSHOT_TEMPLATES
+} from '../configs/templateConfigs';
 
 import {
     processLemGendaryResize,
@@ -38,30 +34,16 @@ import {
     optimizeForWeb,
     checkImageTransparency,
     checkImageTransparencyDetailed
-} from '../processors/index.js';
+} from '../processors';
 
 import {
     safeCleanupGPUMemory,
     ensureFileObject,
-    checkAVIFSupport
-} from '../utils/index.js';
-
-import {
     UnifiedScreenshotService
-    // Removed createScreenshotPreview - it doesn't exist in screenshotUtils.js
-} from '../utils/screenshotUtils.js';
+} from '../utils';
 
 let cleanupInProgress = false;
 let aiUpscalingDisabled = false;
-
-// Create constants for template categories from the imported array
-const TEMPLATE_CATEGORIES_CONST = {
-    WEB: 'web',
-    LOGO: 'logo',
-    SOCIAL_MEDIA: 'social_media',
-    FAVICON: 'favicon',
-    SCREENSHOTS: 'screenshots'
-};
 
 // Helper function to get category constant
 const getCategoryConstant = (categoryId) => {
@@ -677,6 +659,8 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
         if (filteredTemplateIds.length === 0) {
             throw new Error(ERROR_MESSAGES.NO_VALID_TEMPLATES);
         }
+
+        if (onProgress) onProgress('processing', 30);
 
         const selectedTemplates = filteredTemplateIds
             .map(templateId => templateConfigs.find(t => t.id === templateId))

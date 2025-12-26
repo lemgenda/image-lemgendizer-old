@@ -9,6 +9,7 @@ import {
 
 // Import favicon and screenshot generators
 import { generateFaviconSet, generateScreenshots } from '../utils';
+
 /**
  * Creates export settings based on processing mode.
  *
@@ -72,12 +73,6 @@ export const generateExportSettings = (mode, additionalSettings = {}) => {
  * Gets folder structure for different export modes.
  *
  * @param {string} mode - Processing mode
- * @returns {Array<string>} Array of folder paths
- */
-/**
- * Gets folder structure for different export modes.
- *
- * @param {string} mode - Processing mode
  * @param {Object} settings - Export settings (optional)
  * @returns {Array<string>} Array of folder paths
  */
@@ -93,10 +88,10 @@ export const getExportFolderStructure = (mode, settings = {}) => {
 
         // Only add these folders if they're actually needed
         if (settings.includeFavicon) {
-            folders.push('FaviconSet');
+            folders.push(PLATFORM_NAMES.FAVICON || 'FaviconSet');
         }
         if (settings.includeScreenshots && settings.screenshotUrl) {
-            folders.push('Screenshots');
+            folders.push(PLATFORM_NAMES.SCREENSHOTS || 'Screenshots');
         }
 
         return folders;
@@ -138,15 +133,17 @@ export const organizeTemplatesByPlatform = (socialTemplates) => {
     socialTemplates.forEach(img => {
         if (img.template && img.format === 'jpg') {
             const platform = img.template.platform;
-            // Clean up platform names for folder structure
-            const cleanPlatform = platform.replace(/\s*\/\s*X/g, '').replace(/Twitter\/X/, 'Twitter').trim();
+            // Clean up platform names for folder structure using PLATFORM_NAMES constants
+            const cleanPlatform = platform.replace(/\s*\/\s*X/g, '').replace(/Twitter\/X/, PLATFORM_NAMES.TWITTER || 'Twitter').trim();
 
             if (!organized[cleanPlatform]) {
                 organized[cleanPlatform] = [];
             }
 
-            // Clean up file names to remove platform duplication
-            const cleanFileName = img.name.replace(`${platform}-`, '').replace(/Twitter\/X/g, 'Twitter');
+            // Clean up file names to remove platform duplication using TEMPLATE_NAMES constants
+            const cleanFileName = img.name
+                .replace(`${platform}-`, '')
+                .replace(/Twitter\/X/g, PLATFORM_NAMES.TWITTER || 'Twitter');
             const cleanImage = {
                 ...img,
                 name: cleanFileName
@@ -157,6 +154,25 @@ export const organizeTemplatesByPlatform = (socialTemplates) => {
     });
 
     return organized;
+};
+
+/**
+ * Filters screenshot templates to only include selected ones
+ * @param {Array<Object>} processedImages - Processed images (unused in this version)
+ * @param {Array<string>} selectedTemplateIds - Selected template IDs
+ * @returns {Array<Object>} Filtered screenshot templates
+ */
+const filterScreenshotTemplates = (processedImages, selectedTemplateIds) => {
+    // Import SCREENSHOT_TEMPLATES here to avoid circular dependencies
+    const { SCREENSHOT_TEMPLATES } = require('../configs/templateConfigs');
+
+    // First, get all screenshot templates from SCREENSHOT_TEMPLATES
+    const allScreenshotTemplates = Object.values(SCREENSHOT_TEMPLATES || {});
+
+    // Filter to only include selected templates
+    return allScreenshotTemplates.filter(template =>
+        selectedTemplateIds.includes(template.id)
+    );
 };
 
 /**
@@ -171,7 +187,7 @@ const processFaviconSet = async (sourceImage, settings, zip = null) => {
     try {
         const faviconZipBlob = await generateFaviconSet(
             sourceImage,
-            settings.faviconSiteName || 'My Website',
+            settings.faviconSiteName || TEMPLATE_NAMES.FAVICON_SITE_NAME || 'My Website',
             settings.faviconThemeColor || '#ffffff',
             settings.faviconBackgroundColor || '#ffffff'
         );
@@ -179,13 +195,18 @@ const processFaviconSet = async (sourceImage, settings, zip = null) => {
         if (zip) {
             // Extract and add to existing ZIP
             const faviconZip = await JSZip.loadAsync(faviconZipBlob);
-            const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/FaviconSet`);
+            const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/${PLATFORM_NAMES.FAVICON || 'FaviconSet'}`);
 
             const files = faviconZip.files;
             for (const [fileName, fileData] of Object.entries(files)) {
                 if (!fileData.dir) {
-                    const content = await fileData.async('blob');
-                    faviconFolder.file(fileName, content);
+                    try {
+                        const content = await fileData.async('blob');
+                        faviconFolder.file(fileName, content);
+                    } catch (fileError) {
+                        console.warn(`Failed to add favicon file ${fileName}:`, fileError);
+                        // Skip this file but continue with others
+                    }
                 }
             }
             return null;
@@ -198,7 +219,7 @@ const processFaviconSet = async (sourceImage, settings, zip = null) => {
 
         if (zip) {
             // Add error placeholder
-            const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/FaviconSet`);
+            const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/${PLATFORM_NAMES.FAVICON || 'FaviconSet'}`);
             const errorText = `Favicon generation failed: ${error.message}\n\nPlease try again with a different image.`;
             faviconFolder.file('error.txt', errorText);
         }
@@ -232,7 +253,11 @@ export const createExportZip = async (originalImages, processedImages, settings,
         const originalFolder = zip.folder(EXPORT_FOLDERS.ORIGINAL_IMAGES);
         for (const image of originalImages) {
             if (image.file) {
-                originalFolder.file(image.name, image.file);
+                try {
+                    originalFolder.file(image.name, image.file);
+                } catch (error) {
+                    console.warn(`Failed to add original image ${image.name}:`, error);
+                }
             }
         }
     }
@@ -241,18 +266,22 @@ export const createExportZip = async (originalImages, processedImages, settings,
     if (mode === PROCESSING_MODES.CUSTOM && settings.includeOptimized && processedImages.length > 0) {
         const groupedByFormat = organizeImagesByFormat(processedImages);
 
-        Object.keys(groupedByFormat).forEach(format => {
-            if (groupedByFormat[format].length > 0) {
+        for (const [format, images] of Object.entries(groupedByFormat)) {
+            if (images.length > 0) {
                 const formatFolder = zip.folder(`${EXPORT_FOLDERS.OPTIMIZED_IMAGES}/${format.toUpperCase()}`);
-                groupedByFormat[format].forEach(image => {
-                    let fileName = image.name;
-                    if (!fileName.includes('.')) {
-                        fileName = `${fileName}.${format}`;
+                for (const image of images) {
+                    try {
+                        let fileName = image.name;
+                        if (!fileName.includes('.')) {
+                            fileName = `${fileName}.${format}`;
+                        }
+                        formatFolder.file(fileName, image.file);
+                    } catch (error) {
+                        console.warn(`Failed to add optimized image ${image.name} (${format}):`, error);
                     }
-                    formatFolder.file(fileName, image.file);
-                });
+                }
             }
-        });
+        }
     }
 
     // Add WebImages folder (for templates mode) - WebP + JPEG/PNG
@@ -270,9 +299,29 @@ export const createExportZip = async (originalImages, processedImages, settings,
             const pngImages = webTemplates.filter(img => img.format === 'png');
             const jpgImages = webTemplates.filter(img => img.format === 'jpg');
 
-            webpImages.forEach(image => webFolder.file(image.name, image.file));
-            pngImages.forEach(image => webFolder.file(image.name, image.file));
-            jpgImages.forEach(image => webFolder.file(image.name, image.file));
+            for (const image of webpImages) {
+                try {
+                    webFolder.file(image.name, image.file);
+                } catch (error) {
+                    console.warn(`Failed to add web image ${image.name}:`, error);
+                }
+            }
+
+            for (const image of pngImages) {
+                try {
+                    webFolder.file(image.name, image.file);
+                } catch (error) {
+                    console.warn(`Failed to add web image ${image.name}:`, error);
+                }
+            }
+
+            for (const image of jpgImages) {
+                try {
+                    webFolder.file(image.name, image.file);
+                } catch (error) {
+                    console.warn(`Failed to add web image ${image.name}:`, error);
+                }
+            }
         }
     }
 
@@ -289,8 +338,21 @@ export const createExportZip = async (originalImages, processedImages, settings,
             const pngImages = logoTemplates.filter(img => img.format === 'png');
             const jpgImages = logoTemplates.filter(img => img.format === 'jpg');
 
-            pngImages.forEach(image => logoFolder.file(image.name, image.file));
-            jpgImages.forEach(image => logoFolder.file(image.name, image.file));
+            for (const image of pngImages) {
+                try {
+                    logoFolder.file(image.name, image.file);
+                } catch (error) {
+                    console.warn(`Failed to add logo image ${image.name}:`, error);
+                }
+            }
+
+            for (const image of jpgImages) {
+                try {
+                    logoFolder.file(image.name, image.file);
+                } catch (error) {
+                    console.warn(`Failed to add logo image ${image.name}:`, error);
+                }
+            }
         }
     }
 
@@ -308,12 +370,16 @@ export const createExportZip = async (originalImages, processedImages, settings,
         if (socialTemplates.length > 0) {
             const organizedPlatforms = organizeTemplatesByPlatform(socialTemplates);
 
-            Object.entries(organizedPlatforms).forEach(([platform, platformImages]) => {
+            for (const [platform, platformImages] of Object.entries(organizedPlatforms)) {
                 const platformFolder = zip.folder(`${EXPORT_FOLDERS.SOCIAL_MEDIA_IMAGES}/${platform}`);
-                platformImages.forEach(image => {
-                    platformFolder.file(image.name, image.file);
-                });
-            });
+                for (const image of platformImages) {
+                    try {
+                        platformFolder.file(image.name, image.file);
+                    } catch (error) {
+                        console.warn(`Failed to add social media image ${image.name} (${platform}):`, error);
+                    }
+                }
+            }
         }
     }
 
@@ -352,7 +418,7 @@ export const createExportZip = async (originalImages, processedImages, settings,
                 console.warn('Favicon set generation failed, continuing without it:', error);
 
                 // Add error placeholder
-                const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/FaviconSet`);
+                const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/${PLATFORM_NAMES.FAVICON || 'FaviconSet'}`);
                 const errorText = `Favicon generation failed: ${error.message}\n\nPlease try again with a different image.`;
                 faviconFolder.file('error.txt', errorText);
             }
@@ -367,48 +433,96 @@ export const createExportZip = async (originalImages, processedImages, settings,
         try {
             console.log('Generating screenshots for URL:', settings.screenshotUrl);
 
-            const screenshotZipBlob = await generateScreenshots(
-                settings.screenshotUrl,
-                settings.faviconSiteName || 'Website Screenshots'
-            );
+            // Get selected screenshot template IDs from settings
+            const selectedScreenshotTemplateIds = settings.selectedScreenshotTemplates || [];
 
-            const screenshotZip = await JSZip.loadAsync(screenshotZipBlob);
-            const screenshotFolder = zip.folder('Screenshots');
+            if (selectedScreenshotTemplateIds.length === 0) {
+                console.log('No screenshot templates selected, skipping screenshot generation');
+                // Add a note file instead
+                const screenshotFolder = zip.folder(PLATFORM_NAMES.SCREENSHOTS || 'Screenshots');
+                screenshotFolder.file('NOTE.txt',
+                    'No screenshot templates were selected for generation.\n' +
+                    'Select screenshot templates in the template selection interface.'
+                );
+            } else {
+                // Get the actual template objects using the helper function
+                const selectedScreenshotTemplates = filterScreenshotTemplates(processedImages, selectedScreenshotTemplateIds);
 
-            // Check what files were generated
-            const files = screenshotZip.files;
-            let hasActualScreenshots = false;
+                console.log('Selected screenshot templates:', selectedScreenshotTemplates.map(t => t.id));
 
-            for (const [fileName, fileData] of Object.entries(files)) {
-                if (!fileData.dir) {
-                    const content = await fileData.async('blob');
-                    screenshotFolder.file(fileName, content);
+                // Clean the URL
+                let cleanUrl = settings.screenshotUrl.trim();
+                if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+                    cleanUrl = `https://${cleanUrl}`;
+                }
+                // Fix double slashes
+                cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
 
-                    // Check if this is an actual screenshot or placeholder
-                    if (fileName.includes('screenshot-') && !fileName.includes('error')) {
-                        hasActualScreenshots = true;
+                const screenshotZipBlob = await generateScreenshots(
+                    cleanUrl,
+                    settings.faviconSiteName || TEMPLATE_NAMES.SCREENSHOTS_SITE_NAME || 'Website Screenshots',
+                    selectedScreenshotTemplateIds,  // Pass selected IDs
+                    {
+                        selectedScreenshotTemplates: selectedScreenshotTemplateIds,
+                        ...settings
+                    }
+                );
+
+                // Validate the screenshot ZIP blob
+                if (!(screenshotZipBlob instanceof Blob)) {
+                    console.error('Screenshot ZIP is not a valid Blob:', screenshotZipBlob);
+                    throw new Error('Failed to create screenshot ZIP file');
+                }
+
+                const screenshotZip = await JSZip.loadAsync(screenshotZipBlob);
+                const screenshotFolder = zip.folder(PLATFORM_NAMES.SCREENSHOTS || 'Screenshots');
+
+                // Check what files were generated
+                const files = screenshotZip.files;
+                let hasActualScreenshots = false;
+                let filesAdded = 0;
+
+                for (const [fileName, fileData] of Object.entries(files)) {
+                    if (!fileData.dir) {
+                        try {
+                            // Use the proper JSZip file API to get content
+                            const content = await fileData.async('blob');
+                            screenshotFolder.file(fileName, content);
+                            filesAdded++;
+
+                            // Check if this is an actual screenshot or placeholder
+                            if (fileName.includes('screenshot-') && !fileName.includes('error')) {
+                                hasActualScreenshots = true;
+                            }
+                        } catch (fileError) {
+                            console.warn(`Failed to process screenshot file ${fileName}:`, fileError);
+                            // Skip this file but continue with others
+                            continue;
+                        }
                     }
                 }
-            }
 
-            if (hasActualScreenshots) {
-                console.log('Actual screenshots added to ZIP');
-            } else {
-                console.log('Placeholder screenshots added (website blocks capture)');
-                // Add a note file
-                screenshotFolder.file('NOTE.txt',
-                    `The website ${settings.screenshotUrl} uses security headers that prevent automated screenshot capture.\n` +
-                    `The included images are informative placeholders.\n` +
-                    `To get actual screenshots:\n` +
-                    `1. Use browser developer tools (F12)\n` +
-                    `2. Use a screenshot extension\n` +
-                    `3. Contact the website owner about X-Frame-Options headers`
-                );
+                console.log(`Added ${filesAdded} screenshot files to ZIP`);
+
+                if (hasActualScreenshots) {
+                    console.log('Actual screenshots added to ZIP');
+                } else {
+                    console.log('Placeholder screenshots added (website blocks capture)');
+                    // Add a note file
+                    screenshotFolder.file('NOTE.txt',
+                        `The website ${cleanUrl} uses security headers that prevent automated screenshot capture.\n` +
+                        `The included images are informative placeholders.\n` +
+                        `To get actual screenshots:\n` +
+                        `1. Use browser developer tools (F12)\n` +
+                        `2. Use a screenshot extension\n` +
+                        `3. Contact the website owner about X-Frame-Options headers`
+                    );
+                }
             }
 
         } catch (error) {
             console.error('Screenshot generation failed:', error);
-            const screenshotFolder = zip.folder('Screenshots');
+            const screenshotFolder = zip.folder(PLATFORM_NAMES.SCREENSHOTS || 'Screenshots');
             const errorText = `Screenshot generation failed: ${error.message}\n\nURL: ${settings.screenshotUrl}`;
             screenshotFolder.file('error.txt', errorText);
         }
@@ -418,7 +532,15 @@ export const createExportZip = async (originalImages, processedImages, settings,
     const summary = createExportSummary(originalImages, processedImages, settings, mode);
     zip.file('export-summary.txt', summary);
 
-    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    // Generate the final ZIP
+    const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: {
+            level: 6
+        }
+    });
+
     return zipBlob;
 };
 
@@ -441,7 +563,13 @@ export const createFaviconZip = async (imageFile, settings = {}) => {
  * @returns {Promise<Blob>} Screenshot ZIP blob
  */
 export const createScreenshotZip = async (url, settings = {}) => {
-    return await generateScreenshots(url, settings);
+    const templateIds = settings.selectedScreenshotTemplates || [];
+    return await generateScreenshots(
+        url,
+        settings.faviconSiteName || 'Website Screenshots',
+        templateIds,
+        settings
+    );
 };
 
 /**
@@ -537,7 +665,13 @@ const calculateTotalFiles = (originalImages, processedImages, settings, mode) =>
             ).length;
         }
         if (settings.includeFavicon === true) total += 15; // Approximate favicon files
-        if (settings.includeScreenshots === true && settings.screenshotUrl) total += 3; // Screenshot files
+        if (settings.includeScreenshots === true && settings.screenshotUrl) {
+            // Count only selected screenshot templates
+            const selectedScreenshotCount = processedImages
+                .filter(img => img.template?.category === 'screenshots' && !img.name.includes('preview'))
+                .length;
+            total += selectedScreenshotCount || 3; // Use actual count or default
+        }
     }
 
     return total;
@@ -561,9 +695,9 @@ const getIncludedContentSummary = (settings, mode) => {
         if (settings.includeWebImages) items.push('✓ Web-optimized images');
         if (settings.includeLogoImages) items.push('✓ Logo variations');
         if (settings.includeSocialMedia) items.push('✓ Social media templates (organized by platform)');
-        if (settings.includeFavicon === true) items.push('✓ Complete favicon set (with manifest and documentation)');
+        if (settings.includeFavicon === true) items.push(`✓ ${PLATFORM_NAMES.FAVICON || 'Favicon'} set (with manifest and documentation)`);
         if (settings.includeScreenshots === true && settings.screenshotUrl) {
-            items.push(`✓ Website screenshots (from: ${settings.screenshotUrl})`);
+            items.push(`✓ ${PLATFORM_NAMES.SCREENSHOTS || 'Website'} screenshots (from: ${settings.screenshotUrl})`);
         }
     }
 
@@ -582,8 +716,8 @@ const getExportNotes = (mode) => {
 - Processed files include any applied optimizations`;
     } else if (mode === PROCESSING_MODES.TEMPLATES) {
         return `- Social media images are organized by platform
-- Favicon set includes all required sizes and documentation
-- Screenshots are captured at standard responsive sizes
+- ${PLATFORM_NAMES.FAVICON || 'Favicon'} set includes all required sizes and documentation
+- ${PLATFORM_NAMES.SCREENSHOTS || 'Screenshots'} are captured at standard responsive sizes
 - Web and logo images are optimized for their specific use cases`;
     }
     return '';
