@@ -11,6 +11,7 @@
         "preview": "vite preview",
         "start": "vite preview --port 3000",
         "vercel-build": "vite build",
+        "deploy": "npm run build && vercel --prod",
         "test:api": "node test-api.js",
         "test:vercel": "node test-vercel.js"
     },

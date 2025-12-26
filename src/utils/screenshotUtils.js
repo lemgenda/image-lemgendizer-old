@@ -236,25 +236,39 @@ export class UnifiedScreenshotService {
         try {
             const response = await fetch('/api/screenshot', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'image/png, application/json'
+                },
                 body: JSON.stringify({
                     url: url,
                     device: options.device,
                     fullPage: options.fullPage,
                     templateId: templateId,
                     width: options.width,
-                    height: options.height
+                    height: options.height,
+                    quality: options.quality || 80
                 }),
+                signal: AbortSignal.timeout(options.timeout || DEFAULT_SCREENSHOT_TIMEOUT)
             });
 
             if (!response.ok) {
-                const error = await response.json().catch(() => ({}));
-                throw new Error(error.error || `API error: ${response.status}`);
+                // Check if it's a JSON error response
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const error = await response.json();
+                    throw new Error(error.error || error.details || `API error: ${response.status}`);
+                } else {
+                    const errorText = await response.text();
+                    throw new Error(`API error ${response.status}: ${errorText.substring(0, 200)}`);
+                }
             }
 
             const screenshotBuffer = await response.arrayBuffer();
             const responseTime = Date.now() - startTime;
             const dimensions = JSON.parse(response.headers.get('x-dimensions') || '{}');
+            const method = response.headers.get('x-method') || 'api';
+            const isPlaceholder = response.headers.get('x-placeholder') === 'true';
 
             return {
                 success: true,
@@ -264,8 +278,13 @@ export class UnifiedScreenshotService {
                 device: options.device,
                 dimensions,
                 responseTime,
+                method,
+                isPlaceholder,
+                warning: response.headers.get('x-warning') || null,
+                templateId: templateId
             };
         } catch (error) {
+            console.error('API capture error:', error);
             throw new Error(`API capture failed: ${error.message}`);
         }
     }
