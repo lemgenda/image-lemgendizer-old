@@ -1,5 +1,8 @@
-﻿// ================================
-// Unified Device & Screenshot Constants for screenshot.js
+﻿// screenshot.js - Complete production version
+import { Buffer } from 'buffer';
+
+// ================================
+// Device & Screenshot Constants
 // ================================
 
 const DEVICE_CONFIGS = {
@@ -37,7 +40,7 @@ const DEVICE_CONFIGS = {
     }
 };
 
-// Exact match to frontend SCREENSHOT_TEMPLATES
+// Match your frontend SCREENSHOT_TEMPLATES exactly
 const SCREENSHOT_TEMPLATE_CONFIGS = {
     'screenshots-mobile': {
         id: 'screenshots-mobile',
@@ -76,7 +79,7 @@ const SCREENSHOT_TEMPLATE_CONFIGS = {
         name: 'Mobile Full Page',
         device: 'mobile',
         width: 375,
-        height: null, // 'auto' in frontend becomes null for full page
+        height: null,
         fullPage: true
     },
     'screenshots-tablet-full': {
@@ -106,130 +109,25 @@ const SCREENSHOT_TEMPLATE_CONFIGS = {
 };
 
 // ================================
-// Template ID to Device Mapping
-// ================================
-
-const TEMPLATE_TO_DEVICE_MAP = {
-    'screenshots-mobile': 'mobile',
-    'screenshots-tablet': 'tablet',
-    'screenshots-desktop': 'desktop',
-    'screenshots-desktop-hd': 'desktop-hd',
-    'screenshots-mobile-full': 'mobile',
-    'screenshots-tablet-full': 'tablet',
-    'screenshots-desktop-full': 'desktop',
-    'screenshots-desktop-hd-full': 'desktop-hd'
-};
-
-// ================================
-// Response Header Constants
-// ================================
-
-const HEADERS = {
-    PLACEHOLDER: 'x-is-placeholder',
-    PLACEHOLDER_ALT: 'x-placeholder', // For backward compatibility
-    DIMENSIONS: 'x-dimensions',
-    METHOD: 'x-method',
-    DEVICE: 'x-device',
-    TEMPLATE: 'x-template',
-    RESPONSE_TIME: 'x-response-time',
-    WARNING: 'x-warning'
-};
-
-// ================================
-// Timeout & Performance Constants
-// ================================
-
-const TIMEOUTS = {
-    DEFAULT_CAPTURE: 30000, // 30 seconds
-    MAX_CAPTURE: 60000, // 60 seconds max
-    PAGE_LOAD: 5000, // 5 seconds for page load
-    REQUEST: 30000 // 30 seconds for fetch request
-};
-
-// ================================
-// Browserless API Constants
-// ================================
-
-const BROWSERLESS_CONFIG = {
-    BASE_URL: 'https://production-sfo.browserless.io',
-    ENDPOINT: '/screenshot',
-    DEFAULT_QUALITY: 80,
-    DEFAULT_TYPE: 'png'
-};
-
-// ================================
-// CORS Configuration
-// ================================
-
-const ALLOWED_ORIGINS = [
-    'https://image-lemgendizer.vercel.app',
-    'https://image-lemgendizer-old-x2qz.vercel.app',
-    'https://lemgenda.github.io',
-    'http://localhost:3000',
-    'http://localhost:5173'
-];
-
-const EXPOSED_HEADERS = [
-    HEADERS.DIMENSIONS,
-    HEADERS.METHOD,
-    HEADERS.DEVICE,
-    HEADERS.TEMPLATE,
-    HEADERS.PLACEHOLDER,
-    HEADERS.PLACEHOLDER_ALT,
-    HEADERS.WARNING,
-    'Content-Type',
-    'Content-Length',
-    HEADERS.RESPONSE_TIME
-];
-
-// ================================
-// Error Message Constants
-// ================================
-
-const ERROR_MESSAGES = {
-    INVALID_URL: 'Invalid URL format',
-    MISSING_URL: 'Missing required parameter: URL',
-    INVALID_JSON: 'Invalid JSON format',
-    BROWSERLESS_NOT_CONFIGURED: 'Browserless.io API key not configured',
-    INVALID_API_TOKEN: 'Invalid Browserless API token',
-    CAPTURE_FAILED: 'Screenshot capture failed',
-    CAPTURE_TIMEOUT: 'Screenshot capture timeout',
-    UNKNOWN_ERROR: 'Unknown error occurred'
-};
-
-// ================================
 // Helper Functions
 // ================================
 
-/**
- * Gets device configuration by device name
- */
 function getDeviceConfig(deviceName) {
     return DEVICE_CONFIGS[deviceName] || DEVICE_CONFIGS.desktop;
 }
 
-/**
- * Gets screenshot template configuration by template ID
- */
 function getScreenshotTemplate(templateId) {
     return SCREENSHOT_TEMPLATE_CONFIGS[templateId] || SCREENSHOT_TEMPLATE_CONFIGS['screenshots-desktop'];
 }
 
-/**
- * Gets viewport dimensions for template
- */
 function getTemplateViewport(templateId, customWidth, customHeight, customFullPage) {
     const template = getScreenshotTemplate(templateId);
+    const device = template.device || 'desktop';
+    const deviceConfig = getDeviceConfig(device);
 
-    // Use custom values if provided, otherwise use template defaults
     const width = customWidth || template.width;
     const fullPage = customFullPage !== undefined ? customFullPage : template.fullPage;
-
-    // For full page screenshots, height is auto (null in backend)
     const height = fullPage ? null : (customHeight || template.height);
-
-    const device = TEMPLATE_TO_DEVICE_MAP[templateId] || 'desktop';
-    const deviceConfig = getDeviceConfig(device);
 
     return {
         width,
@@ -242,12 +140,9 @@ function getTemplateViewport(templateId, customWidth, customHeight, customFullPa
     };
 }
 
-/**
- * Validates and sanitizes URL input
- */
 function validateAndCleanUrl(url) {
     if (!url || typeof url !== 'string') {
-        throw new Error(ERROR_MESSAGES.MISSING_URL);
+        throw new Error('URL is required');
     }
 
     let cleanUrl = url.trim();
@@ -262,46 +157,41 @@ function validateAndCleanUrl(url) {
         new URL(cleanUrl);
         return cleanUrl;
     } catch {
-        throw new Error(`${ERROR_MESSAGES.INVALID_URL}: ${url}`);
+        throw new Error(`Invalid URL format: ${url}`);
     }
 }
 
-/**
- * Creates error response object
- */
-function createErrorResponse(error, isPlaceholder = true) {
-    return {
-        success: false,
-        error: error.message || ERROR_MESSAGES.UNKNOWN_ERROR,
-        isPlaceholder: isPlaceholder,
-        details: error.details || error.toString()
-    };
-}
-
-/**
- * Sets response headers consistently
- */
 function setResponseHeaders(res, headers, origin, isError = false) {
-    // Set content type - JSON for errors, PNG for success
+    const allowedOrigins = [
+        'https://image-lemgendizer.vercel.app',
+        'https://image-lemgendizer-old-x2qz.vercel.app',
+        'https://lemgenda.github.io',
+        'http://localhost:3000',
+        'http://localhost:5173'
+    ];
+
+    // Set content type
     res.setHeader('Content-Type', isError ? 'application/json' : 'image/png');
 
     // Set custom headers
-    Object.entries(headers).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-            res.setHeader(key, value.toString());
-        }
-    });
+    if (headers) {
+        Object.entries(headers).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                res.setHeader(key, value.toString());
+            }
+        });
+    }
 
     // Set both placeholder headers for compatibility
-    if (headers[HEADERS.PLACEHOLDER] !== undefined) {
-        res.setHeader(HEADERS.PLACEHOLDER_ALT, headers[HEADERS.PLACEHOLDER]);
+    if (headers && headers['x-is-placeholder'] !== undefined) {
+        res.setHeader('x-placeholder', headers['x-is-placeholder']);
     }
 
     // Set CORS headers
-    if (origin && ALLOWED_ORIGINS.some(allowed =>
+    if (origin && allowedOrigins.some(allowed =>
         origin.includes(allowed.replace('https://', '').replace('http://', '')))) {
         res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Expose-Headers', EXPOSED_HEADERS.join(', '));
+        res.setHeader('Access-Control-Expose-Headers', 'x-dimensions, x-method, x-device, x-template, x-is-placeholder, x-placeholder, x-warning, Content-Type, Content-Length, x-response-time');
     } else {
         res.setHeader('Access-Control-Allow-Origin', '*');
     }
@@ -310,14 +200,26 @@ function setResponseHeaders(res, headers, origin, isError = false) {
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS, POST, PUT, PATCH, DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
     res.setHeader('Access-Control-Max-Age', '86400');
-    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+
+    if (!isError) {
+        res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+    }
+}
+
+function createErrorResponse(error, isPlaceholder = true) {
+    return {
+        success: false,
+        error: error.message || 'Screenshot capture failed',
+        isPlaceholder: isPlaceholder,
+        details: error.details || error.toString()
+    };
 }
 
 // ================================
-// Main handler function
+// Main Handler
 // ================================
 
-async function handler(req, res) {
+export default async function handler(req, res) {
     const origin = req.headers.origin;
 
     // Handle preflight
@@ -342,7 +244,7 @@ async function handler(req, res) {
             } catch {
                 setResponseHeaders(res, {}, origin, true);
                 return res.status(400).json(createErrorResponse(
-                    new Error(ERROR_MESSAGES.INVALID_JSON)
+                    new Error('Invalid JSON format')
                 ));
             }
         } else {
@@ -353,7 +255,7 @@ async function handler(req, res) {
         if (!url) {
             setResponseHeaders(res, {}, origin, true);
             return res.status(400).json(createErrorResponse(
-                new Error(ERROR_MESSAGES.MISSING_URL)
+                new Error('Missing required parameter: URL')
             ));
         }
 
@@ -361,7 +263,7 @@ async function handler(req, res) {
         const customWidth = parseInt(body.width) || null;
         const customHeight = parseInt(body.height) || null;
         const customFullPage = body.fullPage !== undefined ? Boolean(body.fullPage) : undefined;
-        const timeout = Math.min(parseInt(body.timeout) || TIMEOUTS.DEFAULT_CAPTURE, TIMEOUTS.MAX_CAPTURE);
+        const timeout = Math.min(parseInt(body.timeout) || 30000, 60000);
 
         const cleanUrl = validateAndCleanUrl(url);
         const viewport = getTemplateViewport(templateId, customWidth, customHeight, customFullPage);
@@ -372,20 +274,20 @@ async function handler(req, res) {
         if (!USE_BROWSERLESS) {
             setResponseHeaders(res, {}, origin, true);
             return res.status(200).json(createErrorResponse(
-                new Error(ERROR_MESSAGES.BROWSERLESS_NOT_CONFIGURED)
+                new Error('Browserless.io API key not configured')
             ));
         }
 
-        const browserlessUrl = `${BROWSERLESS_CONFIG.BASE_URL}${BROWSERLESS_CONFIG.ENDPOINT}?token=${BROWSERLESS_API_KEY}`;
+        const browserlessUrl = `https://production-sfo.browserless.io/screenshot?token=${BROWSERLESS_API_KEY}`;
 
         const browserlessBody = {
             url: cleanUrl,
             options: {
-                type: BROWSERLESS_CONFIG.DEFAULT_TYPE,
+                type: 'png',
                 fullPage: viewport.fullPage,
                 encoding: 'binary',
-                waitForTimeout: TIMEOUTS.PAGE_LOAD,
-                quality: BROWSERLESS_CONFIG.DEFAULT_QUALITY
+                waitForTimeout: 5000,
+                quality: 80
             }
         };
 
@@ -421,13 +323,13 @@ async function handler(req, res) {
                 if (response.status === 401 || response.status === 403) {
                     setResponseHeaders(res, {}, origin, true);
                     return res.status(200).json(createErrorResponse(
-                        new Error(ERROR_MESSAGES.INVALID_API_TOKEN)
+                        new Error('Invalid Browserless API token')
                     ));
                 }
 
                 setResponseHeaders(res, {}, origin, true);
                 return res.status(200).json(createErrorResponse(
-                    new Error(ERROR_MESSAGES.CAPTURE_FAILED),
+                    new Error('Screenshot capture failed'),
                     true
                 ));
             }
@@ -437,15 +339,15 @@ async function handler(req, res) {
 
             setResponseHeaders(res, {
                 'Content-Length': imageBuffer.length,
-                [HEADERS.DIMENSIONS]: JSON.stringify({
+                'x-dimensions': JSON.stringify({
                     width: viewport.width,
                     height: viewport.height
                 }),
-                [HEADERS.METHOD]: 'browserless',
-                [HEADERS.DEVICE]: viewport.device,
-                [HEADERS.TEMPLATE]: templateId,
-                [HEADERS.PLACEHOLDER]: 'false',
-                [HEADERS.RESPONSE_TIME]: Date.now().toString()
+                'x-method': 'browserless',
+                'x-device': viewport.device,
+                'x-template': templateId,
+                'x-is-placeholder': 'false',
+                'x-response-time': Date.now().toString()
             }, origin, false);
 
             return res.status(200).send(imageBuffer);
@@ -456,13 +358,13 @@ async function handler(req, res) {
             if (fetchError.name === 'AbortError') {
                 setResponseHeaders(res, {}, origin, true);
                 return res.status(200).json(createErrorResponse(
-                    new Error(ERROR_MESSAGES.CAPTURE_TIMEOUT)
+                    new Error('Screenshot capture timeout')
                 ));
             }
 
             setResponseHeaders(res, {}, origin, true);
             return res.status(200).json(createErrorResponse(
-                new Error(ERROR_MESSAGES.CAPTURE_FAILED),
+                new Error('Screenshot capture failed'),
                 true
             ));
         }
@@ -472,5 +374,3 @@ async function handler(req, res) {
         return res.status(200).json(createErrorResponse(error, true));
     }
 }
-
-export default handler;

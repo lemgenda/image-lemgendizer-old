@@ -1,87 +1,168 @@
-// complete-test.js
+// complete-test-fixed.js
 async function runCompleteTestSuite() {
-    console.log('🚀 Complete API Test Suite\n');
+    console.log('🚀 Complete Screenshot API Test Suite\n');
     console.log('='.repeat(60));
 
     const testCases = [
         {
-            name: 'Basic screenshot (lemgenda.hr)',
-            body: { url: 'https://lemgenda.hr' }
-        },
-        {
-            name: 'Mobile viewport',
+            name: 'Default desktop screenshot',
             body: {
                 url: 'https://lemgenda.hr',
-                device: 'mobile'
+                templateId: 'screenshots-desktop'  // Added templateId
             }
         },
         {
-            name: 'Tablet viewport',
+            name: 'Mobile screenshot via template',
             body: {
                 url: 'https://lemgenda.hr',
-                device: 'tablet'
+                templateId: 'screenshots-mobile'
             }
         },
         {
-            name: 'Custom dimensions',
+            name: 'Tablet screenshot via template',
             body: {
                 url: 'https://lemgenda.hr',
-                width: 1024,
-                height: 768
+                templateId: 'screenshots-tablet'
             }
         },
         {
-            name: 'Full page screenshot',
+            name: 'Desktop HD screenshot',
             body: {
                 url: 'https://lemgenda.hr',
+                templateId: 'screenshots-desktop-hd'
+            }
+        },
+        {
+            name: 'Mobile full page',
+            body: {
+                url: 'https://lemgenda.hr',
+                templateId: 'screenshots-mobile-full',
                 fullPage: true
             }
         },
         {
-            name: 'JPEG with quality',
+            name: 'Custom dimensions override',
             body: {
                 url: 'https://lemgenda.hr',
-                type: 'jpeg',
-                quality: 90
+                templateId: 'screenshots-desktop',
+                width: 800,
+                height: 600
+            }
+        },
+        {
+            name: 'Timeout test (should fail)',
+            body: {
+                url: 'https://lemgenda.hr',
+                templateId: 'screenshots-desktop',
+                timeout: 1000  // 1 second - should timeout
+            }
+        },
+        {
+            name: 'Invalid URL (should error)',
+            body: {
+                url: 'not-a-valid-url',
+                templateId: 'screenshots-desktop'
+            }
+        },
+        {
+            name: 'Missing templateId (should use default)',
+            body: {
+                url: 'https://lemgenda.hr'
+                // No templateId - should default to screenshots-desktop
             }
         }
     ];
 
+    let passed = 0;
+    let failed = 0;
+
     for (const testCase of testCases) {
-        console.log(`\n🧪 Testing: ${testCase.name}`);
+        console.log(`\n🧪 Test ${testCases.indexOf(testCase) + 1}: ${testCase.name}`);
+        console.log(`   Request: ${JSON.stringify(testCase.body)}`);
 
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
+
             const response = await fetch('http://localhost:3000/api/screenshot', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'image/png, application/json'
+                },
                 body: JSON.stringify(testCase.body),
-                signal: AbortSignal.timeout(30000)
+                signal: controller.signal
             });
 
-            console.log(`   Status: ${response.status}`);
+            clearTimeout(timeoutId);
+
+            console.log(`   Status: ${response.status} ${response.statusText}`);
+
+            // Log all headers for debugging
+            console.log('   Headers:');
+            for (const [key, value] of response.headers.entries()) {
+                console.log(`     ${key}: ${value}`);
+            }
+
+            const contentType = response.headers.get('content-type');
 
             if (response.ok) {
-                const contentType = response.headers.get('content-type');
                 if (contentType && contentType.includes('image')) {
                     const buffer = await response.arrayBuffer();
-                    console.log(`   ✅ Success: ${buffer.byteLength} bytes`);
+                    console.log(`   ✅ SUCCESS: ${(buffer.byteLength / 1024).toFixed(2)} KB image`);
                     console.log(`   📏 Dimensions: ${response.headers.get('x-dimensions')}`);
                     console.log(`   ⚙️  Method: ${response.headers.get('x-method')}`);
+                    console.log(`   📱 Device: ${response.headers.get('x-device')}`);
+                    console.log(`   🏷️  Template: ${response.headers.get('x-template')}`);
+                    console.log(`   📍 Placeholder: ${response.headers.get('x-is-placeholder')}`);
+                    passed++;
+                } else if (contentType && contentType.includes('json')) {
+                    const errorData = await response.json();
+                    console.log(`   ⚠️  JSON Response (expected image):`);
+                    console.log(`      Error: ${errorData.error}`);
+                    console.log(`      Placeholder: ${errorData.isPlaceholder}`);
+                    if (errorData.details) {
+                        console.log(`      Details: ${errorData.details}`);
+                    }
+                    failed++;
                 } else {
-                    console.log(`   ⚠️  Not an image: ${contentType}`);
+                    console.log(`   ❓ Unexpected content type: ${contentType}`);
+                    failed++;
                 }
             } else {
-                const error = await response.text();
-                console.log(`   ❌ Error: ${error.substring(0, 200)}`);
+                if (contentType && contentType.includes('json')) {
+                    const errorData = await response.json();
+                    console.log(`   ❌ Error Response:`);
+                    console.log(`      Error: ${errorData.error}`);
+                    if (errorData.isPlaceholder !== undefined) {
+                        console.log(`      Placeholder: ${errorData.isPlaceholder}`);
+                    }
+                    failed++;
+                } else {
+                    const errorText = await response.text();
+                    console.log(`   ❌ Error: ${errorText.substring(0, 200)}`);
+                    failed++;
+                }
             }
+
         } catch (error) {
             console.log(`   ❌ Request failed: ${error.message}`);
+            failed++;
         }
     }
 
     console.log('\n' + '='.repeat(60));
-    console.log('✅ All tests completed!');
-    console.log('\n🎉 Your screenshot API is fully functional!');
+    console.log(`📊 Summary: ${passed} passed, ${failed} failed`);
+
+    if (failed === 0) {
+        console.log('🎉 All tests passed! Your screenshot API is working perfectly!');
+    } else {
+        console.log('⚠️  Some tests failed. Check the logs above for details.');
+    }
 }
 
-runCompleteTestSuite().catch(console.error);
+// Run with proper error handling
+runCompleteTestSuite().catch(error => {
+    console.error('Test suite crashed:', error);
+    process.exit(1);
+});
