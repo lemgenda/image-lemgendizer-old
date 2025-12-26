@@ -1,21 +1,14 @@
 import JSZip from 'jszip';
-import {
-    PROCESSING_MODES,
-    EXPORT_FOLDERS,
-    TEMPLATE_CATEGORIES,
-    PLATFORM_NAMES,
-    TEMPLATE_NAMES
-} from '../constants/sharedConstants';
-
+import { PROCESSING_MODES } from '../constants/sharedConstants';
 import { generateFaviconSet, generateScreenshots } from '../utils';
+import {
+    EXPORT_FOLDERS,
+    TEMPLATE_CATEGORIES_CONST as TEMPLATE_CATEGORIES,
+    PLATFORM_NAMES,
+    TEMPLATE_NAMES,
+    SCREENSHOT_TEMPLATES
+} from '../configs/templateConfigs';
 
-/**
- * Creates export settings based on processing mode.
- *
- * @param {string} mode - Processing mode ('custom' or 'templates')
- * @param {Object} additionalSettings - Additional settings for templates
- * @returns {Object} Export settings object
- */
 export const generateExportSettings = (mode, additionalSettings = {}) => {
     const baseDefaults = {
         includeOriginal: false,
@@ -62,13 +55,6 @@ export const generateExportSettings = (mode, additionalSettings = {}) => {
     return mergedSettings;
 };
 
-/**
- * Gets folder structure for different export modes.
- *
- * @param {string} mode - Processing mode
- * @param {Object} settings - Export settings (optional)
- * @returns {Array<string>} Array of folder paths
- */
 export const getExportFolderStructure = (mode, settings = {}) => {
     if (mode === PROCESSING_MODES.CUSTOM) {
         return [EXPORT_FOLDERS.ORIGINAL_IMAGES, EXPORT_FOLDERS.OPTIMIZED_IMAGES];
@@ -91,12 +77,6 @@ export const getExportFolderStructure = (mode, settings = {}) => {
     return [];
 };
 
-/**
- * Organizes processed images by format for custom mode export.
- *
- * @param {Array<Object>} processedImages - Array of processed image objects
- * @returns {Object} Images grouped by format
- */
 export const organizeImagesByFormat = (processedImages) => {
     const groupedByFormat = {};
 
@@ -113,12 +93,6 @@ export const organizeImagesByFormat = (processedImages) => {
     return groupedByFormat;
 };
 
-/**
- * Organizes social media templates by platform.
- *
- * @param {Array<Object>} socialTemplates - Array of social media template images
- * @returns {Object} Templates grouped by platform
- */
 export const organizeTemplatesByPlatform = (socialTemplates) => {
     const organized = {};
 
@@ -146,30 +120,24 @@ export const organizeTemplatesByPlatform = (socialTemplates) => {
     return organized;
 };
 
-/**
- * Filters screenshot templates to only include selected ones
- * @param {Array<Object>} processedImages - Processed images (unused in this version)
- * @param {Array<string>} selectedTemplateIds - Selected template IDs
- * @returns {Array<Object>} Filtered screenshot templates
- */
 const filterScreenshotTemplates = (processedImages, selectedTemplateIds) => {
-    const { SCREENSHOT_TEMPLATES } = require('../configs/templateConfigs');
+    if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
+        return [];
+    }
 
-    const allScreenshotTemplates = Object.values(SCREENSHOT_TEMPLATES || {});
+    const allTemplates = [];
 
-    return allScreenshotTemplates.filter(template =>
-        selectedTemplateIds.includes(template.id)
-    );
+    if (SCREENSHOT_TEMPLATES && typeof SCREENSHOT_TEMPLATES === 'object') {
+        Object.values(SCREENSHOT_TEMPLATES).forEach(template => {
+            if (selectedTemplateIds.includes(template.id)) {
+                allTemplates.push(template);
+            }
+        });
+    }
+
+    return allTemplates;
 };
 
-/**
- * Processes favicon set generation
- * @async
- * @param {File} sourceImage - Source image for favicon
- * @param {Object} settings - Export settings with favicon options
- * @param {JSZip} zip - JSZip instance (optional)
- * @returns {Promise<Blob|void>} Favicon ZIP blob or adds to existing zip
- */
 const processFaviconSet = async (sourceImage, settings, zip = null) => {
     try {
         const faviconZipBlob = await generateFaviconSet(
@@ -186,38 +154,23 @@ const processFaviconSet = async (sourceImage, settings, zip = null) => {
             const files = faviconZip.files;
             for (const [fileName, fileData] of Object.entries(files)) {
                 if (!fileData.dir) {
-                    try {
-                        const content = await fileData.async('blob');
-                        faviconFolder.file(fileName, content);
-                    } catch {
-                    }
+                    const content = await fileData.async('blob');
+                    faviconFolder.file(fileName, content);
                 }
             }
-            return null;
+            return;
         } else {
             return faviconZipBlob;
         }
     } catch {
         if (zip) {
             const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/${PLATFORM_NAMES.FAVICON || 'FaviconSet'}`);
-            const errorText = `Favicon generation failed`;
-            faviconFolder.file('error.txt', errorText);
+            faviconFolder.file('error.txt', 'Favicon generation failed');
         }
         throw new Error('Favicon generation failed');
     }
 };
 
-/**
- * Creates an export ZIP file with organized folder structure.
- *
- * @async
- * @param {Array<Object>} originalImages - Original image objects with file and name properties
- * @param {Array<Object>} processedImages - Processed image objects with file, name, and optional template properties
- * @param {Object} settings - Export settings with include flags
- * @param {string} mode - Processing mode ('custom' or 'templates')
- * @param {Array<string>} formats - Array of selected output formats (for custom mode)
- * @returns {Promise<Blob>} ZIP file blob
- */
 export const createExportZip = async (originalImages, processedImages, settings, mode, formats = ['webp']) => {
     const zip = new JSZip();
 
@@ -231,10 +184,7 @@ export const createExportZip = async (originalImages, processedImages, settings,
         const originalFolder = zip.folder(EXPORT_FOLDERS.ORIGINAL_IMAGES);
         for (const image of originalImages) {
             if (image.file) {
-                try {
-                    originalFolder.file(image.name, image.file);
-                } catch {
-                }
+                originalFolder.file(image.name, image.file);
             }
         }
     }
@@ -246,14 +196,11 @@ export const createExportZip = async (originalImages, processedImages, settings,
             if (images.length > 0) {
                 const formatFolder = zip.folder(`${EXPORT_FOLDERS.OPTIMIZED_IMAGES}/${format.toUpperCase()}`);
                 for (const image of images) {
-                    try {
-                        let fileName = image.name;
-                        if (!fileName.includes('.')) {
-                            fileName = `${fileName}.${format}`;
-                        }
-                        formatFolder.file(fileName, image.file);
-                    } catch {
+                    let fileName = image.name;
+                    if (!fileName.includes('.')) {
+                        fileName = `${fileName}.${format}`;
                     }
+                    formatFolder.file(fileName, image.file);
                 }
             }
         }
@@ -273,24 +220,15 @@ export const createExportZip = async (originalImages, processedImages, settings,
             const jpgImages = webTemplates.filter(img => img.format === 'jpg');
 
             for (const image of webpImages) {
-                try {
-                    webFolder.file(image.name, image.file);
-                } catch {
-                }
+                webFolder.file(image.name, image.file);
             }
 
             for (const image of pngImages) {
-                try {
-                    webFolder.file(image.name, image.file);
-                } catch {
-                }
+                webFolder.file(image.name, image.file);
             }
 
             for (const image of jpgImages) {
-                try {
-                    webFolder.file(image.name, image.file);
-                } catch {
-                }
+                webFolder.file(image.name, image.file);
             }
         }
     }
@@ -308,17 +246,11 @@ export const createExportZip = async (originalImages, processedImages, settings,
             const jpgImages = logoTemplates.filter(img => img.format === 'jpg');
 
             for (const image of pngImages) {
-                try {
-                    logoFolder.file(image.name, image.file);
-                } catch {
-                }
+                logoFolder.file(image.name, image.file);
             }
 
             for (const image of jpgImages) {
-                try {
-                    logoFolder.file(image.name, image.file);
-                } catch {
-                }
+                logoFolder.file(image.name, image.file);
             }
         }
     }
@@ -339,10 +271,7 @@ export const createExportZip = async (originalImages, processedImages, settings,
             for (const [platform, platformImages] of Object.entries(organizedPlatforms)) {
                 const platformFolder = zip.folder(`${EXPORT_FOLDERS.SOCIAL_MEDIA_IMAGES}/${platform}`);
                 for (const image of platformImages) {
-                    try {
-                        platformFolder.file(image.name, image.file);
-                    } catch {
-                    }
+                    platformFolder.file(image.name, image.file);
                 }
             }
         }
@@ -377,8 +306,7 @@ export const createExportZip = async (originalImages, processedImages, settings,
                 }
             } catch {
                 const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/${PLATFORM_NAMES.FAVICON || 'FaviconSet'}`);
-                const errorText = `Favicon generation failed`;
-                faviconFolder.file('error.txt', errorText);
+                faviconFolder.file('error.txt', 'Favicon generation failed');
             }
         }
     }
@@ -393,8 +321,7 @@ export const createExportZip = async (originalImages, processedImages, settings,
             if (selectedScreenshotTemplateIds.length === 0) {
                 const screenshotFolder = zip.folder(PLATFORM_NAMES.SCREENSHOTS || 'Screenshots');
                 screenshotFolder.file('NOTE.txt',
-                    'No screenshot templates were selected for generation.\n' +
-                    'Select screenshot templates in the template selection interface.'
+                    'No screenshot templates were selected for generation.'
                 );
             } else {
                 const selectedScreenshotTemplates = filterScreenshotTemplates(processedImages, selectedScreenshotTemplateIds);
@@ -407,7 +334,7 @@ export const createExportZip = async (originalImages, processedImages, settings,
 
                 const screenshotZipBlob = await generateScreenshots(
                     cleanUrl,
-                    settings.faviconSiteName || TEMPLATE_NAMES.SCREENSHOTS_SITE_NAME || 'Website Screenshots',
+                    settings.faviconSiteName || TEMPLATE_NAMES.SCREENSHOT_SITE_NAME || 'Website Screenshots',
                     selectedScreenshotTemplateIds,
                     {
                         selectedScreenshotTemplates: selectedScreenshotTemplateIds,
@@ -424,40 +351,27 @@ export const createExportZip = async (originalImages, processedImages, settings,
 
                 const files = screenshotZip.files;
                 let hasActualScreenshots = false;
-                let filesAdded = 0;
 
                 for (const [fileName, fileData] of Object.entries(files)) {
                     if (!fileData.dir) {
-                        try {
-                            const content = await fileData.async('blob');
-                            screenshotFolder.file(fileName, content);
-                            filesAdded++;
+                        const content = await fileData.async('blob');
+                        screenshotFolder.file(fileName, content);
 
-                            if (fileName.includes('screenshot-') && !fileName.includes('error')) {
-                                hasActualScreenshots = true;
-                            }
-                        } catch {
-                            continue;
+                        if (fileName.includes('screenshot-') && !fileName.includes('error')) {
+                            hasActualScreenshots = true;
                         }
                     }
                 }
 
                 if (!hasActualScreenshots) {
                     screenshotFolder.file('NOTE.txt',
-                        `The website ${cleanUrl} uses security headers that prevent automated screenshot capture.\n` +
-                        `The included images are informative placeholders.\n` +
-                        `To get actual screenshots:\n` +
-                        `1. Use browser developer tools\n` +
-                        `2. Use a screenshot extension\n` +
-                        `3. Contact the website owner about X-Frame-Options headers`
+                        `The website ${cleanUrl} uses security headers that prevent automated screenshot capture.`
                     );
                 }
             }
-
         } catch {
             const screenshotFolder = zip.folder(PLATFORM_NAMES.SCREENSHOTS || 'Screenshots');
-            const errorText = `Screenshot generation failed`;
-            screenshotFolder.file('error.txt', errorText);
+            screenshotFolder.file('error.txt', 'Screenshot generation failed');
         }
     }
 
@@ -475,24 +389,10 @@ export const createExportZip = async (originalImages, processedImages, settings,
     return zipBlob;
 };
 
-/**
- * Creates a standalone favicon set ZIP file
- * @async
- * @param {File} imageFile - Source image file
- * @param {Object} settings - Favicon settings
- * @returns {Promise<Blob>} Favicon ZIP blob
- */
 export const createFaviconZip = async (imageFile, settings = {}) => {
     return await processFaviconSet(imageFile, settings);
 };
 
-/**
- * Creates a standalone screenshot ZIP file
- * @async
- * @param {string} url - Website URL
- * @param {Object} settings - Screenshot settings
- * @returns {Promise<Blob>} Screenshot ZIP blob
- */
 export const createScreenshotZip = async (url, settings = {}) => {
     const templateIds = settings.selectedScreenshotTemplates || [];
     return await generateScreenshots(
@@ -503,14 +403,6 @@ export const createScreenshotZip = async (url, settings = {}) => {
     );
 };
 
-/**
- * Creates export summary text
- * @param {Array<Object>} originalImages - Original images
- * @param {Array<Object>} processedImages - Processed images
- * @param {Object} settings - Export settings
- * @param {string} mode - Processing mode
- * @returns {string} Summary text
- */
 const createExportSummary = (originalImages, processedImages, settings, mode) => {
     const timestamp = new Date().toISOString();
 
@@ -557,14 +449,6 @@ Need help? Contact support or check the documentation.`;
     return summary;
 };
 
-/**
- * Calculates total files in export
- * @param {Array<Object>} originalImages - Original images
- * @param {Array<Object>} processedImages - Processed images
- * @param {Object} settings - Export settings
- * @param {string} mode - Processing mode
- * @returns {number} Total file count
- */
 const calculateTotalFiles = (originalImages, processedImages, settings, mode) => {
     let total = 0;
 
@@ -605,12 +489,6 @@ const calculateTotalFiles = (originalImages, processedImages, settings, mode) =>
     return total;
 };
 
-/**
- * Gets included content summary
- * @param {Object} settings - Export settings
- * @param {string} mode - Processing mode
- * @returns {string} Content summary
- */
 const getIncludedContentSummary = (settings, mode) => {
     const items = [];
 
@@ -632,11 +510,6 @@ const getIncludedContentSummary = (settings, mode) => {
     return items.map(item => `✓ ${item}`).join('\n');
 };
 
-/**
- * Gets export notes based on mode
- * @param {string} mode - Processing mode
- * @returns {string} Export notes
- */
 const getExportNotes = (mode) => {
     if (mode === PROCESSING_MODES.CUSTOM) {
         return `- Images are organized by format in subfolders
@@ -651,12 +524,6 @@ const getExportNotes = (mode) => {
     return '';
 };
 
-/**
- * Downloads a ZIP file to the user's device.
- *
- * @param {Blob} zipBlob - The ZIP file blob to download
- * @param {string} prefix - File name prefix for the downloaded file
- */
 export const downloadZip = (zipBlob, prefix) => {
     const url = URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
@@ -668,11 +535,6 @@ export const downloadZip = (zipBlob, prefix) => {
     URL.revokeObjectURL(url);
 };
 
-/**
- * Downloads individual files (for standalone exports)
- * @param {Blob} blob - File blob
- * @param {string} filename - File name
- */
 export const downloadFile = (blob, filename) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

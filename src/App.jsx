@@ -18,17 +18,21 @@ import {
   calculateTotalTemplateFiles,
   formatFileSize
 } from './utils';
-import { getTemplateCategories, SOCIAL_MEDIA_TEMPLATES } from './configs/templateConfigs';
+import {
+  getTemplateCategories,
+  SOCIAL_MEDIA_TEMPLATES,
+  SCREENSHOT_TEMPLATES,
+  DEFAULT_FAVICON_BACKGROUND_COLOR,
+  DEFAULT_FAVICON_SITE_NAME,
+  SCREENSHOT_TEMPLATE_ID,
+  FAVICON_TEMPLATE_ID,
+  DEFAULT_FAVICON_THEME_COLOR
+} from './configs/templateConfigs';
 import {
   PROCESSING_MODES,
   COMPRESSION_QUALITY_RANGE,
   CROP_MODES,
   ALL_OUTPUT_FORMATS,
-  FAVICON_TEMPLATE_ID,
-  SCREENSHOT_TEMPLATE_ID,
-  DEFAULT_FAVICON_SITE_NAME,
-  DEFAULT_FAVICON_THEME_COLOR,
-  DEFAULT_FAVICON_BACKGROUND_COLOR,
   DEFAULT_PROCESSING_CONFIG,
   MODAL_TYPES,
   EXPORT_SETTINGS,
@@ -86,10 +90,8 @@ function App() {
       try {
         await loadUTIFLibrary();
 
-        // Initialize screenshot service if in template mode
         if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
           try {
-            // Create a test instance to check API availability
             const screenshotService = new UnifiedScreenshotService({
               useServerCapture: true,
               enableCaching: true,
@@ -97,36 +99,24 @@ function App() {
               timeout: DEFAULT_SCREENSHOT_TIMEOUT
             });
 
-            // Check if API is available
             const apiAvailable = await screenshotService.isApiAvailable();
 
-            if (!apiAvailable) {
-              console.warn('Screenshot API is not available. Placeholder images will be used.');
-
-              // Show a subtle warning to the user
-              if (!screenshotUrl.trim()) {
-                // Only show if user hasn't entered a URL yet
-                setTimeout(() => {
-                  showModal(
-                    t('message.info'),
-                    t('message.screenshotApiUnavailable'),
-                    MODAL_TYPES.INFO
-                  );
-                }, 2000);
-              }
+            if (!apiAvailable && !screenshotUrl.trim()) {
+              setTimeout(() => {
+                showModal(
+                  t('message.info'),
+                  t('message.screenshotApiUnavailable'),
+                  MODAL_TYPES.INFO
+                );
+              }, 2000);
             }
 
-            // Clean up the test instance
             screenshotService.cleanup();
 
-          } catch (apiError) {
-            // Silently handle initialization errors
-            console.info('Screenshot service initialization failed:', apiError.message);
+          } catch {
           }
         }
-      } catch (error) {
-        // Silently handle UTIF loading errors
-        console.info('UTIF library loading failed');
+      } catch {
       }
     };
 
@@ -170,8 +160,7 @@ function App() {
       blobUrls.forEach(url => {
         try {
           URL.revokeObjectURL(url);
-        } catch {
-        }
+        } catch { }
       });
 
       cleanupBlobUrls(images);
@@ -285,12 +274,10 @@ function App() {
     setIsScreenshotSelected(selected);
 
     if (selected) {
-      if (!processingOptions.selectedTemplates.includes(SCREENSHOT_TEMPLATE_ID)) {
-        setProcessingOptions(prev => ({
-          ...prev,
-          selectedTemplates: [...prev.selectedTemplates, SCREENSHOT_TEMPLATE_ID]
-        }));
-      }
+      setProcessingOptions(prev => ({
+        ...prev,
+        selectedTemplates: prev.selectedTemplates.filter(id => id !== SCREENSHOT_TEMPLATE_ID)
+      }));
     } else {
       setProcessingOptions(prev => ({
         ...prev,
@@ -569,7 +556,6 @@ function App() {
           cleanUrl = `https://${cleanUrl}`;
         }
         cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
-
         new URL(cleanUrl);
         setScreenshotUrl(cleanUrl);
       } catch {
@@ -585,14 +571,12 @@ function App() {
 
     setIsLoading(true);
 
-    // Check if we're generating screenshots without API
     const hasScreenshotTemplates = processingOptions.selectedTemplates.some(id => {
       const template = SOCIAL_MEDIA_TEMPLATES.find(t => t.id === id);
       return template && template.category === 'screenshots';
     });
 
     if (hasScreenshotTemplates && isScreenshotSelected) {
-      // Show info about placeholder mode if API might not be available
       showModal(
         t('message.processingImages', { count: processingOptions.selectedTemplates.length }),
         t('message.generatingScreenshots'),
@@ -609,9 +593,12 @@ function App() {
     try {
       const processingConfig = getProcessingConfiguration(processingOptions);
 
+      const screenshotTemplateIds = isScreenshotSelected && SCREENSHOT_TEMPLATES ?
+        Object.keys(SCREENSHOT_TEMPLATES) : [];
+
       const processingOptionsWithExtras = {
         ...processingConfig,
-        useServerCapture: true,
+        useServerCapture: false,
         faviconSiteName: processingOptions.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
         faviconThemeColor: processingOptions.faviconThemeColor || DEFAULT_FAVICON_THEME_COLOR,
         faviconBackgroundColor: processingOptions.faviconBackgroundColor || DEFAULT_FAVICON_BACKGROUND_COLOR,
@@ -619,10 +606,7 @@ function App() {
         includeFavicon: isFaviconSelected,
         includeScreenshots: isScreenshotSelected,
         selectedTemplates: processingOptions.selectedTemplates,
-        selectedScreenshotTemplates: processingOptions.selectedTemplates.filter(id => {
-          const template = SOCIAL_MEDIA_TEMPLATES.find(t => t.id === id);
-          return template && template.category === 'screenshots';
-        }),
+        selectedScreenshotTemplates: screenshotTemplateIds,
         ...(isFaviconSelected && { faviconTemplateIds: [FAVICON_TEMPLATE_ID] })
       };
 
@@ -643,6 +627,7 @@ function App() {
         screenshotUrl: isScreenshotSelected ? screenshotUrl : '',
         includeFavicon: isFaviconSelected,
         includeScreenshots: isScreenshotSelected,
+        selectedScreenshotTemplates: screenshotTemplateIds,
         includeOriginal: false,
         includeOptimized: false,
         includeWebImages: true,
@@ -660,8 +645,7 @@ function App() {
 
       downloadZip(zipBlob, EXPORT_SETTINGS.DEFAULT_ZIP_NAME_TEMPLATES);
 
-      // Check if we used placeholders for screenshots
-      const usedPlaceholders = processedImages.some(img =>
+      const hasScreenshotPlaceholders = processedImages.some(img =>
         img.template?.category === 'screenshots' &&
         img.method &&
         img.method.includes('placeholder')
@@ -671,14 +655,13 @@ function App() {
         imagesProcessed: 1,
         totalFiles: processedImages.length,
         success: true,
-        usedPlaceholders: usedPlaceholders
+        usedPlaceholders: hasScreenshotPlaceholders
       }, processingConfig, t);
 
       closeModal();
       showSummaryModal(summary);
 
-      // Show additional info if placeholders were used
-      if (usedPlaceholders && isScreenshotSelected) {
+      if (hasScreenshotPlaceholders && isScreenshotSelected) {
         setTimeout(() => {
           showModal(
             t('message.info'),

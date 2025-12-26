@@ -1,4 +1,4 @@
-import { TEMPLATE_CATEGORIES } from '../constants/sharedConstants.js';
+import { TEMPLATE_CATEGORIES } from '../configs/templateConfigs';
 
 /**
  * Gets template by ID.

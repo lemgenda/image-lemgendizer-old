@@ -20,7 +20,8 @@ import {
     FAVICON_PREVIEW_SIZE,
     DEFAULT_FAVICON_SITE_NAME,
     DEFAULT_FAVICON_THEME_COLOR,
-    DEFAULT_FAVICON_BACKGROUND_COLOR
+    DEFAULT_FAVICON_BACKGROUND_COLOR,
+    SCREENSHOT_TEMPLATES
 } from '../configs/templateConfigs';
 
 import {
@@ -668,8 +669,10 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
 
         const processedImages = [];
 
-        const screenshotTemplates = selectedTemplates.filter(t => getCategoryConstant(t.category) === 'screenshots');
-        const otherTemplates = selectedTemplates.filter(t => getCategoryConstant(t.category) !== 'screenshots');
+        const screenshotTemplateIds = processingOptions.selectedScreenshotTemplates || [];
+        const otherTemplates = selectedTemplates.filter(t =>
+            getCategoryConstant(t.category) !== 'screenshots'
+        );
 
         if (otherTemplates.length > 0) {
             if (onProgress) onProgress('processing-regular-templates', 40);
@@ -685,26 +688,56 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
             processedImages.push(...regularTemplateImages);
         }
 
-        if (screenshotTemplates.length > 0 && processingOptions.includeScreenshots && processingOptions.screenshotUrl) {
+        if (screenshotTemplateIds.length > 0 && processingOptions.includeScreenshots && processingOptions.screenshotUrl) {
             if (onProgress) onProgress('capturing-screenshots', 70);
 
             const screenshotService = new UnifiedScreenshotService({
-                useServerCapture: true,
+                useServerCapture: false,
                 enableCaching: true,
                 enableCompression: true,
-                timeout: PROCESSING_DELAYS.SCREENSHOT_CAPTURE
+                timeout: 10000
             });
 
-            const screenshotResults = await screenshotService.processScreenshotsForTemplates(
-                processingOptions.screenshotUrl,
-                screenshotTemplates,
-                {
-                    fullPage: processingOptions.fullPageScreenshots || false,
-                    siteName: processingOptions.faviconSiteName || 'Website'
-                }
-            );
+            const screenshotTemplates = screenshotTemplateIds
+                .map(id => SCREENSHOT_TEMPLATES && SCREENSHOT_TEMPLATES[id])
+                .filter(template => template !== undefined);
 
-            processedImages.push(...screenshotResults);
+            if (screenshotTemplates.length > 0) {
+                const screenshotResults = await screenshotService.captureByTemplates(
+                    processingOptions.screenshotUrl,
+                    screenshotTemplateIds,
+                    {
+                        fullPage: processingOptions.fullPageScreenshots || false,
+                        siteName: processingOptions.faviconSiteName || 'Website',
+                        timeout: 10000
+                    }
+                );
+
+                Object.entries(screenshotResults.results).forEach(([templateId, result]) => {
+                    const template = screenshotTemplates.find(t => t.id === templateId);
+                    if (template && result.blob && result.blob instanceof Blob) {
+                        const baseName = `${template.platform}-${template.name}-${Date.now()}`;
+                        const extension = result.format || 'png';
+                        const fileName = `${baseName}.${extension}`;
+
+                        const file = new File([result.blob], fileName, {
+                            type: `image/${extension}`,
+                            lastModified: Date.now()
+                        });
+
+                        processedImages.push({
+                            file: file,
+                            name: fileName,
+                            template: template,
+                            format: extension,
+                            processed: true,
+                            success: result.success,
+                            method: result.method || 'placeholder',
+                            dimensions: result.dimensions
+                        });
+                    }
+                });
+            }
         }
 
         if (onProgress) onProgress('finalizing', 90);

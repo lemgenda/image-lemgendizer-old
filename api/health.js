@@ -27,12 +27,12 @@ export default async function handler(req, res) {
         reachable: false,
         status: null,
         endpointTested: 'production-sfo.browserless.io',
-        authMethod: 'token query parameter'
+        authMethod: 'Bearer token in headers'
     };
 
     if (hasApiKey) {
         try {
-            const testUrl = `https://production-sfo.browserless.io/screenshot?token=${BROWSERLESS_API_KEY}`;
+            const testUrl = 'https://production-sfo.browserless.io/screenshot';
             const testBody = {
                 url: 'https://example.com',
                 viewport: { width: 800, height: 600 },
@@ -43,7 +43,8 @@ export default async function handler(req, res) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'User-Agent': 'Image-Legendizer-Health-Check/2.6.0'
+                    'User-Agent': 'Image-Legendizer-Health-Check/2.6.0',
+                    'Authorization': `Bearer ${BROWSERLESS_API_KEY}`  // FIX: Use headers, not query parameter
                 },
                 body: JSON.stringify(testBody),
                 signal: AbortSignal.timeout(10000)
@@ -54,7 +55,7 @@ export default async function handler(req, res) {
                 status: testResponse.status,
                 statusText: testResponse.statusText,
                 endpointTested: 'production-sfo.browserless.io',
-                authMethod: 'token query parameter',
+                authMethod: 'Bearer token in headers',
                 headers: {
                     'x-ratelimit-limit': testResponse.headers.get('x-ratelimit-limit'),
                     'x-ratelimit-remaining': testResponse.headers.get('x-ratelimit-remaining'),
@@ -68,7 +69,7 @@ export default async function handler(req, res) {
                 status: null,
                 error: error.message,
                 endpointTested: 'production-sfo.browserless.io',
-                authMethod: 'token query parameter'
+                authMethod: 'Bearer token in headers'
             };
         }
     }
@@ -92,7 +93,7 @@ export default async function handler(req, res) {
         },
         browserlessConfig: {
             endpoint: 'production-sfo.browserless.io',
-            authMethod: 'token query parameter'
+            authMethod: 'Bearer token in headers'  // FIX: Update auth method
         },
         browserlessStatus: browserlessStatus,
         vercel: {

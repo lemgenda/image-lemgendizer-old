@@ -1,22 +1,4 @@
 // ================================
-// Import template constants from templateConfigs.js
-// ================================
-import {
-    TEMPLATE_CATEGORIES_CONST,
-    PLATFORM_NAMES,
-    TEMPLATE_NAMES,
-    EXPORT_FOLDERS,
-    FAVICON_TEMPLATE_ID,
-    SCREENSHOT_TEMPLATE_ID,
-    DEFAULT_FAVICON_SITE_NAME,
-    DEFAULT_FAVICON_THEME_COLOR,
-    DEFAULT_FAVICON_BACKGROUND_COLOR,
-    FAVICON_SIZE_LIST,
-    FAVICON_PREVIEW_SIZE,
-    SCREENSHOT_TEMPLATES
-} from '../configs/templateConfigs.js';
-
-// ================================
 // Image Processing Constants
 // ================================
 
@@ -204,25 +186,6 @@ export const CROP_POSITIONS = [
 export const CROP_MARGIN = 10;
 
 // ================================
-// Template Constants (Imported from templateConfigs.js)
-// ================================
-
-export {
-    TEMPLATE_CATEGORIES_CONST as TEMPLATE_CATEGORIES,
-    PLATFORM_NAMES,
-    TEMPLATE_NAMES,
-    EXPORT_FOLDERS,
-    FAVICON_TEMPLATE_ID,
-    SCREENSHOT_TEMPLATE_ID,
-    DEFAULT_FAVICON_SITE_NAME,
-    DEFAULT_FAVICON_THEME_COLOR,
-    DEFAULT_FAVICON_BACKGROUND_COLOR,
-    FAVICON_SIZE_LIST,
-    FAVICON_PREVIEW_SIZE,
-    SCREENSHOT_TEMPLATES
-};
-
-// ================================
 // App-specific Constants
 // ================================
 
@@ -289,12 +252,18 @@ export const VERCEL_ENDPOINTS = [
     {
         url: 'https://image-lemgendizer-old-x2qz.vercel.app/api/screenshot',
         priority: 1,
-        lastUsed: 0
+        lastUsed: 0,
+        healthUrls: [
+            'https://image-lemgendizer-old-x2qz.vercel.app/api/health'
+        ]
     },
     {
         url: 'http://localhost:3000/api/screenshot',
         priority: 2,
-        lastUsed: 0
+        lastUsed: 0,
+        healthUrls: [
+            'http://localhost:3000/api/health'
+        ]
     }
 ];
 

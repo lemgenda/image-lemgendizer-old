@@ -3,7 +3,7 @@ import {
     DEFAULT_FAVICON_SITE_NAME,
     DEFAULT_FAVICON_THEME_COLOR,
     DEFAULT_FAVICON_BACKGROUND_COLOR
-} from '../constants/sharedConstants.js';
+} from '../configs/templateConfigs';
 
 /**
  * Generates a complete favicon set from an image

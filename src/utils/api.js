@@ -1,19 +1,11 @@
 import {
     VERCEL_ENDPOINTS,
     DEFAULT_SCREENSHOT_TIMEOUT,
-    ERROR_MESSAGES,
-    DEVICE_PRESETS,
-    SCREENSHOT_TEMPLATES
+    DEVICE_PRESETS
 } from './constants/sharedConstants';
 
-/**
- * Captures screenshot using API endpoint
- * @async
- * @param {string} url - Website URL to capture
- * @param {string} templateId - Template ID for dimensions
- * @param {Object} options - Capture options
- * @returns {Promise<Object>} Screenshot result with blob, dimensions, and metadata
- */
+import { SCREENSHOT_TEMPLATES } from '../configs/templateConfigs';
+
 export async function captureScreenshot(url, templateId = 'desktop', options = {}) {
     try {
         let cleanUrl = url.trim();
@@ -26,6 +18,7 @@ export async function captureScreenshot(url, templateId = 'desktop', options = {
         const width = options.width || template?.width || 1280;
         const height = options.height || (template?.height === 'auto' ? null : template?.height) || 720;
         const device = options.device || 'desktop';
+        const timeout = Math.min(options.timeout || DEFAULT_SCREENSHOT_TIMEOUT, 30000);
 
         const requestBody = {
             url: cleanUrl,
@@ -34,22 +27,26 @@ export async function captureScreenshot(url, templateId = 'desktop', options = {
             height: height,
             fullPage: options.fullPage || false,
             templateId: templateId,
-            quality: options.quality || 80,
-            timeout: options.timeout || DEFAULT_SCREENSHOT_TIMEOUT
+            timeout: timeout
         };
 
         let lastError = null;
 
         for (const endpoint of VERCEL_ENDPOINTS) {
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout);
+
                 const response = await fetch(endpoint.url, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(requestBody),
-                    signal: AbortSignal.timeout(DEFAULT_SCREENSHOT_TIMEOUT)
+                    signal: controller.signal
                 });
+
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
@@ -86,30 +83,43 @@ export async function captureScreenshot(url, templateId = 'desktop', options = {
         }
 
         if (lastError) {
-            return await createPlaceholderScreenshot(cleanUrl, width, height, device, templateId);
+            const placeholder = await createPlaceholderScreenshot(cleanUrl, width, height, device, templateId);
+            return {
+                success: true,
+                blob: placeholder.blob,
+                url: placeholder.url,
+                device,
+                dimensions: { width, height },
+                method: 'placeholder',
+                isPlaceholder: true,
+                warning: 'API endpoint failed, using placeholder',
+                responseTime: 0
+            };
         }
 
         throw new Error('No endpoints available');
 
     } catch (error) {
+        const placeholder = await createPlaceholderScreenshot(url,
+            options.width || 1280,
+            options.height || 720,
+            options.device || 'desktop',
+            templateId);
+
         return {
-            success: false,
-            error: error.message || ERROR_MESSAGES.SCREENSHOT_CAPTURE_FAILED,
-            url: url
+            success: true,
+            blob: placeholder.blob,
+            url: placeholder.url,
+            device: options.device || 'desktop',
+            dimensions: { width: options.width || 1280, height: options.height || 720 },
+            method: 'placeholder-fallback',
+            isPlaceholder: true,
+            warning: 'Capture failed, using placeholder',
+            responseTime: 0
         };
     }
 }
 
-/**
- * Creates placeholder screenshot when API capture fails
- * @async
- * @param {string} url - Website URL
- * @param {number} width - Image width
- * @param {number} height - Image height
- * @param {string} device - Device type
- * @param {string} templateId - Template ID
- * @returns {Promise<Object>} Placeholder screenshot
- */
 async function createPlaceholderScreenshot(url, width, height, device, templateId) {
     return new Promise((resolve) => {
         const canvas = document.createElement('canvas');
@@ -177,28 +187,13 @@ async function createPlaceholderScreenshot(url, width, height, device, templateI
 
         canvas.toBlob((blob) => {
             resolve({
-                success: true,
                 blob,
-                url: URL.createObjectURL(blob),
-                device,
-                dimensions: { width, height },
-                method: 'placeholder',
-                isPlaceholder: true,
-                warning: 'API endpoint failed, using placeholder',
-                responseTime: 0
+                url: URL.createObjectURL(blob)
             });
         }, 'image/png', 0.9);
     });
 }
 
-/**
- * Captures multiple screenshots for template processing
- * @async
- * @param {string} url - Website URL
- * @param {Array<string>} templateIds - Template IDs to capture
- * @param {Object} options - Capture options
- * @returns {Promise<Array<Object>>} Array of screenshot results
- */
 export async function captureScreenshotsForTemplates(url, templateIds, options = {}) {
     const results = [];
 
@@ -221,11 +216,6 @@ export async function captureScreenshotsForTemplates(url, templateIds, options =
     return results;
 }
 
-/**
- * Tests if the screenshot API is available
- * @async
- * @returns {Promise<Object>} API health check result
- */
 export async function testScreenshotAPI() {
     try {
         for (const endpoint of VERCEL_ENDPOINTS) {
@@ -258,37 +248,18 @@ export async function testScreenshotAPI() {
     }
 }
 
-/**
- * Gets device configuration
- * @param {string} device - Device type
- * @returns {Object} Device configuration
- */
 export function getDeviceConfig(device) {
     return DEVICE_PRESETS[device] || DEVICE_PRESETS.desktop;
 }
 
-/**
- * Gets screenshot template by ID
- * @param {string} id - Template ID
- * @returns {Object|null} Template object or null
- */
 export function getScreenshotTemplate(id) {
     return SCREENSHOT_TEMPLATES[id] || null;
 }
 
-/**
- * Gets all screenshot templates
- * @returns {Array<Object>} Array of screenshot templates
- */
 export function getAllScreenshotTemplates() {
     return Object.values(SCREENSHOT_TEMPLATES);
 }
 
-/**
- * Gets screenshot templates by category
- * @param {string} category - Template category
- * @returns {Array<Object>} Array of screenshot templates
- */
 export function getScreenshotTemplatesByCategory(category) {
     return getAllScreenshotTemplates().filter(template =>
         template.category === category

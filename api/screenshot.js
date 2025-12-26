@@ -48,15 +48,12 @@ export default async function handler(req, res) {
     const allowedOrigins = [
         'https://image-lemgendizer.vercel.app',
         'https://image-lemgendizer-old-x2qz.vercel.app',
-        'http://localhost:5173',
-        'http://localhost:3000',
-        'https://lemgenda.github.io/image-lemgendizer-old/'
+        'https://lemgenda.github.io/image-lemgendizer-old/',
+        'http://localhost:3000'
     ];
 
-    // Get the origin from the request
     const origin = req.headers.origin;
 
-    // Set CORS headers if origin is allowed
     if (origin && allowedOrigins.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
     }
@@ -64,9 +61,8 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS, POST, PUT, PATCH, DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
-    res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+    res.setHeader('Access-Control-Max-Age', '86400');
 
-    // Handle preflight requests
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
@@ -106,7 +102,6 @@ export default async function handler(req, res) {
         const width = parseInt(body.width) || deviceConfig.viewport.width;
         const height = parseInt(body.height) || deviceConfig.viewport.height;
         const fullPage = Boolean(body.fullPage) || false;
-        const quality = parseInt(body.quality) || 80;
         const timeout = parseInt(body.timeout) || 30000;
         const templateId = body.templateId || 'desktop';
 
@@ -129,8 +124,7 @@ export default async function handler(req, res) {
             options: {
                 type: 'png',
                 fullPage: fullPage,
-                encoding: 'binary',
-                quality: Math.min(Math.max(quality, 1), 100)
+                encoding: 'binary'
             }
         };
 
@@ -141,7 +135,8 @@ export default async function handler(req, res) {
             };
         }
 
-        const browserlessUrl = `https://production-sfo.browserless.io/screenshot?token=${BROWSERLESS_API_KEY}`;
+        // FIX: Use the correct Browserless.io URL format with headers, not query parameter
+        const browserlessUrl = 'https://production-sfo.browserless.io/screenshot';
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -151,7 +146,8 @@ export default async function handler(req, res) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Cache-Control': 'no-cache'
+                    'Cache-Control': 'no-cache',
+                    'Authorization': `Bearer ${BROWSERLESS_API_KEY}`  // FIX: Add API key to headers
                 },
                 body: JSON.stringify(browserlessBody),
                 signal: controller.signal
@@ -161,7 +157,16 @@ export default async function handler(req, res) {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`Browserless.io error: ${errorText}`);
+                console.error('Browserless.io API error:', errorText);
+
+                // Return a placeholder response instead of throwing
+                return res.status(200).json({
+                    success: false,
+                    error: 'Screenshot capture failed via API',
+                    details: errorText,
+                    isPlaceholder: true,
+                    suggestion: 'Using placeholder image instead'
+                });
             }
 
             const buffer = await response.arrayBuffer();
@@ -176,7 +181,6 @@ export default async function handler(req, res) {
             res.setHeader('X-Template', templateId);
             res.setHeader('X-Is-Placeholder', 'false');
 
-            // Add CORS headers for the image response
             if (origin && allowedOrigins.includes(origin)) {
                 res.setHeader('Access-Control-Expose-Headers', 'X-Dimensions, X-Method, X-Device, X-Template, X-Is-Placeholder, Content-Type, Content-Length');
             }
@@ -187,20 +191,25 @@ export default async function handler(req, res) {
             clearTimeout(timeoutId);
 
             if (fetchError.name === 'AbortError') {
-                return res.status(408).json({
+                console.error('Screenshot capture timeout');
+                return res.status(200).json({
                     error: 'Screenshot capture timeout',
                     details: `Request took too long to complete (${timeout}ms)`,
                     isPlaceholder: true
                 });
             }
 
-            throw fetchError;
+            console.error('Fetch error:', fetchError);
+            return res.status(200).json({
+                error: 'Screenshot capture failed',
+                details: fetchError.message,
+                isPlaceholder: true
+            });
         }
 
     } catch (error) {
-        console.error('Screenshot capture error:', error);
-
-        return res.status(500).json({
+        console.error('Handler error:', error);
+        return res.status(200).json({
             error: 'Screenshot capture failed',
             details: error.message,
             isPlaceholder: true,
