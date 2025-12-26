@@ -27,9 +27,9 @@ const activeBlobUrls = new Set();
  */
 export class UnifiedScreenshotService {
     /**
-     * Creates a new optimized screenshot service instance
-     * @param {object} options - Service configuration options
-     */
+    * Creates a new optimized screenshot service instance
+    * @param {object} options - Service configuration options
+    */
     constructor(options = {}) {
         this.useServerCapture = options.useServerCapture !== false;
         this.enableCaching = options.enableCaching !== false;
@@ -41,9 +41,28 @@ export class UnifiedScreenshotService {
         this.endpointStats = new Map();
         this.initEndpointStats();
 
+        // Check if we're in development mode
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-            this.useServerCapture = false;
+            console.info('Running in local development mode - server capture may be disabled');
         }
+
+        // Initialize API availability check
+        this.apiAvailable = null;
+    }
+
+    /**
+    * Initializes the service and checks API availability
+    * @async
+    * @returns {Promise<boolean>} True if API is available
+    */
+    async initialize() {
+        if (this.useServerCapture) {
+            this.apiAvailable = await this.isApiAvailable();
+            if (!this.apiAvailable) {
+                console.warn('Screenshot API is not available. Using placeholder mode.');
+            }
+        }
+        return this.apiAvailable !== false;
     }
 
     /**
@@ -77,7 +96,6 @@ export class UnifiedScreenshotService {
             }
         }
 
-        // Get templates from centralized config
         const templates = this.getTemplatesByIds(templateIds);
 
         if (templates.length === 0) {
@@ -135,41 +153,172 @@ export class UnifiedScreenshotService {
      * @returns {Array<object>} Template objects
      */
     getTemplatesByIds(templateIds) {
-        // First check screenshot templates
         const screenshotTemplates = templateIds
             .map(id => SCREENSHOT_TEMPLATES[id])
             .filter(t => t);
 
-        // Then check social media templates
         const socialTemplates = templateIds
             .map(id => SOCIAL_MEDIA_TEMPLATES.find(t => t.id === id))
             .filter(t => t);
 
-        // Combine both
         return [...screenshotTemplates, ...socialTemplates];
     }
 
     /**
-     * Processes template capture
+ * Tests if the screenshot API is available
+ * @async
+ * @returns {Promise<boolean>} True if API is available
+ */
+    async isApiAvailable() {
+        const apiEndpoints = [
+            'https://image-lemgendizer-old-x2qz.vercel.app/api/screenshot',
+            'http://localhost:3000/api/screenshot'
+        ];
+
+        for (const apiUrl of apiEndpoints) {
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'HEAD',
+                    signal: AbortSignal.timeout(3000)
+                });
+
+                if (response.ok) {
+                    console.log(`API available at: ${apiUrl}`);
+                    return true;
+                }
+            } catch {
+                console.log(`API not available at: ${apiUrl}`);
+                continue;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Updated: Captures screenshot using your API endpoint
      * @param {string} url - Website URL
-     * @param {object} template - Template configuration
      * @param {object} options - Capture options
-     * @param {number} startTime - Overall capture start time
-     * @returns {Promise<object>} Capture result
+     * @param {string} templateId - Template ID
+     * @returns {Promise<object>} Screenshot result
      */
+    async captureWithApi(url, options, templateId) {
+        const startTime = Date.now();
+
+        try {
+            // Try the deployed API first
+            const apiEndpoints = [
+                'https://image-lemgendizer-old-x2qz.vercel.app/api/screenshot',
+                'http://localhost:3000/api/screenshot'
+            ];
+
+            let lastError = null;
+
+            for (const apiUrl of apiEndpoints) {
+                try {
+                    console.log(`Trying API endpoint: ${apiUrl}`);
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'image/png, application/json'
+                        },
+                        body: JSON.stringify({
+                            url: url,
+                            device: options.device || 'desktop',
+                            fullPage: options.fullPage || false,
+                            templateId: templateId,
+                            width: options.width || 1280,
+                            height: options.height || 720,
+                            quality: options.quality || 80,
+                            timeout: options.timeout || DEFAULT_SCREENSHOT_TIMEOUT
+                        }),
+                        signal: AbortSignal.timeout(options.timeout || DEFAULT_SCREENSHOT_TIMEOUT)
+                    });
+
+                    const contentType = response.headers.get('content-type');
+
+                    if (response.ok && contentType && contentType.includes('image')) {
+                        const screenshotBuffer = await response.arrayBuffer();
+                        const responseTime = Date.now() - startTime;
+                        const dimensions = JSON.parse(response.headers.get('x-dimensions') || '{}');
+                        const method = response.headers.get('x-method') || 'api';
+                        const isPlaceholder = response.headers.get('x-is-placeholder') === 'true';
+
+                        console.log(`API ${apiUrl} success: ${screenshotBuffer.byteLength} bytes`);
+
+                        return {
+                            success: true,
+                            blob: new Blob([screenshotBuffer], { type: 'image/png' }),
+                            format: 'png',
+                            fullPage: options.fullPage,
+                            device: options.device || 'desktop',
+                            dimensions,
+                            responseTime,
+                            method,
+                            isPlaceholder,
+                            warning: response.headers.get('x-warning') || null,
+                            templateId: templateId
+                        };
+                    } else {
+                        // Handle JSON error response
+                        const errorData = await response.json();
+                        console.log(`API ${apiUrl} returned error:`, errorData);
+
+                        if (errorData.isPlaceholder) {
+                            // This is a placeholder response from API (no Browserless key)
+                            throw new Error(errorData.error || 'Placeholder mode');
+                        } else {
+                            throw new Error(errorData.error || errorData.details || `API error: ${response.status}`);
+                        }
+                    }
+                } catch (error) {
+                    lastError = error;
+                    console.log(`API endpoint ${apiUrl} failed:`, error.message);
+                    continue; // Try next endpoint
+                }
+            }
+
+            // All endpoints failed
+            console.log('All API endpoints failed, creating local placeholder');
+            throw new Error(`All API endpoints failed. Last error: ${lastError?.message}`);
+
+        } catch (error) {
+            // If API fails completely, create a local placeholder
+            if (error.message.includes('Placeholder') || error.message.includes('All API endpoints failed')) {
+                const placeholder = await this.createPlaceholderScreenshot(url, options, { id: templateId, name: templateId });
+                return {
+                    ...placeholder,
+                    method: 'local-placeholder',
+                    isPlaceholder: true,
+                    warning: 'API unavailable, using local placeholder'
+                };
+            }
+
+            throw new Error(`API capture failed: ${error.message}`);
+        }
+    }
+
+    /**
+ * Updated: Processes template capture
+ * @param {string} url - Website URL
+ * @param {object} template - Template configuration
+ * @param {object} options - Capture options
+ * @param {number} startTime - Overall capture start time
+ * @returns {Promise<object>} Capture result
+ */
     async processTemplate(url, template, options, startTime) {
         const remainingTime = this.timeout * 2 - (Date.now() - startTime);
         if (remainingTime <= 0) {
             throw new Error('Insufficient time remaining for capture');
         }
 
-        // Use template dimensions - get viewport size if available
         const viewport = getViewportSize ? getViewportSize(template.id) : null;
         const width = viewport?.width || template.width || 1280;
         const height = viewport?.height || (template.height === 'auto' ? null : template.height) || 720;
         const fullPage = template.fullPage || options.fullPage || false;
 
-        // Determine device from template or options
         const device = this.getDeviceFromTemplate(template) || options.device || 'desktop';
 
         const captureOptions = {
@@ -184,7 +333,13 @@ export class UnifiedScreenshotService {
         try {
             if (this.useServerCapture) {
                 try {
-                    // Call your API endpoint with template info
+                    // Check if API is available first
+                    const apiAvailable = await this.isApiAvailable();
+
+                    if (!apiAvailable) {
+                        throw new Error('Screenshot API is not available');
+                    }
+
                     const result = await this.captureWithApi(url, captureOptions, template.id);
                     return {
                         ...result,
@@ -193,6 +348,7 @@ export class UnifiedScreenshotService {
                         success: true
                     };
                 } catch (serverError) {
+                    // If API fails, create placeholder
                     const result = await this.createPlaceholderScreenshot(url, captureOptions, template);
                     return {
                         ...result,
@@ -203,6 +359,7 @@ export class UnifiedScreenshotService {
                     };
                 }
             } else {
+                // Local development or API disabled
                 const result = await this.createPlaceholderScreenshot(url, captureOptions, template);
                 return {
                     ...result,
@@ -212,6 +369,7 @@ export class UnifiedScreenshotService {
                 };
             }
         } catch (error) {
+            // Any other error
             const result = await this.createPlaceholderScreenshot(url, captureOptions, template);
             return {
                 ...result,
@@ -220,72 +378,6 @@ export class UnifiedScreenshotService {
                 success: true,
                 warning: `Error during capture: ${error.message}`
             };
-        }
-    }
-
-    /**
-     * Captures screenshot using your API endpoint
-     * @param {string} url - Website URL
-     * @param {object} options - Capture options
-     * @param {string} templateId - Template ID
-     * @returns {Promise<object>} Screenshot result
-     */
-    async captureWithApi(url, options, templateId) {
-        const startTime = Date.now();
-
-        try {
-            const response = await fetch('/api/screenshot', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'image/png, application/json'
-                },
-                body: JSON.stringify({
-                    url: url,
-                    device: options.device,
-                    fullPage: options.fullPage,
-                    templateId: templateId,
-                    width: options.width,
-                    height: options.height,
-                    quality: options.quality || 80
-                }),
-                signal: AbortSignal.timeout(options.timeout || DEFAULT_SCREENSHOT_TIMEOUT)
-            });
-
-            if (!response.ok) {
-                // Check if it's a JSON error response
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    const error = await response.json();
-                    throw new Error(error.error || error.details || `API error: ${response.status}`);
-                } else {
-                    const errorText = await response.text();
-                    throw new Error(`API error ${response.status}: ${errorText.substring(0, 200)}`);
-                }
-            }
-
-            const screenshotBuffer = await response.arrayBuffer();
-            const responseTime = Date.now() - startTime;
-            const dimensions = JSON.parse(response.headers.get('x-dimensions') || '{}');
-            const method = response.headers.get('x-method') || 'api';
-            const isPlaceholder = response.headers.get('x-placeholder') === 'true';
-
-            return {
-                success: true,
-                blob: new Blob([screenshotBuffer], { type: 'image/png' }),
-                format: 'png',
-                fullPage: options.fullPage,
-                device: options.device,
-                dimensions,
-                responseTime,
-                method,
-                isPlaceholder,
-                warning: response.headers.get('x-warning') || null,
-                templateId: templateId
-            };
-        } catch (error) {
-            console.error('API capture error:', error);
-            throw new Error(`API capture failed: ${error.message}`);
         }
     }
 
@@ -346,13 +438,11 @@ export class UnifiedScreenshotService {
             ctx.strokeStyle = '#e5e7eb';
             ctx.strokeRect(20, 100, width - 40, height - 140);
 
-            // Use HEADLINE_FONT_SIZE
             ctx.fillStyle = '#1e40af';
             ctx.font = `bold ${HEADLINE_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
             ctx.textAlign = 'center';
             ctx.fillText(template.name, width / 2, height / 2 - 60);
 
-            // Use BODY_FONT_SIZE
             ctx.fillStyle = '#374151';
             ctx.font = `${BODY_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
             ctx.fillText(`${width} × ${height}`, width / 2, height / 2 - 20);
@@ -401,8 +491,7 @@ export class UnifiedScreenshotService {
                     const filename = `${siteName}-${templateId}-${method}-${timestamp}.${extension}`;
 
                     zip.file(filename, result.blob);
-                } catch (error) {
-                    // File addition error
+                } catch {
                 }
             }
         });
@@ -508,7 +597,6 @@ export class UnifiedScreenshotService {
      * @returns {string} User agent string
      */
     getUserAgent(device) {
-        // Use imported getUserAgent if available, otherwise use local fallback
         if (getUserAgent) {
             return getUserAgent(device);
         }
@@ -735,7 +823,6 @@ export class UnifiedScreenshotService {
             ctx.lineWidth = 2;
             ctx.strokeRect(10, 10, width - 20, height - 20);
 
-            // Use ERROR_MESSAGES constant
             ctx.fillStyle = '#dc2626';
             ctx.font = `bold ${Math.min(HEADLINE_FONT_SIZE * 2, height / 10)}px ${DEFAULT_FONT_FAMILY}`;
             ctx.textAlign = 'center';

@@ -49,10 +49,6 @@ import {
 } from './components';
 import './styles/App.css';
 
-/**
- * Main application component for image processing and optimization
- * @returns {JSX.Element} Rendered application
- */
 function App() {
   const { t, i18n } = useTranslation();
   const [isFaviconSelected, setIsFaviconSelected] = useState(false);
@@ -85,25 +81,58 @@ function App() {
 
   const fileInputRef = useRef(null);
 
-  /**
-   * Preload UTIF.js library for TIFF support
-   * @returns {void}
-   */
   useEffect(() => {
     const preloadLibraries = async () => {
       try {
         await loadUTIFLibrary();
+
+        // Initialize screenshot service if in template mode
+        if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
+          try {
+            // Create a test instance to check API availability
+            const screenshotService = new UnifiedScreenshotService({
+              useServerCapture: true,
+              enableCaching: true,
+              enableCompression: true,
+              timeout: DEFAULT_SCREENSHOT_TIMEOUT
+            });
+
+            // Check if API is available
+            const apiAvailable = await screenshotService.isApiAvailable();
+
+            if (!apiAvailable) {
+              console.warn('Screenshot API is not available. Placeholder images will be used.');
+
+              // Show a subtle warning to the user
+              if (!screenshotUrl.trim()) {
+                // Only show if user hasn't entered a URL yet
+                setTimeout(() => {
+                  showModal(
+                    t('message.info'),
+                    t('message.screenshotApiUnavailable'),
+                    MODAL_TYPES.INFO
+                  );
+                }, 2000);
+              }
+            }
+
+            // Clean up the test instance
+            screenshotService.cleanup();
+
+          } catch (apiError) {
+            // Silently handle initialization errors
+            console.info('Screenshot service initialization failed:', apiError.message);
+          }
+        }
       } catch (error) {
+        // Silently handle UTIF loading errors
+        console.info('UTIF library loading failed');
       }
     };
 
     preloadLibraries();
-  }, []);
+  }, [processingOptions.processingMode, screenshotUrl, t]);
 
-  /**
-   * Loads AI model when needed for smart cropping or templates
-   * @returns {void}
-   */
   useEffect(() => {
     const loadAIModelAsync = async () => {
       const needsAI = (processingOptions.cropMode === CROP_MODES.SMART && !aiModelLoaded) ||
@@ -128,10 +157,6 @@ function App() {
     loadAIModelAsync();
   }, [processingOptions.cropMode, processingOptions.processingMode, t]);
 
-  /**
-   * Cleans up blob URLs when component unmounts
-   * @returns {Function} Cleanup function
-   */
   useEffect(() => {
     const blobUrls = [];
 
@@ -145,7 +170,7 @@ function App() {
       blobUrls.forEach(url => {
         try {
           URL.revokeObjectURL(url);
-        } catch (e) {
+        } catch {
         }
       });
 
@@ -153,12 +178,6 @@ function App() {
     };
   }, [images]);
 
-  /**
-   * Handles image upload from file input or drag-and-drop
-   * @async
-   * @param {File[]} files - Array of uploaded image files
-   * @returns {Promise<void>}
-   */
   const handleImageUpload = async (files) => {
     try {
       setIsLoading(true);
@@ -188,18 +207,13 @@ function App() {
 
       showModal(t('message.success'), t('message.successUpload', { count: files.length }), MODAL_TYPES.SUCCESS);
 
-    } catch (error) {
+    } catch {
       showModal(t('message.error'), t('message.errorUpload'), MODAL_TYPES.ERROR);
     } finally {
       setIsLoading(false);
     }
   };
 
-  /**
-   * Handles image selection in gallery
-   * @param {string} imageId - Unique identifier of the image
-   * @returns {void}
-   */
   const handleImageSelect = (imageId) => {
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
       setProcessingOptions(prev => ({
@@ -216,10 +230,6 @@ function App() {
     }
   };
 
-  /**
-   * Selects or deselects all images
-   * @returns {void}
-   */
   const handleSelectAll = () => {
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) return;
 
@@ -230,10 +240,6 @@ function App() {
     }
   };
 
-  /**
-   * Removes selected images from the gallery
-   * @returns {void}
-   */
   const handleRemoveSelected = () => {
     const imagesToRemove = processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
       ? [processingOptions.templateSelectedImage].filter(Boolean)
@@ -255,11 +261,6 @@ function App() {
     showModal(t('message.removed'), t('message.removedImages'), MODAL_TYPES.SUCCESS);
   };
 
-  /**
-   * Toggles favicon selection
-   * @param {boolean} selected - Whether favicon is selected
-   * @returns {void}
-   */
   const handleFaviconToggle = (selected) => {
     setIsFaviconSelected(selected);
 
@@ -280,11 +281,6 @@ function App() {
     }
   };
 
-  /**
-   * Toggles screenshot selection
-   * @param {boolean} selected - Whether screenshot is selected
-   * @returns {void}
-   */
   const handleScreenshotToggle = (selected) => {
     setIsScreenshotSelected(selected);
 
@@ -305,11 +301,6 @@ function App() {
     }
   };
 
-  /**
-   * Handles screenshot URL change with validation
-   * @param {string} url - New screenshot URL
-   * @returns {void}
-   */
   const handleScreenshotUrlChange = (url) => {
     setScreenshotUrl(url);
 
@@ -320,7 +311,7 @@ function App() {
           isValid: true,
           message: 'Valid URL format'
         });
-      } catch (error) {
+      } catch {
         setScreenshotValidation({
           isValid: false,
           message: 'Invalid URL format'
@@ -331,22 +322,10 @@ function App() {
     }
   };
 
-  /**
-   * Displays modal dialog
-   * @param {string} title - Modal title
-   * @param {string} message - Modal message content
-   * @param {string} type - Modal type ('info', 'success', 'error', 'summary')
-   * @returns {void}
-   */
   const showModal = (title, message, type = MODAL_TYPES.INFO) => {
     setModal({ isOpen: true, title, message, type });
   };
 
-  /**
-   * Shows summary modal with processing details
-   * @param {Object} summary - Processing summary object
-   * @returns {void}
-   */
   const showSummaryModal = (summary) => {
     setProcessingSummary(summary);
     setModal({
@@ -357,19 +336,11 @@ function App() {
     });
   };
 
-  /**
-   * Closes modal dialog
-   * @returns {void}
-   */
   const closeModal = () => {
     setModal({ isOpen: false, title: '', message: '', type: MODAL_TYPES.INFO });
     setProcessingSummary(null);
   };
 
-  /**
-   * Toggles between resize and crop modes
-   * @returns {void}
-   */
   const toggleResizeCrop = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -378,10 +349,6 @@ function App() {
     }));
   };
 
-  /**
-   * Toggles crop mode between standard and smart
-   * @returns {void}
-   */
   const toggleCropMode = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -389,11 +356,6 @@ function App() {
     }));
   };
 
-  /**
-   * Toggles format selection
-   * @param {string} format - Format to toggle
-   * @returns {void}
-   */
   const handleFormatToggle = (format) => {
     setProcessingOptions(prev => {
       const currentFormats = prev.output.formats || [];
@@ -413,10 +375,6 @@ function App() {
     });
   };
 
-  /**
-   * Selects all output formats
-   * @returns {void}
-   */
   const handleSelectAllFormats = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -427,10 +385,6 @@ function App() {
     }));
   };
 
-  /**
-   * Clears all output formats
-   * @returns {void}
-   */
   const handleClearAllFormats = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -441,11 +395,6 @@ function App() {
     }));
   };
 
-  /**
-   * Switches between custom processing and templates mode
-   * @param {'custom'|'templates'} mode - Processing mode
-   * @returns {void}
-   */
   const toggleProcessingMode = (mode) => {
     const newMode = mode === PROCESSING_MODES.TEMPLATES ? PROCESSING_MODES.TEMPLATES : PROCESSING_MODES.CUSTOM;
 
@@ -476,11 +425,6 @@ function App() {
     }
   };
 
-  /**
-   * Toggles selection of a specific template
-   * @param {string} templateId - Unique identifier of the template
-   * @returns {void}
-   */
   const handleTemplateToggle = (templateId) => {
     setProcessingOptions(prev => {
       const newSelected = prev.selectedTemplates.includes(templateId)
@@ -491,10 +435,6 @@ function App() {
     });
   };
 
-  /**
-   * Selects all available templates
-   * @returns {void}
-   */
   const handleSelectAllTemplates = () => {
     const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id);
     setProcessingOptions(prev => ({
@@ -503,11 +443,6 @@ function App() {
     }));
   };
 
-  /**
-   * Selects all templates in a specific category
-   * @param {string} category - Template category identifier
-   * @returns {void}
-   */
   const handleSelectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
@@ -519,11 +454,6 @@ function App() {
     }));
   };
 
-  /**
-   * Deselects all templates in a specific category
-   * @param {string} category - Template category identifier
-   * @returns {void}
-   */
   const handleDeselectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
@@ -535,13 +465,6 @@ function App() {
     }));
   };
 
-  /**
-   * Updates processing options
-   * @param {string} category - Option category
-   * @param {string} key - Option key within the category
-   * @param {any} value - New option value
-   * @returns {void}
-   */
   const handleOptionChange = (category, key, value) => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -552,12 +475,6 @@ function App() {
     }));
   };
 
-  /**
-   * Updates single processing option
-   * @param {string} key - Option key to update
-   * @param {any} value - New option value
-   * @returns {void}
-   */
   const handleSingleOptionChange = (key, value) => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -565,10 +482,6 @@ function App() {
     }));
   };
 
-  /**
-   * Gets currently selected images for processing
-   * @returns {Array<Object>} Array of selected image objects
-   */
   const getSelectedImagesForProcessing = () => {
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
       return processingOptions.templateSelectedImage
@@ -579,11 +492,6 @@ function App() {
     }
   };
 
-  /**
-   * Processes images using custom settings
-   * @async
-   * @returns {Promise<void>}
-   */
   const processCustomImages = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing();
     if (selectedImagesForProcessing.length === 0) {
@@ -630,18 +538,13 @@ function App() {
       closeModal();
       showSummaryModal(summary);
 
-    } catch (error) {
+    } catch {
       showModal(t('message.error'), t('message.errorProcessing'), MODAL_TYPES.ERROR);
     } finally {
       setIsLoading(false);
     }
   };
 
-  /**
-   * Processes images using social media templates
-   * @async
-   * @returns {Promise<void>}
-   */
   const processTemplates = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing();
     if (selectedImagesForProcessing.length === 0) {
@@ -661,18 +564,15 @@ function App() {
 
     if (isScreenshotSelected && screenshotUrl.trim()) {
       try {
-        // Clean the URL
         let cleanUrl = screenshotUrl.trim();
         if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
           cleanUrl = `https://${cleanUrl}`;
         }
-        // Fix double slashes
         cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
 
         new URL(cleanUrl);
-        // Update the state with cleaned URL
         setScreenshotUrl(cleanUrl);
-      } catch (error) {
+      } catch {
         showModal(t('message.error'), t('message.errorInvalidUrl'), MODAL_TYPES.ERROR);
         return;
       }
@@ -684,7 +584,27 @@ function App() {
     }
 
     setIsLoading(true);
-    showModal(t('message.processingImages', { count: processingOptions.selectedTemplates.length }), t('message.processingImages', { count: processingOptions.selectedTemplates.length }), MODAL_TYPES.INFO);
+
+    // Check if we're generating screenshots without API
+    const hasScreenshotTemplates = processingOptions.selectedTemplates.some(id => {
+      const template = SOCIAL_MEDIA_TEMPLATES.find(t => t.id === id);
+      return template && template.category === 'screenshots';
+    });
+
+    if (hasScreenshotTemplates && isScreenshotSelected) {
+      // Show info about placeholder mode if API might not be available
+      showModal(
+        t('message.processingImages', { count: processingOptions.selectedTemplates.length }),
+        t('message.generatingScreenshots'),
+        MODAL_TYPES.INFO
+      );
+    } else {
+      showModal(
+        t('message.processingImages', { count: processingOptions.selectedTemplates.length }),
+        t('message.processingImages', { count: processingOptions.selectedTemplates.length }),
+        MODAL_TYPES.INFO
+      );
+    }
 
     try {
       const processingConfig = getProcessingConfiguration(processingOptions);
@@ -699,7 +619,6 @@ function App() {
         includeFavicon: isFaviconSelected,
         includeScreenshots: isScreenshotSelected,
         selectedTemplates: processingOptions.selectedTemplates,
-        // Add this to pass selected screenshot template IDs
         selectedScreenshotTemplates: processingOptions.selectedTemplates.filter(id => {
           const template = SOCIAL_MEDIA_TEMPLATES.find(t => t.id === id);
           return template && template.category === 'screenshots';
@@ -741,14 +660,33 @@ function App() {
 
       downloadZip(zipBlob, EXPORT_SETTINGS.DEFAULT_ZIP_NAME_TEMPLATES);
 
+      // Check if we used placeholders for screenshots
+      const usedPlaceholders = processedImages.some(img =>
+        img.template?.category === 'screenshots' &&
+        img.method &&
+        img.method.includes('placeholder')
+      );
+
       const summary = createProcessingSummary({
         imagesProcessed: 1,
         totalFiles: processedImages.length,
-        success: true
+        success: true,
+        usedPlaceholders: usedPlaceholders
       }, processingConfig, t);
 
       closeModal();
       showSummaryModal(summary);
+
+      // Show additional info if placeholders were used
+      if (usedPlaceholders && isScreenshotSelected) {
+        setTimeout(() => {
+          showModal(
+            t('message.info'),
+            t('message.placeholderScreenshotsGenerated'),
+            MODAL_TYPES.INFO
+          );
+        }, 1000);
+      }
 
     } catch (error) {
       showModal(t('message.error'), `${t('message.errorApplying')}: ${error.message}`, MODAL_TYPES.ERROR);
@@ -757,45 +695,22 @@ function App() {
     }
   };
 
-  /**
-   * Formats template names for display using translations
-   * @param {string} name - Original template name
-   * @returns {string} Formatted display name
-   */
   const formatTemplateName = (name) => {
     return t(`template.${name}`) || name;
   };
 
-  /**
-   * Increments number value
-   * @param {string} key - State key to update
-   * @param {number} increment - Amount to increment by
-   * @returns {void}
-   */
   const incrementValue = (key, increment = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
     const currentValue = parseInt(processingOptions[key] || '0');
     const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue + increment);
     handleSingleOptionChange(key, String(newValue));
   };
 
-  /**
-   * Decrements number value
-   * @param {string} key - State key to update
-   * @param {number} decrement - Amount to decrement by
-   * @returns {void}
-   */
   const decrementValue = (key, decrement = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
     const currentValue = parseInt(processingOptions[key] || '1');
     const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue - decrement);
     handleSingleOptionChange(key, String(newValue));
   };
 
-  /**
-   * Calculates categories applied from selected templates
-   * @param {Array<string>} selectedTemplates - Selected template IDs
-   * @param {Array<Object>} SOCIAL_MEDIA_TEMPLATES - All available templates
-   * @returns {number} Number of categories applied
-   */
   const calculateCategoriesApplied = (selectedTemplates, SOCIAL_MEDIA_TEMPLATES) => {
     if (!selectedTemplates || selectedTemplates.length === 0) return 0;
 

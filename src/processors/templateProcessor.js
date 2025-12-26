@@ -1,4 +1,3 @@
-// src/processors/templateProcessor.js
 import {
     DEFAULT_QUALITY,
     LARGE_IMAGE_THRESHOLD,
@@ -17,13 +16,11 @@ import {
     DEFAULT_PNG_QUALITY
 } from '../constants/sharedConstants';
 
-// Import template-related constants from templateConfigs.js
 import {
     FAVICON_PREVIEW_SIZE,
     DEFAULT_FAVICON_SITE_NAME,
     DEFAULT_FAVICON_THEME_COLOR,
-    DEFAULT_FAVICON_BACKGROUND_COLOR,
-    SCREENSHOT_TEMPLATES
+    DEFAULT_FAVICON_BACKGROUND_COLOR
 } from '../configs/templateConfigs';
 
 import {
@@ -45,14 +42,13 @@ import {
 let cleanupInProgress = false;
 let aiUpscalingDisabled = false;
 
-// Helper function to get category constant
 const getCategoryConstant = (categoryId) => {
     switch (categoryId) {
         case 'web': return 'web';
         case 'logo': return 'logo';
         case 'favicon': return 'favicon';
         case 'screenshots': return 'screenshots';
-        default: return 'social_media'; // All other social media platforms
+        default: return 'social_media';
     }
 };
 
@@ -355,7 +351,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                             { quality: DEFAULT_QUALITY, format: 'webp' }
                         );
                         wasSmartCropped = true;
-                    } catch (smartCropError) {
+                    } catch {
                         processedFile = await processSimpleSmartCrop(
                             processedFile,
                             targetWidth,
@@ -404,7 +400,6 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
             upscaled: wasUpscaled
         });
 
-        // Check template category using our helper
         const templateCategory = getCategoryConstant(template.category);
 
         if (templateCategory === 'logo') {
@@ -506,7 +501,6 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
     const totalPixels = img.naturalWidth * img.naturalHeight;
     const isLargeImage = totalPixels > LARGE_IMAGE_THRESHOLD;
 
-    // Use our helper function to filter templates
     const regularTemplates = selectedTemplates.filter(t => {
         const category = getCategoryConstant(t.category);
         return category !== 'favicon' && category !== 'screenshots';
@@ -674,7 +668,6 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
 
         const processedImages = [];
 
-        // Filter templates using our helper
         const screenshotTemplates = selectedTemplates.filter(t => getCategoryConstant(t.category) === 'screenshots');
         const otherTemplates = selectedTemplates.filter(t => getCategoryConstant(t.category) !== 'screenshots');
 
