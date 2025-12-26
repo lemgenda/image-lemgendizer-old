@@ -1,5 +1,4 @@
-﻿// screenshot.js - Complete production version
-import { Buffer } from 'buffer';
+﻿// screenshot.js - Vercel-compatible FIXED production version
 
 // ================================
 // Device & Screenshot Constants
@@ -216,7 +215,7 @@ function createErrorResponse(error, isPlaceholder = true) {
 }
 
 // ================================
-// Main Handler
+// Main Handler - Vercel-Compatible FIXED Version
 // ================================
 
 export default async function handler(req, res) {
@@ -278,38 +277,47 @@ export default async function handler(req, res) {
             ));
         }
 
+        // FIXED: Use correct Browserless endpoint and parameters
         const browserlessUrl = `https://production-sfo.browserless.io/screenshot?token=${BROWSERLESS_API_KEY}`;
 
+        // FIXED: Use simple, correct parameters that match the health check
         const browserlessBody = {
             url: cleanUrl,
+            viewport: {
+                width: viewport.width || 1280,
+                height: viewport.fullPage ? null : (viewport.height || 720),
+                deviceScaleFactor: viewport.deviceScaleFactor || 1,
+                isMobile: viewport.isMobile || false,
+                hasTouch: viewport.hasTouch || false
+            },
             options: {
                 type: 'png',
-                fullPage: viewport.fullPage,
                 encoding: 'binary',
                 waitForTimeout: 5000,
-                quality: 80
+                fullPage: viewport.fullPage || false
             }
         };
 
-        if (!viewport.fullPage) {
-            browserlessBody.viewport = {
-                width: viewport.width,
-                height: viewport.height,
-                deviceScaleFactor: viewport.deviceScaleFactor,
-                isMobile: viewport.isMobile,
-                hasTouch: viewport.hasTouch
-            };
-        }
+        // Debug logging
+        console.log('🔍 Screenshot Request Details:');
+        console.log('- URL:', cleanUrl);
+        console.log('- Template:', templateId);
+        console.log('- Viewport:', browserlessBody.viewport);
+        console.log('- Full Page:', viewport.fullPage);
+        console.log('- Browserless URL:', browserlessUrl.split('?')[0]);
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
         try {
+            console.log('📡 Calling Browserless API...');
+
             const response = await fetch(browserlessUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Cache-Control': 'no-cache'
+                    'Cache-Control': 'no-cache',
+                    'User-Agent': 'Image-Legendizer-Screenshot-API/2.6.0'
                 },
                 body: JSON.stringify(browserlessBody),
                 signal: controller.signal
@@ -317,59 +325,104 @@ export default async function handler(req, res) {
 
             clearTimeout(timeoutId);
 
+            console.log('✅ Browserless Response:', response.status, response.statusText);
+            console.log('📄 Content-Type:', response.headers.get('content-type'));
+
             if (!response.ok) {
-                const errorText = await response.text();
+                let errorDetails = '';
+                try {
+                    const errorData = await response.json();
+                    errorDetails = JSON.stringify(errorData);
+                } catch {
+                    errorDetails = await response.text();
+                }
+
+                console.log('❌ Browserless Error:', errorDetails);
 
                 if (response.status === 401 || response.status === 403) {
                     setResponseHeaders(res, {}, origin, true);
                     return res.status(200).json(createErrorResponse(
-                        new Error('Invalid Browserless API token')
+                        new Error(`Invalid Browserless API token (Status: ${response.status})`)
+                    ));
+                }
+
+                if (response.status === 429) {
+                    setResponseHeaders(res, {}, origin, true);
+                    return res.status(200).json(createErrorResponse(
+                        new Error('Rate limit exceeded. Please try again later.')
                     ));
                 }
 
                 setResponseHeaders(res, {}, origin, true);
                 return res.status(200).json(createErrorResponse(
-                    new Error('Screenshot capture failed'),
+                    new Error(`Screenshot capture failed: ${response.status} ${response.statusText}`),
                     true
                 ));
             }
 
+            const contentType = response.headers.get('content-type');
+
+            if (!contentType || !contentType.includes('image')) {
+                const bodyText = await response.text();
+                console.log('⚠️ Unexpected response type:', contentType);
+                console.log('Response preview:', bodyText.substring(0, 500));
+
+                setResponseHeaders(res, {}, origin, true);
+                return res.status(200).json(createErrorResponse(
+                    new Error('Browserless returned non-image response')
+                ));
+            }
+
             const buffer = await response.arrayBuffer();
-            const imageBuffer = Buffer.from(buffer);
+
+            console.log(`✅ Screenshot captured: ${(buffer.byteLength / 1024).toFixed(2)} KB`);
 
             setResponseHeaders(res, {
-                'Content-Length': imageBuffer.length,
+                'Content-Length': buffer.byteLength,
                 'x-dimensions': JSON.stringify({
                     width: viewport.width,
-                    height: viewport.height
+                    height: viewport.height,
+                    device: viewport.device
                 }),
                 'x-method': 'browserless',
                 'x-device': viewport.device,
                 'x-template': templateId,
                 'x-is-placeholder': 'false',
-                'x-response-time': Date.now().toString()
+                'x-response-time': Date.now().toString(),
+                'x-cache': 'MISS'
             }, origin, false);
 
-            return res.status(200).send(imageBuffer);
+            // Convert ArrayBuffer to Uint8Array for Vercel compatibility
+            const imageData = new Uint8Array(buffer);
+            return res.status(200).send(imageData);
 
         } catch (fetchError) {
             clearTimeout(timeoutId);
+            console.log('❌ Fetch Error:', fetchError.message);
 
             if (fetchError.name === 'AbortError') {
                 setResponseHeaders(res, {}, origin, true);
                 return res.status(200).json(createErrorResponse(
-                    new Error('Screenshot capture timeout')
+                    new Error(`Screenshot capture timeout after ${timeout}ms`)
+                ));
+            }
+
+            if (fetchError.code === 'ECONNREFUSED' || fetchError.code === 'ENOTFOUND') {
+                setResponseHeaders(res, {}, origin, true);
+                return res.status(200).json(createErrorResponse(
+                    new Error('Cannot connect to Browserless service. Please check your network connection.')
                 ));
             }
 
             setResponseHeaders(res, {}, origin, true);
             return res.status(200).json(createErrorResponse(
-                new Error('Screenshot capture failed'),
+                new Error(`Screenshot capture failed: ${fetchError.message}`),
                 true
             ));
         }
 
     } catch (error) {
+        console.log('❌ Handler Error:', error.message);
         setResponseHeaders(res, {}, origin, true);
         return res.status(200).json(createErrorResponse(error, true));
     }
