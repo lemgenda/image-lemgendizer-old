@@ -13,12 +13,6 @@
     }
 };
 
-/**
- * Validates and sanitizes URL input
- * @param {string} url - Raw URL input from request
- * @returns {string} Validated and cleaned URL
- * @throws {Error} If URL is invalid or malformed
- */
 function validateAndCleanUrl(url) {
     if (!url || typeof url !== 'string') {
         throw new Error('URL is required');
@@ -40,14 +34,7 @@ function validateAndCleanUrl(url) {
     }
 }
 
-/**
- * Main API handler for screenshot requests
- * @param {Object} req - HTTP request object
- * @param {Object} res - HTTP response object
- * @returns {Promise<void>}
- */
 async function handler(req, res) {
-    // Define allowed origins
     const allowedOrigins = [
         'https://image-lemgendizer.vercel.app',
         'https://image-lemgendizer-old-x2qz.vercel.app',
@@ -125,6 +112,9 @@ async function handler(req, res) {
             });
         }
 
+        // CORRECTED: Use token in URL parameter, not Authorization header
+        const browserlessUrl = `https://production-sfo.browserless.io/screenshot?token=${BROWSERLESS_API_KEY}`;
+
         const browserlessBody = {
             url: cleanUrl,
             options: {
@@ -143,9 +133,6 @@ async function handler(req, res) {
             };
         }
 
-        // Use headers authentication (recommended by Browserless)
-        const browserlessUrl = 'https://production-sfo.browserless.io/screenshot';
-
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -156,8 +143,7 @@ async function handler(req, res) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Cache-Control': 'no-cache',
-                    'Authorization': `Bearer ${BROWSERLESS_API_KEY}`
+                    'Cache-Control': 'no-cache'
                 },
                 body: JSON.stringify(browserlessBody),
                 signal: controller.signal
@@ -172,7 +158,7 @@ async function handler(req, res) {
                 if (response.status === 401 || response.status === 403) {
                     return res.status(200).json({
                         success: false,
-                        error: 'Invalid Browserless API key',
+                        error: 'Invalid Browserless API token',
                         details: 'Check your BROWSERLESS_API_KEY in Vercel dashboard',
                         isPlaceholder: true
                     });

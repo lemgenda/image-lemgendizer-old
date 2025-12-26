@@ -5,8 +5,9 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const BROWSERLESS_API_KEY = process.env.BROWSERLESS_API_KEY || "2TfpPHSu17r0zsS7d1859d9555f6a305a16871ced31381f86";
-const url = 'https://production-sfo.browserless.io/screenshot';
+const BROWSERLESS_API_KEY = process.env.BROWSERLESS_API_KEY;
+const API_TOKEN = BROWSERLESS_API_KEY;
+const url = `https://production-sfo.browserless.io/screenshot?token=${API_TOKEN}`;
 
 const data = {
     url: "https://example.com/",
@@ -24,19 +25,18 @@ const data = {
 
 async function testBrowserless() {
     try {
-        console.log('=== Testing Browserless.io API ===');
-        console.log('API Key:', BROWSERLESS_API_KEY ? `${BROWSERLESS_API_KEY.substring(0, 10)}...` : 'Not set');
-        console.log('URL:', url);
+        console.log('=== Testing Browserless.io API (Corrected Authentication) ===');
+        console.log('API Token Present:', BROWSERLESS_API_KEY ? 'Yes' : 'No');
+        console.log('Endpoint:', url.replace(API_TOKEN, '[REDACTED]'));
         console.log('');
 
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${BROWSERLESS_API_KEY}`
+                'Cache-Control': 'no-cache'
             },
-            body: JSON.stringify(data),
-            timeout: 30000
+            body: JSON.stringify(data)
         });
 
         console.log('Response Status:', response.status);
@@ -51,7 +51,7 @@ async function testBrowserless() {
             const buffer = await response.arrayBuffer();
             fs.writeFileSync(`${__dirname}/test-screenshot.png`, Buffer.from(buffer));
             console.log('\n✅ SUCCESS: Screenshot saved as test-screenshot.png');
-            console.log('✅ Browserless API key is VALID!');
+            console.log('✅ Browserless API token is VALID!');
             console.log(`✅ Image size: ${Math.round(buffer.byteLength / 1024)} KB`);
         } else {
             const errorText = await response.text();
@@ -61,9 +61,9 @@ async function testBrowserless() {
 
             if (response.status === 401 || response.status === 403) {
                 console.error('\n🔑 AUTHENTICATION ISSUE:');
-                console.error('- Check if API key is valid');
-                console.error('- Make sure API key has credits');
-                console.error('- Verify API key format');
+                console.error('- Check if API token is valid');
+                console.error('- Make sure API token has credits');
+                console.error('- Verify API token format');
             }
         }
     } catch (error) {

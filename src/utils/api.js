@@ -37,6 +37,8 @@ export async function captureScreenshot(url, templateId = 'desktop', options = {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+                // CORRECTED: Your Vercel endpoint doesn't need the Browserless token
+                // The token is handled by your screenshot.js serverless function
                 const response = await fetch(endpoint.url, {
                     method: 'POST',
                     headers: {

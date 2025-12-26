@@ -1,11 +1,4 @@
-/**
- * Health check endpoint for API status monitoring
- * @param {Object} req - HTTP request object
- * @param {Object} res - HTTP response object
- * @returns {Promise<void>}
- */
 async function handler(req, res) {
-    // CORS headers
     const allowedOrigins = [
         'https://image-lemgendizer.vercel.app',
         'https://image-lemgendizer-old-x2qz.vercel.app',
@@ -45,13 +38,14 @@ async function handler(req, res) {
         reachable: false,
         status: null,
         endpointTested: 'production-sfo.browserless.io',
-        authMethod: 'Bearer token in headers',
+        authMethod: 'Token in URL parameter',
         error: null
     };
 
     if (hasApiKey) {
         try {
-            const testUrl = 'https://production-sfo.browserless.io/screenshot';
+            // CORRECTED: Use token in URL parameter
+            const testUrl = `https://production-sfo.browserless.io/screenshot?token=${BROWSERLESS_API_KEY}`;
             const testBody = {
                 url: 'https://example.com',
                 viewport: { width: 800, height: 600 },
@@ -65,8 +59,8 @@ async function handler(req, res) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'User-Agent': 'Image-Legendizer-Health-Check/2.6.0',
-                    'Authorization': `Bearer ${BROWSERLESS_API_KEY}`
+                    'Cache-Control': 'no-cache',
+                    'User-Agent': 'Image-Legendizer-Health-Check/2.6.0'
                 },
                 body: JSON.stringify(testBody),
                 signal: controller.signal
@@ -79,7 +73,7 @@ async function handler(req, res) {
                 status: testResponse.status,
                 statusText: testResponse.statusText,
                 endpointTested: 'production-sfo.browserless.io',
-                authMethod: 'Bearer token in headers',
+                authMethod: 'Token in URL parameter',
                 headers: {
                     'x-ratelimit-limit': testResponse.headers.get('x-ratelimit-limit'),
                     'x-ratelimit-remaining': testResponse.headers.get('x-ratelimit-remaining'),
@@ -93,7 +87,7 @@ async function handler(req, res) {
                 status: null,
                 error: error.message,
                 endpointTested: 'production-sfo.browserless.io',
-                authMethod: 'Bearer token in headers'
+                authMethod: 'Token in URL parameter'
             };
         }
     }
@@ -121,13 +115,13 @@ async function handler(req, res) {
         },
         browserlessConfig: {
             endpoint: 'production-sfo.browserless.io',
-            authMethod: 'Bearer token in headers',
+            authMethod: 'Token in URL parameter',
             keyConfigured: hasApiKey
         },
         browserlessStatus: browserlessStatus,
         recommendations: hasApiKey && !browserlessStatus.reachable ? [
-            'Check if Browserless API key is valid',
-            'Verify API key has sufficient credits',
+            'Check if Browserless API token is valid',
+            'Verify API token has sufficient credits',
             'Check network connectivity to Browserless'
         ] : ['All systems operational']
     };

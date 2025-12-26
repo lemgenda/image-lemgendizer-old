@@ -1,48 +1,55 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
+export default defineConfig({
+  plugins: [react()],
 
-  return {
-    plugins: [react()],
-    base: '/',
-    server: {
-      port: 5173,
-      host: true
-    },
-    build: {
-      outDir: 'dist',
-      sourcemap: false,
-      minify: 'esbuild',
-      // Removed problematic manual chunks configuration
-      rollupOptions: {
-        // Let Vite handle chunking automatically
-        output: {
-          // Vite will handle chunking automatically
-          chunkFileNames: 'assets/[name]-[hash].js',
-          entryFileNames: 'assets/[name]-[hash].js',
-          assetFileNames: 'assets/[name]-[hash].[ext]'
-        }
-      },
-      chunkSizeWarningLimit: 2000, // Increased warning limit
-      target: 'es2020'
-    },
-    optimizeDeps: {
-      exclude: ['@sparticuz/chromium-min'],
-      include: [
-        'react',
-        'react-dom',
-        'i18next',
-        'i18next-browser-languagedetector',
-        'react-i18next'
-      ]
-    },
-    define: {
-      'process.env.NODE_ENV': JSON.stringify(mode),
-      'process.env.VERCEL': JSON.stringify(process.env.VERCEL || '0'),
-      'process.env.VERCEL_ENV': JSON.stringify(process.env.VERCEL_ENV || ''),
-      'process.env.BROWSERLESS_API_KEY': JSON.stringify(process.env.BROWSERLESS_API_KEY || '')
+  // Base path for assets
+  base: '/',
+
+  // Build configuration
+  build: {
+    outDir: 'dist',           // Output directory
+    sourcemap: false,         // No sourcemaps for production
+    emptyOutDir: true,        // Clean before building
+
+    // Use esbuild for minification (built-in, no extra dependencies)
+    minify: 'esbuild',
+
+    // Optimize build size
+    target: 'es2020',
+    cssCodeSplit: true,
+
+    // Rollup options (optional)
+    rollupOptions: {
+      output: {
+        // Organize output files
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
+      }
     }
+  },
+
+  // Development server
+  server: {
+    port: 5173,
+    host: true,
+    open: true,  // Open browser automatically
+
+    // Proxy API requests to your backend during development
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
+  },
+
+  // Preview server (for built files)
+  preview: {
+    port: 4173,
+    host: true
   }
 })
