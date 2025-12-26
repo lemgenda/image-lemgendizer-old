@@ -7,6 +7,9 @@
     },
     desktop: {
         viewport: { width: 1280, height: 720 }
+    },
+    'desktop-hd': {
+        viewport: { width: 1920, height: 1080 }
     }
 };
 
@@ -43,19 +46,22 @@ function validateAndCleanUrl(url) {
  * @param {Object} res - HTTP response object
  * @returns {Promise<void>}
  */
-export default async function handler(req, res) {
+async function handler(req, res) {
     // Define allowed origins
     const allowedOrigins = [
         'https://image-lemgendizer.vercel.app',
         'https://image-lemgendizer-old-x2qz.vercel.app',
-        'https://lemgenda.github.io/image-lemgendizer-old/',
-        'http://localhost:3000'
+        'https://lemgenda.github.io',
+        'http://localhost:3000',
+        'http://localhost:5173'
     ];
 
     const origin = req.headers.origin;
 
-    if (origin && allowedOrigins.includes(origin)) {
+    if (origin && allowedOrigins.some(allowed => origin.includes(allowed.replace('https://', '').replace('http://', '')))) {
         res.setHeader('Access-Control-Allow-Origin', origin);
+    } else {
+        res.setHeader('Access-Control-Allow-Origin', '*');
     }
 
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -102,7 +108,7 @@ export default async function handler(req, res) {
         const width = parseInt(body.width) || deviceConfig.viewport.width;
         const height = parseInt(body.height) || deviceConfig.viewport.height;
         const fullPage = Boolean(body.fullPage) || false;
-        const timeout = parseInt(body.timeout) || 30000;
+        const timeout = Math.min(parseInt(body.timeout) || 30000, 60000);
         const templateId = body.templateId || 'desktop';
 
         const cleanUrl = validateAndCleanUrl(url);
@@ -114,7 +120,7 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 success: false,
                 error: 'Browserless.io API key not configured',
-                suggestion: 'Set BROWSERLESS_API_KEY environment variable',
+                suggestion: 'Set BROWSERLESS_API_KEY environment variable in Vercel dashboard',
                 isPlaceholder: true
             });
         }
@@ -124,30 +130,34 @@ export default async function handler(req, res) {
             options: {
                 type: 'png',
                 fullPage: fullPage,
-                encoding: 'binary'
+                encoding: 'binary',
+                waitForTimeout: 5000
             }
         };
 
         if (!fullPage) {
             browserlessBody.viewport = {
                 width: width,
-                height: height
+                height: height,
+                deviceScaleFactor: 1
             };
         }
 
-        // FIX: Use the correct Browserless.io URL format with headers, not query parameter
+        // Use headers authentication (recommended by Browserless)
         const browserlessUrl = 'https://production-sfo.browserless.io/screenshot';
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
         try {
+            console.log(`Attempting screenshot capture for: ${cleanUrl}, Device: ${device}, Width: ${width}, Height: ${height}`);
+
             const response = await fetch(browserlessUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Cache-Control': 'no-cache',
-                    'Authorization': `Bearer ${BROWSERLESS_API_KEY}`  // FIX: Add API key to headers
+                    'Authorization': `Bearer ${BROWSERLESS_API_KEY}`
                 },
                 body: JSON.stringify(browserlessBody),
                 signal: controller.signal
@@ -157,15 +167,22 @@ export default async function handler(req, res) {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('Browserless.io API error:', errorText);
+                console.error('Browserless.io API error:', response.status, errorText);
 
-                // Return a placeholder response instead of throwing
+                if (response.status === 401 || response.status === 403) {
+                    return res.status(200).json({
+                        success: false,
+                        error: 'Invalid Browserless API key',
+                        details: 'Check your BROWSERLESS_API_KEY in Vercel dashboard',
+                        isPlaceholder: true
+                    });
+                }
+
                 return res.status(200).json({
                     success: false,
-                    error: 'Screenshot capture failed via API',
-                    details: errorText,
-                    isPlaceholder: true,
-                    suggestion: 'Using placeholder image instead'
+                    error: 'Screenshot capture failed',
+                    details: errorText.substring(0, 200),
+                    isPlaceholder: true
                 });
             }
 
@@ -180,9 +197,10 @@ export default async function handler(req, res) {
             res.setHeader('X-Device', device);
             res.setHeader('X-Template', templateId);
             res.setHeader('X-Is-Placeholder', 'false');
+            res.setHeader('X-Response-Time', Date.now().toString());
 
-            if (origin && allowedOrigins.includes(origin)) {
-                res.setHeader('Access-Control-Expose-Headers', 'X-Dimensions, X-Method, X-Device, X-Template, X-Is-Placeholder, Content-Type, Content-Length');
+            if (origin && allowedOrigins.some(allowed => origin.includes(allowed.replace('https://', '').replace('http://', '')))) {
+                res.setHeader('Access-Control-Expose-Headers', 'X-Dimensions, X-Method, X-Device, X-Template, X-Is-Placeholder, Content-Type, Content-Length, X-Response-Time');
             }
 
             return res.status(200).send(imageBuffer);
@@ -199,7 +217,7 @@ export default async function handler(req, res) {
                 });
             }
 
-            console.error('Fetch error:', fetchError);
+            console.error('Fetch error:', fetchError.message);
             return res.status(200).json({
                 error: 'Screenshot capture failed',
                 details: fetchError.message,
@@ -208,7 +226,7 @@ export default async function handler(req, res) {
         }
 
     } catch (error) {
-        console.error('Handler error:', error);
+        console.error('Handler error:', error.message);
         return res.status(200).json({
             error: 'Screenshot capture failed',
             details: error.message,
@@ -217,3 +235,5 @@ export default async function handler(req, res) {
         });
     }
 }
+
+export default handler;

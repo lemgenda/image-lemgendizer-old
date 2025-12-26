@@ -1,25 +1,30 @@
 {
-    "buildCommand": "npm run vercel-build",
-    "outputDirectory": "dist",
-    "framework": "vite",
-    "functions": {
-        "api/screenshot.js": {
-            "maxDuration": 30,
-            "memory": 2048
+    "version": 2,
+    "builds": [
+        {
+            "src": "package.json",
+            "use": "@vercel/static-build",
+            "config": {
+                "distDir": "dist"
+            }
         },
-        "api/health.js": {
-            "maxDuration": 10,
-            "memory": 1024
+        {
+            "src": "api/screenshot.js",
+            "use": "@vercel/node"
+        },
+        {
+            "src": "api/health.js",
+            "use": "@vercel/node"
         }
-    },
-    "rewrites": [
+    ],
+    "routes": [
         {
-            "source": "/api/(.*)",
-            "destination": "/api/$1"
+            "src": "/api/(.*)",
+            "dest": "/api/$1"
         },
         {
-            "source": "/(.*)",
-            "destination": "/index.html"
+            "src": "/(.*)",
+            "dest": "/"
         }
     ]
 }
