@@ -219,96 +219,132 @@ function createErrorResponse(error, isPlaceholder = true) {
 // ================================
 
 export default async function handler(req, res) {
-    const origin = req.headers.origin;
+    // Set CORS headers immediately
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Handle preflight
     if (req.method === 'OPTIONS') {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS, POST, PUT, PATCH, DELETE');
-        res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
-        res.setHeader('Access-Control-Max-Age', '86400');
         return res.status(200).end();
     }
 
     if (req.method !== 'POST') {
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        return res.status(405).json({
-            error: 'Method not allowed',
-            allowed: ['POST']
-        });
+        return res.status(405).json({ error: 'Method not allowed' });
     }
 
     try {
-        // FIX: Read body ONCE and store it
-        let body;
+        // Get body - Vercel automatically parses JSON
+        const body = req.body || {};
+        const {
+            url,
+            templateId = 'screenshots-desktop',
+            width: customWidth,
+            height: customHeight,
+            fullPage: customFullPage,
+            timeout = 30000
+        } = body;
 
-        // In Vercel, req.body might already be parsed if Content-Type is application/json
-        if (typeof req.body === 'string') {
-            try {
-                body = JSON.parse(req.body);
-            } catch (parseError) {
-                res.setHeader('Content-Type', 'application/json');
-                res.setHeader('Access-Control-Allow-Origin', '*');
-                return res.status(400).json({
-                    success: false,
-                    error: 'Invalid JSON format',
-                    isPlaceholder: true,
-                    details: parseError.message
-                });
-            }
-        } else if (req.body && typeof req.body === 'object') {
-            // Body is already parsed (Vercel does this automatically)
-            body = req.body;
-        } else {
-            // Need to read the raw body
-            const chunks = [];
-            for await (const chunk of req) {
-                chunks.push(chunk);
-            }
-            const rawBody = Buffer.concat(chunks).toString();
-            try {
-                body = JSON.parse(rawBody);
-            } catch {
-                res.setHeader('Content-Type', 'application/json');
-                res.setHeader('Access-Control-Allow-Origin', '*');
-                return res.status(400).json({
-                    success: false,
-                    error: 'Invalid JSON format',
-                    isPlaceholder: true
-                });
-            }
-        }
-
-        const url = body.url || body.URL;
         if (!url) {
             res.setHeader('Content-Type', 'application/json');
-            res.setHeader('Access-Control-Allow-Origin', '*');
             return res.status(400).json({
                 success: false,
-                error: 'Missing required parameter: URL',
+                error: 'URL is required',
                 isPlaceholder: true
             });
         }
 
-        const templateId = body.templateId || 'screenshots-desktop';
-        const customWidth = parseInt(body.width) || null;
-        const customHeight = parseInt(body.height) || null;
-        const customFullPage = body.fullPage !== undefined ? Boolean(body.fullPage) : undefined;
-        const timeout = Math.min(parseInt(body.timeout) || 30000, 60000);
-
-        // Validate and clean URL
-        let cleanUrl;
-        try {
-            cleanUrl = url.trim();
-            if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-                cleanUrl = 'https://' + cleanUrl;
+        // Template configurations
+        const TEMPLATES = {
+            'screenshots-mobile': {
+                width: 375,
+                height: 667,
+                device: 'mobile',
+                deviceScaleFactor: 2,
+                isMobile: true,
+                hasTouch: true
+            },
+            'screenshots-tablet': {
+                width: 768,
+                height: 1024,
+                device: 'tablet',
+                deviceScaleFactor: 2,
+                isMobile: true,
+                hasTouch: true
+            },
+            'screenshots-desktop': {
+                width: 1280,
+                height: 720,
+                device: 'desktop',
+                deviceScaleFactor: 1,
+                isMobile: false,
+                hasTouch: false
+            },
+            'screenshots-desktop-hd': {
+                width: 1920,
+                height: 1080,
+                device: 'desktop-hd',
+                deviceScaleFactor: 1,
+                isMobile: false,
+                hasTouch: false
+            },
+            'screenshots-mobile-full': {
+                width: 375,
+                height: null,
+                device: 'mobile',
+                fullPage: true,
+                deviceScaleFactor: 2,
+                isMobile: true,
+                hasTouch: true
+            },
+            'screenshots-tablet-full': {
+                width: 768,
+                height: null,
+                device: 'tablet',
+                fullPage: true,
+                deviceScaleFactor: 2,
+                isMobile: true,
+                hasTouch: true
+            },
+            'screenshots-desktop-full': {
+                width: 1280,
+                height: null,
+                device: 'desktop',
+                fullPage: true,
+                deviceScaleFactor: 1,
+                isMobile: false,
+                hasTouch: false
+            },
+            'screenshots-desktop-hd-full': {
+                width: 1920,
+                height: null,
+                device: 'desktop-hd',
+                fullPage: true,
+                deviceScaleFactor: 1,
+                isMobile: false,
+                hasTouch: false
             }
-            cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
-            new URL(cleanUrl); // Validate URL format
+        };
+
+        // Get template or default to desktop
+        const template = TEMPLATES[templateId] || TEMPLATES['screenshots-desktop'];
+
+        // Use custom dimensions if provided
+        const finalWidth = customWidth || template.width;
+        const finalHeight = customFullPage ? null : (customHeight || template.height);
+        const finalFullPage = customFullPage !== undefined ? customFullPage : (template.fullPage || false);
+
+        // Clean URL
+        let cleanUrl = url.trim();
+        if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+            cleanUrl = 'https://' + cleanUrl;
+        }
+        cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
+
+        try {
+            new URL(cleanUrl);
         } catch {
             res.setHeader('Content-Type', 'application/json');
-            res.setHeader('Access-Control-Allow-Origin', '*');
             return res.status(400).json({
                 success: false,
                 error: `Invalid URL format: ${url}`,
@@ -316,27 +352,10 @@ export default async function handler(req, res) {
             });
         }
 
-        // Device templates
-        const TEMPLATES = {
-            'screenshots-mobile': { width: 375, height: 667, device: 'mobile' },
-            'screenshots-tablet': { width: 768, height: 1024, device: 'tablet' },
-            'screenshots-desktop': { width: 1280, height: 720, device: 'desktop' },
-            'screenshots-desktop-hd': { width: 1920, height: 1080, device: 'desktop-hd' },
-            'screenshots-mobile-full': { width: 375, height: null, device: 'mobile', fullPage: true },
-            'screenshots-tablet-full': { width: 768, height: null, device: 'tablet', fullPage: true },
-            'screenshots-desktop-full': { width: 1280, height: null, device: 'desktop', fullPage: true },
-            'screenshots-desktop-hd-full': { width: 1920, height: null, device: 'desktop-hd', fullPage: true }
-        };
-
-        const template = TEMPLATES[templateId] || TEMPLATES['screenshots-desktop'];
-        const width = customWidth || template.width;
-        const height = customFullPage ? null : (customHeight || template.height);
-        const fullPage = customFullPage !== undefined ? customFullPage : (template.fullPage || false);
-
-        const BROWSERLESS_API_KEY = process.env.BROWSERLESS_API_KEY;
-        if (!BROWSERLESS_API_KEY) {
+        // Check API key
+        const apiKey = process.env.BROWSERLESS_API_KEY;
+        if (!apiKey) {
             res.setHeader('Content-Type', 'application/json');
-            res.setHeader('Access-Control-Allow-Origin', '*');
             return res.status(200).json({
                 success: false,
                 error: 'Browserless.io API key not configured',
@@ -344,35 +363,43 @@ export default async function handler(req, res) {
             });
         }
 
-        // Browserless API call
-        const browserlessUrl = `https://production-sfo.browserless.io/screenshot?token=${BROWSERLESS_API_KEY}`;
-
-        const browserlessBody = {
-            url: cleanUrl,
-            viewport: {
-                width: width,
-                height: height,
-                deviceScaleFactor: 1,
-                isMobile: template.device === 'mobile' || template.device === 'tablet',
-                hasTouch: template.device === 'mobile' || template.device === 'tablet'
-            },
-            options: {
-                type: 'png',
-                encoding: 'binary',
-                waitForTimeout: 5000,
-                fullPage: fullPage
-            }
-        };
-
         console.log('📸 Screenshot request:', {
             url: cleanUrl,
             template: templateId,
-            viewport: browserlessBody.viewport,
-            fullPage: fullPage
+            width: finalWidth,
+            height: finalHeight,
+            fullPage: finalFullPage,
+            device: template.device
         });
 
+        // Call Browserless API with correct parameters
+        const browserlessUrl = `https://production-sfo.browserless.io/screenshot?token=${apiKey}`;
+
+        // FIXED: Remove waitForTimeout from options
+        const browserlessBody = {
+            url: cleanUrl,
+            options: {
+                type: 'png',
+                encoding: 'binary',
+                fullPage: finalFullPage
+            }
+        };
+
+        // Add viewport if not full page
+        if (!finalFullPage && finalHeight !== null) {
+            browserlessBody.viewport = {
+                width: finalWidth,
+                height: finalHeight,
+                deviceScaleFactor: template.deviceScaleFactor || 1,
+                isMobile: template.isMobile || false,
+                hasTouch: template.hasTouch || false
+            };
+        }
+
+        console.log('📡 Calling Browserless with:', JSON.stringify(browserlessBody, null, 2));
+
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        const timeoutId = setTimeout(() => controller.abort(), Math.min(timeout, 60000));
 
         try {
             const response = await fetch(browserlessUrl, {
@@ -388,23 +415,36 @@ export default async function handler(req, res) {
 
             clearTimeout(timeoutId);
 
-            console.log('📡 Browserless response:', response.status);
+            console.log('📄 Browserless response:', response.status, response.statusText);
 
             if (!response.ok) {
-                let errorText = 'Unknown error';
+                let errorText = '';
                 try {
                     errorText = await response.text();
-                } catch { }
+                } catch {
+                    errorText = 'Could not read error response';
+                }
 
                 console.log('❌ Browserless error:', errorText);
 
+                // Try to parse JSON error
+                let errorMessage = `Screenshot capture failed: ${response.status} ${response.statusText}`;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    errorMessage = errorJson.error || errorJson.message || errorMessage;
+                } catch {
+                    // Not JSON, use raw text
+                    if (errorText.length > 0) {
+                        errorMessage = errorText.substring(0, 200);
+                    }
+                }
+
                 res.setHeader('Content-Type', 'application/json');
-                res.setHeader('Access-Control-Allow-Origin', '*');
                 return res.status(200).json({
                     success: false,
-                    error: `Screenshot capture failed: ${response.status} ${response.statusText}`,
+                    error: errorMessage,
                     isPlaceholder: true,
-                    details: errorText.substring(0, 200)
+                    details: errorText.substring(0, 500)
                 });
             }
 
@@ -414,7 +454,6 @@ export default async function handler(req, res) {
                 console.log('⚠️ Non-image response:', text.substring(0, 200));
 
                 res.setHeader('Content-Type', 'application/json');
-                res.setHeader('Access-Control-Allow-Origin', '*');
                 return res.status(200).json({
                     success: false,
                     error: 'Browserless returned non-image response',
@@ -427,12 +466,14 @@ export default async function handler(req, res) {
 
             console.log(`✅ Screenshot captured: ${(buffer.byteLength / 1024).toFixed(2)} KB`);
 
-            // Set headers and return image
+            // Return image with headers
             res.setHeader('Content-Type', 'image/png');
             res.setHeader('Content-Length', buffer.byteLength);
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Access-Control-Expose-Headers', 'x-dimensions, x-method, x-device, x-template, x-is-placeholder');
-            res.setHeader('x-dimensions', JSON.stringify({ width, height, device: template.device }));
+            res.setHeader('x-dimensions', JSON.stringify({
+                width: finalWidth,
+                height: finalHeight,
+                device: template.device
+            }));
             res.setHeader('x-method', 'browserless');
             res.setHeader('x-device', template.device);
             res.setHeader('x-template', templateId);
@@ -446,7 +487,6 @@ export default async function handler(req, res) {
             console.log('❌ Fetch error:', fetchError.message);
 
             res.setHeader('Content-Type', 'application/json');
-            res.setHeader('Access-Control-Allow-Origin', '*');
 
             if (fetchError.name === 'AbortError') {
                 return res.status(200).json({
@@ -467,7 +507,6 @@ export default async function handler(req, res) {
         console.log('❌ Handler error:', error.message);
 
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Access-Control-Allow-Origin', '*');
         return res.status(200).json({
             success: false,
             error: `Internal server error: ${error.message}`,
