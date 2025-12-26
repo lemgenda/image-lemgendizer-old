@@ -15,9 +15,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "vite preview --port 3000",
-    "postinstall": "npm run install-chromium",
-    "install-chromium": "npx playwright install chromium"
+    "start": "vite preview --port 3000"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.1.0",

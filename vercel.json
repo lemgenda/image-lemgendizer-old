@@ -11,5 +11,31 @@
             "source": "/(.*)",
             "destination": "/index.html"
         }
+    ],
+    "functions": {
+        "api/screenshot.js": {
+            "maxDuration": 30,
+            "memory": 2048
+        }
+    },
+    "headers": [
+        {
+            "source": "/(.*)",
+            "headers": [
+                {
+                    "key": "Cache-Control",
+                    "value": "public, max-age=3600"
+                }
+            ]
+        },
+        {
+            "source": "/api/(.*)",
+            "headers": [
+                {
+                    "key": "Cache-Control",
+                    "value": "public, max-age=0, s-maxage=3600"
+                }
+            ]
+        }
     ]
 }
