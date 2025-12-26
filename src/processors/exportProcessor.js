@@ -9,6 +9,12 @@ import {
     SCREENSHOT_TEMPLATES
 } from '../configs/templateConfigs';
 
+/**
+ * Generates export settings based on mode
+ * @param {string} mode - Processing mode
+ * @param {Object} additionalSettings - Additional settings
+ * @returns {Object} Export settings
+ */
 export const generateExportSettings = (mode, additionalSettings = {}) => {
     const baseDefaults = {
         includeOriginal: false,
@@ -55,6 +61,12 @@ export const generateExportSettings = (mode, additionalSettings = {}) => {
     return mergedSettings;
 };
 
+/**
+ * Gets export folder structure based on mode
+ * @param {string} mode - Processing mode
+ * @param {Object} settings - Export settings
+ * @returns {Array} Folder structure
+ */
 export const getExportFolderStructure = (mode, settings = {}) => {
     if (mode === PROCESSING_MODES.CUSTOM) {
         return [EXPORT_FOLDERS.ORIGINAL_IMAGES, EXPORT_FOLDERS.OPTIMIZED_IMAGES];
@@ -77,6 +89,11 @@ export const getExportFolderStructure = (mode, settings = {}) => {
     return [];
 };
 
+/**
+ * Organizes images by format
+ * @param {Array} processedImages - Processed images
+ * @returns {Object} Images grouped by format
+ */
 export const organizeImagesByFormat = (processedImages) => {
     const groupedByFormat = {};
 
@@ -93,6 +110,11 @@ export const organizeImagesByFormat = (processedImages) => {
     return groupedByFormat;
 };
 
+/**
+ * Organizes templates by platform
+ * @param {Array} socialTemplates - Social media templates
+ * @returns {Object} Organized templates by platform
+ */
 export const organizeTemplatesByPlatform = (socialTemplates) => {
     const organized = {};
 
@@ -120,6 +142,12 @@ export const organizeTemplatesByPlatform = (socialTemplates) => {
     return organized;
 };
 
+/**
+ * Filters screenshot templates by selected IDs
+ * @param {Array} processedImages - Processed images
+ * @param {Array} selectedTemplateIds - Selected template IDs
+ * @returns {Array} Filtered screenshot templates
+ */
 const filterScreenshotTemplates = (processedImages, selectedTemplateIds) => {
     if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
         return [];
@@ -138,6 +166,13 @@ const filterScreenshotTemplates = (processedImages, selectedTemplateIds) => {
     return allTemplates;
 };
 
+/**
+ * Processes favicon set
+ * @param {File} sourceImage - Source image
+ * @param {Object} settings - Export settings
+ * @param {JSZip} zip - ZIP object
+ * @returns {Promise<void>}
+ */
 const processFaviconSet = async (sourceImage, settings, zip = null) => {
     try {
         const faviconZipBlob = await generateFaviconSet(
@@ -171,6 +206,15 @@ const processFaviconSet = async (sourceImage, settings, zip = null) => {
     }
 };
 
+/**
+ * Creates export ZIP file
+ * @param {Array} originalImages - Original images
+ * @param {Array} processedImages - Processed images
+ * @param {Object} settings - Export settings
+ * @param {string} mode - Processing mode
+ * @param {Array} formats - Output formats
+ * @returns {Promise<Blob>} ZIP blob
+ */
 export const createExportZip = async (originalImages, processedImages, settings, mode, formats = ['webp']) => {
     const zip = new JSZip();
 
@@ -389,10 +433,22 @@ export const createExportZip = async (originalImages, processedImages, settings,
     return zipBlob;
 };
 
+/**
+ * Creates favicon ZIP file
+ * @param {File} imageFile - Image file
+ * @param {Object} settings - Export settings
+ * @returns {Promise<Blob>} Favicon ZIP blob
+ */
 export const createFaviconZip = async (imageFile, settings = {}) => {
     return await processFaviconSet(imageFile, settings);
 };
 
+/**
+ * Creates screenshot ZIP file
+ * @param {string} url - Website URL
+ * @param {Object} settings - Export settings
+ * @returns {Promise<Blob>} Screenshot ZIP blob
+ */
 export const createScreenshotZip = async (url, settings = {}) => {
     const templateIds = settings.selectedScreenshotTemplates || [];
     return await generateScreenshots(
@@ -403,6 +459,14 @@ export const createScreenshotZip = async (url, settings = {}) => {
     );
 };
 
+/**
+ * Creates export summary text
+ * @param {Array} originalImages - Original images
+ * @param {Array} processedImages - Processed images
+ * @param {Object} settings - Export settings
+ * @param {string} mode - Processing mode
+ * @returns {string} Export summary
+ */
 const createExportSummary = (originalImages, processedImages, settings, mode) => {
     const timestamp = new Date().toISOString();
 
@@ -449,6 +513,14 @@ Need help? Contact support or check the documentation.`;
     return summary;
 };
 
+/**
+ * Calculates total files in export
+ * @param {Array} originalImages - Original images
+ * @param {Array} processedImages - Processed images
+ * @param {Object} settings - Export settings
+ * @param {string} mode - Processing mode
+ * @returns {number} Total file count
+ */
 const calculateTotalFiles = (originalImages, processedImages, settings, mode) => {
     let total = 0;
 
@@ -489,6 +561,12 @@ const calculateTotalFiles = (originalImages, processedImages, settings, mode) =>
     return total;
 };
 
+/**
+ * Gets included content summary
+ * @param {Object} settings - Export settings
+ * @param {string} mode - Processing mode
+ * @returns {string} Content summary
+ */
 const getIncludedContentSummary = (settings, mode) => {
     const items = [];
 
@@ -510,6 +588,11 @@ const getIncludedContentSummary = (settings, mode) => {
     return items.map(item => `✓ ${item}`).join('\n');
 };
 
+/**
+ * Gets export notes
+ * @param {string} mode - Processing mode
+ * @returns {string} Export notes
+ */
 const getExportNotes = (mode) => {
     if (mode === PROCESSING_MODES.CUSTOM) {
         return `- Images are organized by format in subfolders
@@ -524,6 +607,11 @@ const getExportNotes = (mode) => {
     return '';
 };
 
+/**
+ * Downloads ZIP file
+ * @param {Blob} zipBlob - ZIP blob
+ * @param {string} prefix - File name prefix
+ */
 export const downloadZip = (zipBlob, prefix) => {
     const url = URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
@@ -535,6 +623,11 @@ export const downloadZip = (zipBlob, prefix) => {
     URL.revokeObjectURL(url);
 };
 
+/**
+ * Downloads file
+ * @param {Blob} blob - File blob
+ * @param {string} filename - File name
+ */
 export const downloadFile = (blob, filename) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

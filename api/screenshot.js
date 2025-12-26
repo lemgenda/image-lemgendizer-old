@@ -13,6 +13,12 @@
     }
 };
 
+/**
+ * Validates and sanitizes URL input
+ * @param {string} url - Raw URL input
+ * @returns {string} Validated and cleaned URL
+ * @throws {Error} If URL is invalid
+ */
 function validateAndCleanUrl(url) {
     if (!url || typeof url !== 'string') {
         throw new Error('URL is required');
@@ -34,6 +40,12 @@ function validateAndCleanUrl(url) {
     }
 }
 
+/**
+ * Main API handler for screenshot requests
+ * @param {Object} req - HTTP request object
+ * @param {Object} res - HTTP response object
+ * @returns {Promise<void>}
+ */
 async function handler(req, res) {
     const allowedOrigins = [
         'https://image-lemgendizer.vercel.app',
@@ -72,10 +84,9 @@ async function handler(req, res) {
         if (typeof req.body === 'string') {
             try {
                 body = JSON.parse(req.body);
-            } catch (parseError) {
+            } catch {
                 return res.status(400).json({
-                    error: 'Invalid JSON format',
-                    details: parseError.message
+                    error: 'Invalid JSON format'
                 });
             }
         } else {
@@ -107,12 +118,10 @@ async function handler(req, res) {
             return res.status(200).json({
                 success: false,
                 error: 'Browserless.io API key not configured',
-                suggestion: 'Set BROWSERLESS_API_KEY environment variable in Vercel dashboard',
                 isPlaceholder: true
             });
         }
 
-        // CORRECTED: Use token in URL parameter, not Authorization header
         const browserlessUrl = `https://production-sfo.browserless.io/screenshot?token=${BROWSERLESS_API_KEY}`;
 
         const browserlessBody = {
@@ -137,8 +146,6 @@ async function handler(req, res) {
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
         try {
-            console.log(`Attempting screenshot capture for: ${cleanUrl}, Device: ${device}, Width: ${width}, Height: ${height}`);
-
             const response = await fetch(browserlessUrl, {
                 method: 'POST',
                 headers: {
@@ -153,13 +160,11 @@ async function handler(req, res) {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('Browserless.io API error:', response.status, errorText);
 
                 if (response.status === 401 || response.status === 403) {
                     return res.status(200).json({
                         success: false,
                         error: 'Invalid Browserless API token',
-                        details: 'Check your BROWSERLESS_API_KEY in Vercel dashboard',
                         isPlaceholder: true
                     });
                 }
@@ -195,15 +200,12 @@ async function handler(req, res) {
             clearTimeout(timeoutId);
 
             if (fetchError.name === 'AbortError') {
-                console.error('Screenshot capture timeout');
                 return res.status(200).json({
                     error: 'Screenshot capture timeout',
-                    details: `Request took too long to complete (${timeout}ms)`,
                     isPlaceholder: true
                 });
             }
 
-            console.error('Fetch error:', fetchError.message);
             return res.status(200).json({
                 error: 'Screenshot capture failed',
                 details: fetchError.message,
@@ -212,12 +214,10 @@ async function handler(req, res) {
         }
 
     } catch (error) {
-        console.error('Handler error:', error.message);
         return res.status(200).json({
             error: 'Screenshot capture failed',
             details: error.message,
-            isPlaceholder: true,
-            suggestion: 'Check the URL and try again. If the issue persists, the website may block automated screenshot capture.'
+            isPlaceholder: true
         });
     }
 }
