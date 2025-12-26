@@ -4,42 +4,23 @@ import {
     VERCEL_ENDPOINTS,
     CACHE_CONFIG,
     DEFAULT_SCREENSHOT_TIMEOUT,
-    MAX_CONCURRENT_SCREENSHOTS
+    MAX_CONCURRENT_SCREENSHOTS,
+    DEFAULT_FONT_FAMILY,
+    HEADLINE_FONT_SIZE,
+    BODY_FONT_SIZE,
+    CAPTION_FONT_SIZE,
+    ERROR_MESSAGES
 } from '../constants/sharedConstants';
 
-// Import SCREENSHOT_TEMPLATES from templateConfigs
-import { SCREENSHOT_TEMPLATES } from '../configs/templateConfigs';
+import {
+    SCREENSHOT_TEMPLATES,
+    SOCIAL_MEDIA_TEMPLATES,
+    getViewportSize,
+    getUserAgent
+} from '../configs/templateConfigs';
 
 const memoryCache = new Map();
 const activeBlobUrls = new Set();
-
-/**
- * Gets all screenshot templates
- * @returns {Array<Object>} Array of screenshot templates
- */
-export const getAllScreenshotTemplates = () => {
-    return Object.values(SCREENSHOT_TEMPLATES);
-};
-
-/**
- * Gets screenshot templates by category
- * @param {string} category - Template category
- * @returns {Array<Object>} Array of screenshot templates
- */
-export const getScreenshotTemplatesByCategory = (category) => {
-    return getAllScreenshotTemplates().filter(template =>
-        template.category === category
-    );
-};
-
-/**
- * Gets screenshot template by ID
- * @param {string} id - Template ID
- * @returns {Object|null} Template object or null
- */
-export const getScreenshotTemplateById = (id) => {
-    return SCREENSHOT_TEMPLATES[id] || null;
-};
 
 /**
  * Unified screenshot service with comprehensive optimization strategies
@@ -47,7 +28,7 @@ export const getScreenshotTemplateById = (id) => {
 export class UnifiedScreenshotService {
     /**
      * Creates a new optimized screenshot service instance
-     * @param {Object} options - Service configuration options
+     * @param {object} options - Service configuration options
      */
     constructor(options = {}) {
         this.useServerCapture = options.useServerCapture !== false;
@@ -59,16 +40,14 @@ export class UnifiedScreenshotService {
         this.requestQueue = [];
         this.endpointStats = new Map();
         this.initEndpointStats();
-        // Disable server capture in development due to CORS issues
+
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
             this.useServerCapture = false;
-            console.warn('Server capture disabled in development due to CORS restrictions');
         }
     }
 
     /**
      * Initializes endpoint usage statistics
-     * @private
      */
     initEndpointStats() {
         VERCEL_ENDPOINTS.forEach(endpoint => {
@@ -83,11 +62,10 @@ export class UnifiedScreenshotService {
 
     /**
      * Captures screenshots based on selected template IDs
-     * @async
      * @param {string} url - Website URL to capture
      * @param {Array<string>} templateIds - Array of template IDs to capture
-     * @param {Object} options - Additional capture options
-     * @returns {Promise<Object>} Object containing captured screenshots and metadata
+     * @param {object} options - Additional capture options
+     * @returns {Promise<object>} Object containing captured screenshots and metadata
      */
     async captureByTemplates(url, templateIds, options = {}) {
         const cacheKey = this.generateCacheKey(url, templateIds, options);
@@ -99,9 +77,8 @@ export class UnifiedScreenshotService {
             }
         }
 
-        const templates = templateIds
-            .map(id => SCREENSHOT_TEMPLATES[id])
-            .filter(t => t);
+        // Get templates from centralized config
+        const templates = this.getTemplatesByIds(templateIds);
 
         if (templates.length === 0) {
             throw new Error('No valid screenshot templates selected');
@@ -153,14 +130,32 @@ export class UnifiedScreenshotService {
     }
 
     /**
+     * Gets templates by their IDs from centralized configs
+     * @param {Array<string>} templateIds - Template identifiers
+     * @returns {Array<object>} Template objects
+     */
+    getTemplatesByIds(templateIds) {
+        // First check screenshot templates
+        const screenshotTemplates = templateIds
+            .map(id => SCREENSHOT_TEMPLATES[id])
+            .filter(t => t);
+
+        // Then check social media templates
+        const socialTemplates = templateIds
+            .map(id => SOCIAL_MEDIA_TEMPLATES.find(t => t.id === id))
+            .filter(t => t);
+
+        // Combine both
+        return [...screenshotTemplates, ...socialTemplates];
+    }
+
+    /**
      * Processes template capture
-     * @async
-     * @private
      * @param {string} url - Website URL
-     * @param {Object} template - Template configuration
-     * @param {Object} options - Capture options
+     * @param {object} template - Template configuration
+     * @param {object} options - Capture options
      * @param {number} startTime - Overall capture start time
-     * @returns {Promise<Object>} Capture result
+     * @returns {Promise<object>} Capture result
      */
     async processTemplate(url, template, options, startTime) {
         const remainingTime = this.timeout * 2 - (Date.now() - startTime);
@@ -168,28 +163,36 @@ export class UnifiedScreenshotService {
             throw new Error('Insufficient time remaining for capture');
         }
 
+        // Use template dimensions - get viewport size if available
+        const viewport = getViewportSize ? getViewportSize(template.id) : null;
+        const width = viewport?.width || template.width || 1280;
+        const height = viewport?.height || (template.height === 'auto' ? null : template.height) || 720;
+        const fullPage = template.fullPage || options.fullPage || false;
+
+        // Determine device from template or options
+        const device = this.getDeviceFromTemplate(template) || options.device || 'desktop';
+
         const captureOptions = {
             ...options,
-            width: template.width,
-            height: template.height === 'auto' ? null : template.height,
-            fullPage: template.fullPage,
-            device: this.getDeviceFromTemplate(template),
+            width,
+            height,
+            fullPage,
+            device,
             timeout: Math.min(remainingTime, this.timeout)
         };
 
         try {
             if (this.useServerCapture) {
                 try {
-                    const result = await this.captureWithServerOptimized(url, captureOptions);
+                    // Call your API endpoint with template info
+                    const result = await this.captureWithApi(url, captureOptions, template.id);
                     return {
                         ...result,
                         template,
-                        method: 'server',
+                        method: 'api',
                         success: true
                     };
                 } catch (serverError) {
-                    // If server capture fails, create placeholder with warning
-                    console.warn(`Server capture failed for ${url}: ${serverError.message}. Falling back to placeholder.`);
                     const result = await this.createPlaceholderScreenshot(url, captureOptions, template);
                     return {
                         ...result,
@@ -221,107 +224,58 @@ export class UnifiedScreenshotService {
     }
 
     /**
-     * Gets device type from template
-     * @private
-     * @param {Object} template - Template object
-     * @returns {string} Device type
+     * Captures screenshot using your API endpoint
+     * @param {string} url - Website URL
+     * @param {object} options - Capture options
+     * @param {string} templateId - Template ID
+     * @returns {Promise<object>} Screenshot result
      */
-    getDeviceFromTemplate(template) {
-        if (template.name.includes('mobile')) return 'mobile';
-        if (template.name.includes('tablet')) return 'tablet';
-        if (template.name.includes('desktop-hd')) return 'desktop-hd';
-        return 'desktop';
-    }
-
-    /**
- * Captures screenshot using server-side API
- * @async
- * @private
- * @param {string} url - Website URL
- * @param {Object} options - Capture options
- * @returns {Promise<Object>} Server-captured screenshot
- */
-    async captureWithServerOptimized(url, options) {
-        const endpoint = this.selectOptimalEndpoint();
+    async captureWithApi(url, options, templateId) {
         const startTime = Date.now();
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), options.timeout);
 
         try {
-            const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
-
-            // Build the request based on whether we're using a relative or absolute URL
-            let requestUrl = endpoint.url;
-            let requestOptions = {
+            const response = await fetch('/api/screenshot', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'image/png,image/webp,image/jpeg'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    url: cleanUrl,
-                    device: options.device || 'mobile',
-                    fullPage: options.fullPage || false
+                    url: url,
+                    device: options.device,
+                    fullPage: options.fullPage,
+                    templateId: templateId,
+                    width: options.width,
+                    height: options.height
                 }),
-                signal: controller.signal
-            };
-
-            // If using a relative URL (starts with /), it's a local API call
-            if (endpoint.url.startsWith('/')) {
-                // For local API, use the current origin
-                requestUrl = window.location.origin + endpoint.url;
-            } else {
-                // For external API, set CORS mode
-                requestOptions.mode = 'cors';
-                requestOptions.credentials = 'omit';
-            }
-
-            const response = await fetch(requestUrl, requestOptions);
-
-            clearTimeout(timeoutId);
-            const responseTime = Date.now() - startTime;
-            this.updateEndpointStats(endpoint.url, true, responseTime);
+            });
 
             if (!response.ok) {
-                this.updateEndpointStats(endpoint.url, false, responseTime);
-                throw new Error(`Server error ${response.status}: ${response.statusText}`);
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.error || `API error: ${response.status}`);
             }
 
-            const contentType = response.headers.get('content-type');
-            const blob = await response.blob();
-            const format = this.detectImageFormat(blob, response.headers);
+            const screenshotBuffer = await response.arrayBuffer();
+            const responseTime = Date.now() - startTime;
+            const dimensions = JSON.parse(response.headers.get('x-dimensions') || '{}');
 
             return {
                 success: true,
-                blob,
-                format,
-                method: 'server',
+                blob: new Blob([screenshotBuffer], { type: 'image/png' }),
+                format: 'png',
                 fullPage: options.fullPage,
                 device: options.device,
-                responseTime
+                dimensions,
+                responseTime,
             };
         } catch (error) {
-            clearTimeout(timeoutId);
-            const responseTime = Date.now() - startTime;
-            this.updateEndpointStats(endpoint.url, false, responseTime);
-
-            // Check if it's a CORS error
-            if (error.name === 'TypeError' || error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
-                throw new Error(`CORS error: Cannot access server API. Please ensure CORS headers are configured on the server.`);
-            }
-
-            throw new Error(`Server capture failed: ${error.message}`);
+            throw new Error(`API capture failed: ${error.message}`);
         }
     }
 
     /**
      * Creates a placeholder screenshot
-     * @async
-     * @private
      * @param {string} url - Website URL
-     * @param {Object} options - Capture options
-     * @param {Object} template - Template configuration
-     * @returns {Promise<Object>} Placeholder screenshot
+     * @param {object} options - Capture options
+     * @param {object} template - Template configuration
+     * @returns {Promise<object>} Placeholder screenshot
      */
     async createPlaceholderScreenshot(url, options, template) {
         return new Promise((resolve) => {
@@ -334,18 +288,15 @@ export class UnifiedScreenshotService {
             canvas.width = width;
             canvas.height = height;
 
-            // Create gradient background
             const gradient = ctx.createLinearGradient(0, 0, width, height);
             gradient.addColorStop(0, '#f0f9ff');
             gradient.addColorStop(1, '#e0f2fe');
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, width, height);
 
-            // Browser window top bar
             ctx.fillStyle = '#e5e5e5';
             ctx.fillRect(20, 20, width - 40, 60);
 
-            // Browser window buttons
             ctx.fillStyle = '#ff5f57';
             ctx.beginPath();
             ctx.arc(45, 50, 8, 0, Math.PI * 2);
@@ -361,87 +312,59 @@ export class UnifiedScreenshotService {
             ctx.arc(95, 50, 8, 0, Math.PI * 2);
             ctx.fill();
 
-            // URL bar
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(120, 35, width - 160, 30);
             ctx.strokeStyle = '#d1d5db';
             ctx.strokeRect(120, 35, width - 160, 30);
 
             ctx.fillStyle = '#4b5563';
-            ctx.font = '14px Arial, sans-serif';
+            ctx.font = `14px ${DEFAULT_FONT_FAMILY}`;
             const displayUrl = url.length > 40 ? url.substring(0, 37) + '...' : url;
             ctx.fillText(displayUrl, 125, 56);
 
-            // Content area
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(20, 100, width - 40, height - 140);
             ctx.strokeStyle = '#e5e7eb';
             ctx.strokeRect(20, 100, width - 40, height - 140);
 
-            // Template info
+            // Use HEADLINE_FONT_SIZE
             ctx.fillStyle = '#1e40af';
-            ctx.font = 'bold 24px Arial, sans-serif';
+            ctx.font = `bold ${HEADLINE_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
             ctx.textAlign = 'center';
             ctx.fillText(template.name, width / 2, height / 2 - 60);
 
+            // Use BODY_FONT_SIZE
             ctx.fillStyle = '#374151';
-            ctx.font = '18px Arial, sans-serif';
+            ctx.font = `${BODY_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
             ctx.fillText(`${width} × ${height}`, width / 2, height / 2 - 20);
 
             ctx.fillStyle = '#6b7280';
-            ctx.font = '16px Arial, sans-serif';
+            ctx.font = `${CAPTION_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
             ctx.fillText(options.device || 'desktop', width / 2, height / 2 + 20);
 
             ctx.fillStyle = '#9ca3af';
             ctx.font = '14px Arial, sans-serif';
-            ctx.fillText('Placeholder - Configure Vercel API for real screenshots', width / 2, height / 2 + 60);
+            ctx.fillText('Placeholder - Configure Browserless API for real screenshots', width / 2, height / 2 + 60);
 
             canvas.toBlob((blob) => {
-                if (!blob) {
-                    // Fallback: create a simple blob if toBlob fails
-                    const errorCanvas = document.createElement('canvas');
-                    errorCanvas.width = 400;
-                    errorCanvas.height = 300;
-                    const errorCtx = errorCanvas.getContext('2d');
-                    errorCtx.fillStyle = '#f0f9ff';
-                    errorCtx.fillRect(0, 0, 400, 300);
-                    errorCtx.fillStyle = '#1e40af';
-                    errorCtx.font = 'bold 20px Arial';
-                    errorCtx.textAlign = 'center';
-                    errorCtx.fillText('Screenshot Placeholder', 200, 150);
-
-                    errorCanvas.toBlob((fallbackBlob) => {
-                        resolve({
-                            success: true,
-                            blob: fallbackBlob,
-                            format: 'png',
-                            fullPage: options.fullPage,
-                            device: options.device,
-                            dimensions: { width, height },
-                            responseTime: 0
-                        });
-                    }, 'image/png', 0.9);
-                } else {
-                    resolve({
-                        success: true,
-                        blob,
-                        format: 'png',
-                        fullPage: options.fullPage,
-                        device: options.device,
-                        dimensions: { width, height },
-                        responseTime: 0
-                    });
-                }
+                resolve({
+                    success: true,
+                    blob,
+                    format: 'png',
+                    fullPage: options.fullPage,
+                    device: options.device,
+                    dimensions: { width, height },
+                    responseTime: 0
+                });
             }, 'image/png', 0.9);
         });
     }
 
     /**
      * Creates a ZIP file with screenshot results
-     * @async
      * @param {string} url - Original website URL
-     * @param {Object} screenshotResults - Results from capture methods
-     * @param {Object} options - ZIP generation options
+     * @param {object} screenshotResults - Results from capture methods
+     * @param {object} options - ZIP generation options
      * @returns {Promise<Blob>} ZIP file blob
      */
     async createScreenshotZip(url, screenshotResults, options = {}) {
@@ -460,37 +383,7 @@ export class UnifiedScreenshotService {
 
                     zip.file(filename, result.blob);
                 } catch (error) {
-                    console.error(`Failed to add screenshot ${templateId}:`, error);
-                }
-            } else {
-                console.warn(`Screenshot result for ${templateId} is not a valid Blob:`, result.blob);
-                // Create a placeholder file instead
-                try {
-                    const template = result.template || SCREENSHOT_TEMPLATES[templateId];
-                    const extension = result.format || 'png';
-                    const method = template?.fullPage ? 'fullpage' : 'viewport';
-                    const filename = `${siteName}-${templateId}-${method}-${timestamp}.${extension}`;
-
-                    const errorCanvas = document.createElement('canvas');
-                    const errorCtx = errorCanvas.getContext('2d');
-                    errorCanvas.width = 400;
-                    errorCanvas.height = 300;
-
-                    errorCtx.fillStyle = '#fee2e2';
-                    errorCtx.fillRect(0, 0, 400, 300);
-                    errorCtx.fillStyle = '#dc2626';
-                    errorCtx.font = '16px Arial';
-                    errorCtx.textAlign = 'center';
-                    errorCtx.textBaseline = 'middle';
-                    errorCtx.fillText('Invalid screenshot', 200, 150);
-
-                    const blob = await new Promise(resolve => {
-                        errorCanvas.toBlob(resolve, 'image/png');
-                    });
-
-                    zip.file(filename, blob);
-                } catch (placeholderError) {
-                    console.error(`Failed to create placeholder for ${templateId}:`, placeholderError);
+                    // File addition error
                 }
             }
         });
@@ -521,11 +414,10 @@ export class UnifiedScreenshotService {
 
     /**
      * Processes screenshots for template processing
-     * @async
      * @param {string} url - Website URL
-     * @param {Array<Object>} screenshotTemplates - Screenshot template objects
-     * @param {Object} options - Screenshot options
-     * @returns {Promise<Array<Object>>} Processed screenshot files for template system
+     * @param {Array<object>} screenshotTemplates - Screenshot template objects
+     * @param {object} options - Screenshot options
+     * @returns {Promise<Array<object>>} Processed screenshot files for template system
      */
     async processScreenshotsForTemplates(url, screenshotTemplates, options = {}) {
         const templateIds = screenshotTemplates.map(t => t.id);
@@ -540,7 +432,6 @@ export class UnifiedScreenshotService {
                 const extension = result.format || 'png';
                 const fileName = `${baseName}.${extension}`;
 
-                // Create a proper File object with all required properties
                 const file = new File([result.blob], fileName, {
                     type: `image/${extension}`,
                     lastModified: Date.now()
@@ -562,6 +453,7 @@ export class UnifiedScreenshotService {
 
         return processedImages;
     }
+
     /**
      * Cleans up all resources and memory
      */
@@ -576,16 +468,44 @@ export class UnifiedScreenshotService {
             } catch { }
         });
         activeBlobUrls.clear();
+    }
 
-        if (typeof window !== 'undefined' && window.gc) {
-            window.gc();
+    /**
+     * Gets device type from template
+     * @param {object} template - Template object
+     * @returns {string} Device type
+     */
+    getDeviceFromTemplate(template) {
+        if (template.name && template.name.toLowerCase().includes('mobile')) return 'mobile';
+        if (template.name && template.name.toLowerCase().includes('tablet')) return 'tablet';
+        if (template.name && template.name.toLowerCase().includes('desktop-hd')) return 'desktop-hd';
+        if (template.name && template.name.toLowerCase().includes('desktop')) return 'desktop';
+        return null;
+    }
+
+    /**
+     * Gets user agent for device type
+     * @param {string} device - Device type
+     * @returns {string} User agent string
+     */
+    getUserAgent(device) {
+        // Use imported getUserAgent if available, otherwise use local fallback
+        if (getUserAgent) {
+            return getUserAgent(device);
         }
+
+        const agents = {
+            mobile: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+            tablet: 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+            desktop: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'desktop-hd': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        };
+        return agents[device] || agents.desktop;
     }
 
     /**
      * Selects optimal endpoint based on performance statistics
-     * @private
-     * @returns {Object} Selected endpoint object
+     * @returns {object} Selected endpoint object
      */
     selectOptimalEndpoint() {
         const now = Date.now();
@@ -615,8 +535,7 @@ export class UnifiedScreenshotService {
 
     /**
      * Calculates endpoint performance score
-     * @private
-     * @param {Object} stats - Endpoint statistics
+     * @param {object} stats - Endpoint statistics
      * @returns {number} Performance score
      */
     calculateEndpointScore(stats) {
@@ -633,7 +552,6 @@ export class UnifiedScreenshotService {
 
     /**
      * Updates endpoint statistics
-     * @private
      * @param {string} endpointUrl - Endpoint URL
      * @param {boolean} success - Whether request succeeded
      * @param {number} responseTime - Response time in milliseconds
@@ -654,9 +572,8 @@ export class UnifiedScreenshotService {
 
     /**
      * Prioritizes templates for optimal capture order
-     * @private
-     * @param {Array<Object>} templates - Template configurations
-     * @returns {Array<Object>} Prioritized templates
+     * @param {Array<object>} templates - Template configurations
+     * @returns {Array<object>} Prioritized templates
      */
     prioritizeTemplates(templates) {
         return [...templates].sort((a, b) => {
@@ -685,10 +602,8 @@ export class UnifiedScreenshotService {
 
     /**
      * Retrieves cached result from memory cache
-     * @async
-     * @private
      * @param {string} cacheKey - Cache key
-     * @returns {Promise<Object|null>} Cached result or null
+     * @returns {Promise<object|null>} Cached result or null
      */
     async getCachedResult(cacheKey) {
         const memoryEntry = memoryCache.get(cacheKey);
@@ -717,10 +632,8 @@ export class UnifiedScreenshotService {
 
     /**
      * Caches result in memory
-     * @async
-     * @private
      * @param {string} cacheKey - Cache key
-     * @param {Object} data - Data to cache
+     * @param {object} data - Data to cache
      */
     async cacheResult(cacheKey, data) {
         const entry = {
@@ -751,9 +664,6 @@ export class UnifiedScreenshotService {
 
     /**
      * Cleans up memory
-     * @async
-     * @private
-     * @returns {Promise<void>}
      */
     async cleanupMemory() {
         activeBlobUrls.forEach(url => {
@@ -779,71 +689,74 @@ export class UnifiedScreenshotService {
     }
 
     /**
-     * Detects image format from blob and headers
-     * @private
-     * @param {Blob} blob - Image blob
-     * @param {Headers} headers - Response headers
-     * @returns {string} Image format
-     */
-    detectImageFormat(blob, headers) {
-        const contentType = headers.get('content-type');
-        if (contentType) {
-            if (contentType.includes('image/webp')) return 'webp';
-            if (contentType.includes('image/png')) return 'png';
-            if (contentType.includes('image/jpeg')) return 'jpg';
-        }
-        return blob.type.split('/')[1] || 'png';
-    }
-
-    /**
      * Creates error placeholder for failed captures
-     * @private
-     * @param {Object} template - Template configuration
+     * @param {object} template - Template configuration
      * @param {string} url - Website URL
      * @param {string} error - Error message
-     * @returns {Promise<Object>} Error placeholder result
+     * @returns {Promise<object>} Error placeholder result
      */
     async createErrorPlaceholder(template, url, error) {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-
-        const width = template.width || 800;
-        const height = template.height === 'auto' ? 600 : template.height || 600;
-
-        canvas.width = width;
-        canvas.height = height;
-
-        const gradient = ctx.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, '#fee2e2');
-        gradient.addColorStop(1, '#fecaca');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-
-        ctx.strokeStyle = '#fca5a5';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(10, 10, width - 20, height - 20);
-
-        ctx.fillStyle = '#dc2626';
-        ctx.font = `bold ${Math.min(32, height / 10)}px Arial, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Capture Failed', width / 2, height / 2 - 60);
-
-        ctx.fillStyle = '#4b5563';
-        ctx.font = `${Math.min(16, height / 20)}px Arial, sans-serif`;
-        ctx.fillText(`URL: ${url.substring(0, 50)}${url.length > 50 ? '...' : ''}`, width / 2, height / 2 - 20);
-
-        ctx.fillStyle = '#991b1b';
-        ctx.font = `${Math.min(14, height / 25)}px Arial, sans-serif`;
-
-        const errorMsg = error.length > 100 ? error.substring(0, 97) + '...' : error;
-        const lines = this.wrapText(ctx, errorMsg, width - 40);
-
-        lines.forEach((line, index) => {
-            ctx.fillText(line, width / 2, height / 2 + 20 + (index * 25));
-        });
-
         return new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            const width = template.width || 800;
+            const height = template.height === 'auto' ? 600 : template.height || 600;
+
+            canvas.width = width;
+            canvas.height = height;
+
+            const gradient = ctx.createLinearGradient(0, 0, width, height);
+            gradient.addColorStop(0, '#fee2e2');
+            gradient.addColorStop(1, '#fecaca');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.strokeStyle = '#fca5a5';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(10, 10, width - 20, height - 20);
+
+            // Use ERROR_MESSAGES constant
+            ctx.fillStyle = '#dc2626';
+            ctx.font = `bold ${Math.min(HEADLINE_FONT_SIZE * 2, height / 10)}px ${DEFAULT_FONT_FAMILY}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(ERROR_MESSAGES.SCREENSHOT_CAPTURE_FAILED, width / 2, height / 2 - 40);
+
+            ctx.fillStyle = '#4b5563';
+            ctx.font = `bold ${Math.min(HEADLINE_FONT_SIZE, height / 15)}px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillText('Processing Error', width / 2, height / 2);
+
+            ctx.fillStyle = '#991b1b';
+            ctx.font = `${Math.min(BODY_FONT_SIZE, height / 20)}px ${DEFAULT_FONT_FAMILY}`;
+
+            const errorMessage = error || ERROR_MESSAGES.SCREENSHOT_CAPTURE_FAILED;
+            const maxWidth = width - 40;
+            const words = errorMessage.split(' ');
+            const lines = [];
+            let currentLine = '';
+
+            for (const word of words) {
+                const testLine = currentLine ? `${currentLine} ${word}` : word;
+                const metrics = ctx.measureText(testLine);
+
+                if (metrics.width > maxWidth && currentLine !== '') {
+                    lines.push(currentLine);
+                    currentLine = word;
+                } else {
+                    currentLine = testLine;
+                }
+            }
+            if (currentLine) lines.push(currentLine);
+
+            lines.forEach((line, index) => {
+                ctx.fillText(
+                    line,
+                    width / 2,
+                    height / 2 + 40 + (index * 30)
+                );
+            });
+
             canvas.toBlob((blob) => {
                 resolve({
                     success: false,
@@ -860,7 +773,6 @@ export class UnifiedScreenshotService {
 
     /**
      * Wraps text to fit within specified width
-     * @private
      * @param {CanvasRenderingContext2D} ctx - Canvas context
      * @param {string} text - Text to wrap
      * @param {number} maxWidth - Maximum width in pixels
@@ -890,7 +802,6 @@ export class UnifiedScreenshotService {
 
     /**
      * Extracts hostname from URL
-     * @private
      * @param {string} url - Website URL
      * @returns {string} Extracted hostname
      */
@@ -905,8 +816,7 @@ export class UnifiedScreenshotService {
 
     /**
      * Estimates data size for cache management
-     * @private
-     * @param {Object} data - Data to estimate size of
+     * @param {object} data - Data to estimate size of
      * @returns {number} Estimated size in bytes
      */
     estimateDataSize(data) {
@@ -916,11 +826,10 @@ export class UnifiedScreenshotService {
 
     /**
      * Creates metadata file for ZIP
-     * @private
      * @param {string} url - Website URL
-     * @param {Object} results - Screenshot results
-     * @param {Object} options - Capture options
-     * @returns {Object} Metadata object
+     * @param {object} results - Screenshot results
+     * @param {object} options - Capture options
+     * @returns {object} Metadata object
      */
     createMetadataFile(url, results, options) {
         const successCount = Object.values(results.results || {}).filter(r => r && r.success).length;
@@ -948,7 +857,6 @@ export class UnifiedScreenshotService {
             })),
             errors: results.errors || [],
             service: 'Screenshot Service',
-            note: 'Placeholder screenshots generated - Configure Vercel API with proper CORS for real screenshots',
             totalTemplates: results.totalTemplates || 0,
             successfulCaptures: results.successfulCaptures || 0,
             totalTime: results.totalTime || 0
@@ -957,9 +865,8 @@ export class UnifiedScreenshotService {
 
     /**
      * Creates README file for ZIP
-     * @private
      * @param {string} url - Website URL
-     * @param {Object} results - Screenshot results
+     * @param {object} results - Screenshot results
      * @returns {string} README content
      */
     createReadmeFile(url, results) {
@@ -973,26 +880,14 @@ URL: ${url}
 Generated: ${new Date().toISOString()}
 Success Rate: ${successCount}/${totalCount} screenshots generated
 
-IMPORTANT NOTE:
-These are placeholder screenshots. For actual website screenshots:
+Service: Screenshot Service with Browserless.io integration
 
-1. Deploy a Vercel function with Playwright/Puppeteer
-2. Add CORS headers to your Vercel function:
-   Access-Control-Allow-Origin: *
-   Access-Control-Allow-Methods: POST, OPTIONS
-   Access-Control-Allow-Headers: Content-Type
-3. Update the API endpoint in screenshotUtils.js
-4. Enable server capture in the service configuration
-
-Service: Screenshot Service with Placeholder Fallback
-
-Note: In development (localhost), server capture is automatically disabled due to CORS restrictions.`;
+Note: Placeholder screenshots are generated when Browserless capture fails.`;
     }
 
     /**
      * Creates error report file
-     * @private
-     * @param {Array<Object>} errors - Array of error objects
+     * @param {Array<object>} errors - Array of error objects
      * @returns {string} Error report content
      */
     createErrorReport(errors) {
@@ -1010,18 +905,16 @@ ${index + 1}. Template: ${err.templateId}
 `).join('\n')}
 
 TROUBLESHOOTING:
-1. Check CORS configuration on your Vercel function
-2. Ensure the function is deployed and accessible
-3. Update API endpoint in screenshotUtils.js
-4. Add proper CORS headers to your server response`;
+1. Check your Browserless.io API key and quota
+2. Ensure the website URL is accessible
+3. Check network connectivity`;
     }
 
     /**
      * Generates cache key
-     * @private
      * @param {string} url - Website URL
      * @param {Array<string>} templateIds - Template IDs
-     * @param {Object} options - Capture options
+     * @param {object} options - Capture options
      * @returns {string} Cache key
      */
     generateCacheKey(url, templateIds, options) {
@@ -1031,7 +924,7 @@ TROUBLESHOOTING:
 
 /**
  * React Hook for using the UnifiedScreenshotService
- * @returns {Object} Hook methods and state
+ * @returns {object} Hook methods and state
  */
 export function useScreenshotService() {
     const [isLoading, setIsLoading] = useState(false);
@@ -1092,10 +985,10 @@ export function useScreenshotService() {
 
 /**
  * Main screenshot generation function for exportProcessor.js
- * @async
  * @param {string} url - Website URL to capture
  * @param {string} siteName - Name of the website for filenames
- * @param {Object} options - Additional options
+ * @param {Array<string>} templateIds - Template IDs to capture
+ * @param {object} options - Additional options
  * @returns {Promise<Blob>} ZIP file containing screenshots
  */
 export const generateScreenshots = async (url, siteName = 'website', templateIds = [], options = {}) => {
@@ -1107,23 +1000,17 @@ export const generateScreenshots = async (url, siteName = 'website', templateIds
         ...options
     });
 
-    // Use provided templateIds or all templates if empty
     const templatesToCapture = templateIds.length > 0
         ? templateIds
         : Object.keys(SCREENSHOT_TEMPLATES);
-
-    console.log('Generating screenshots for templates:', templatesToCapture);
 
     const results = await service.captureByTemplates(url, templatesToCapture);
 
     const zipBlob = await service.createScreenshotZip(url, results, { siteName, ...options });
 
-    // Make sure we're returning a proper Blob
     if (!(zipBlob instanceof Blob)) {
-        console.error('Generated screenshot zip is not a Blob:', zipBlob);
-        // Create an error ZIP instead
         const errorZip = new JSZip();
-        errorZip.file('error.txt', `Failed to generate screenshots for ${url}\n\nGenerated data type: ${typeof zipBlob}`);
+        errorZip.file('error.txt', `Failed to generate screenshots for ${url}`);
         return await errorZip.generateAsync({ type: 'blob' });
     }
 
@@ -1132,9 +1019,8 @@ export const generateScreenshots = async (url, siteName = 'website', templateIds
 
 /**
  * Generates standalone screenshot ZIP
- * @async
  * @param {string} url - Website URL
- * @param {Object} settings - Screenshot settings
+ * @param {object} settings - Screenshot settings
  * @returns {Promise<Blob>} Screenshot ZIP blob
  */
 export const createScreenshotZip = async (url, settings = {}) => {
@@ -1144,5 +1030,16 @@ export const createScreenshotZip = async (url, settings = {}) => {
         settings.faviconSiteName || 'Website Screenshots',
         templateIds,
         settings
+    );
+};
+
+/**
+ * Gets screenshot templates by category
+ * @param {string} category - Template category
+ * @returns {Array<object>} Array of screenshot templates
+ */
+export const getScreenshotTemplatesByCategory = (category) => {
+    return Object.values(SCREENSHOT_TEMPLATES || {}).filter(template =>
+        template.category === category
     );
 };

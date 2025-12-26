@@ -721,6 +721,40 @@ export const EXPORT_FOLDERS = {
 };
 
 // ================================
+// Viewport & User Agent Functions
+// ================================
+
+/**
+ * Returns viewport dimensions for device type
+ * @param {string} device - Device type identifier
+ * @returns {object} Viewport dimensions
+ */
+export const getViewportSize = (device) => {
+    const sizes = {
+        mobile: { width: 375, height: 667 },
+        tablet: { width: 768, height: 1024 },
+        desktop: { width: 1366, height: 768 },
+        'desktop-hd': { width: 1920, height: 1080 },
+    };
+    return sizes[device] || sizes.desktop;
+};
+
+/**
+ * Returns user agent string for device type
+ * @param {string} device - Device type identifier
+ * @returns {string} User agent string
+ */
+export const getUserAgent = (device) => {
+    const agents = {
+        mobile: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+        tablet: 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+        desktop: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'desktop-hd': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    };
+    return agents[device] || agents.desktop;
+};
+
+// ================================
 // Helper Functions
 // ================================
 
@@ -759,7 +793,7 @@ export const getTemplateCategories = () => {
  */
 export const getTemplateById = (templateId) => {
     return SOCIAL_MEDIA_TEMPLATES.find(template => template.id === templateId) ||
-        Object.values(SCREENSHOT_TEMPLATES).find(template => template.id === templateId);
+        SCREENSHOT_TEMPLATES[templateId] || null;
 };
 
 /**
