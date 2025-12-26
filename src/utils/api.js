@@ -6,7 +6,13 @@ import {
 
 import { SCREENSHOT_TEMPLATES } from '../configs/templateConfigs';
 
+/**
+ * Captures screenshot from URL
+ */
 export async function captureScreenshot(url, templateId = 'desktop', options = {}) {
+    let controller = null;
+    let timeoutId = null;
+
     try {
         let cleanUrl = url.trim();
         if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
@@ -34,11 +40,9 @@ export async function captureScreenshot(url, templateId = 'desktop', options = {
 
         for (const endpoint of VERCEL_ENDPOINTS) {
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), timeout);
+                controller = new AbortController();
+                timeoutId = setTimeout(() => controller.abort(), timeout);
 
-                // CORRECTED: Your Vercel endpoint doesn't need the Browserless token
-                // The token is handled by your screenshot.js serverless function
                 const response = await fetch(endpoint.url, {
                     method: 'POST',
                     headers: {
@@ -49,6 +53,8 @@ export async function captureScreenshot(url, templateId = 'desktop', options = {
                 });
 
                 clearTimeout(timeoutId);
+                controller = null;
+                timeoutId = null;
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
@@ -61,7 +67,7 @@ export async function captureScreenshot(url, templateId = 'desktop', options = {
                     const blob = await response.blob();
                     const dimensions = response.headers.get('x-dimensions');
                     const method = response.headers.get('x-method') || 'api';
-                    const isPlaceholder = response.headers.get('x-placeholder') === 'true';
+                    const isPlaceholder = response.headers.get('x-is-placeholder') === 'true';
 
                     return {
                         success: true,
@@ -79,6 +85,10 @@ export async function captureScreenshot(url, templateId = 'desktop', options = {
                     throw new Error(errorData.error || 'Unknown error from API');
                 }
             } catch (error) {
+                if (controller) controller.abort();
+                if (timeoutId) clearTimeout(timeoutId);
+                controller = null;
+                timeoutId = null;
                 lastError = error;
                 continue;
             }
@@ -119,9 +129,15 @@ export async function captureScreenshot(url, templateId = 'desktop', options = {
             warning: 'Capture failed, using placeholder',
             responseTime: 0
         };
+    } finally {
+        if (controller) controller.abort();
+        if (timeoutId) clearTimeout(timeoutId);
     }
 }
 
+/**
+ * Creates placeholder screenshot
+ */
 async function createPlaceholderScreenshot(url, width, height, device, templateId) {
     return new Promise((resolve) => {
         const canvas = document.createElement('canvas');
@@ -196,6 +212,9 @@ async function createPlaceholderScreenshot(url, width, height, device, templateI
     });
 }
 
+/**
+ * Captures screenshots for multiple templates
+ */
 export async function captureScreenshotsForTemplates(url, templateIds, options = {}) {
     const results = [];
 
@@ -218,13 +237,21 @@ export async function captureScreenshotsForTemplates(url, templateIds, options =
     return results;
 }
 
+/**
+ * Tests screenshot API availability
+ */
 export async function testScreenshotAPI() {
     try {
         for (const endpoint of VERCEL_ENDPOINTS) {
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
                 const response = await fetch(`${endpoint.url.replace('/screenshot', '')}/health`, {
-                    signal: AbortSignal.timeout(5000)
+                    signal: controller.signal
                 });
+
+                clearTimeout(timeoutId);
 
                 if (response.ok) {
                     return {
@@ -250,18 +277,30 @@ export async function testScreenshotAPI() {
     }
 }
 
+/**
+ * Gets device configuration
+ */
 export function getDeviceConfig(device) {
     return DEVICE_PRESETS[device] || DEVICE_PRESETS.desktop;
 }
 
+/**
+ * Gets screenshot template
+ */
 export function getScreenshotTemplate(id) {
     return SCREENSHOT_TEMPLATES[id] || null;
 }
 
+/**
+ * Gets all screenshot templates
+ */
 export function getAllScreenshotTemplates() {
     return Object.values(SCREENSHOT_TEMPLATES);
 }
 
+/**
+ * Gets screenshot templates by category
+ */
 export function getScreenshotTemplatesByCategory(category) {
     return getAllScreenshotTemplates().filter(template =>
         template.category === category

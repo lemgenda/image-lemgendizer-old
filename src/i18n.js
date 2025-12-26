@@ -145,6 +145,7 @@ const resources = {
             // Messages
             'message.success': 'Success',
             'message.error': 'Error',
+            'message.info': 'Info',
             'message.warning': 'Warning',
             'message.removed': 'Removed',
             'message.successUpload_one': 'Successfully uploaded {{count}} image',
@@ -456,6 +457,7 @@ const resources = {
             // Messages
             'message.success': 'Uspjeh',
             'message.error': 'Greška',
+            'message.info': 'Info',
             'message.warning': 'Upozorenje',
             'message.removed': 'Uklonjeno',
             'message.successUpload_one': 'Uspješno učitano {{count}} slika',

@@ -54,13 +54,7 @@ const getCategoryConstant = (categoryId) => {
 };
 
 /**
- * Creates favicon preview image with theme colors.
- * @async
- * @param {File} imageFile - Source image file
- * @param {string} siteName - Website name
- * @param {string} themeColor - Theme color
- * @param {string} backgroundColor - Background color
- * @returns {Promise<File>} Favicon preview file
+ * Creates favicon preview image
  */
 const createFaviconPreview = async (imageFile, siteName, themeColor = DEFAULT_FAVICON_THEME_COLOR, backgroundColor = DEFAULT_FAVICON_BACKGROUND_COLOR) => {
     return new Promise((resolve) => {
@@ -141,12 +135,7 @@ const createFaviconPreview = async (imageFile, siteName, themeColor = DEFAULT_FA
 };
 
 /**
- * Creates template error files for failed templates.
- * @async
- * @param {Object} template - Template object
- * @param {Object} image - Original image object
- * @param {Error} error - Error object
- * @returns {Promise<Array<Object>>} Array of error placeholder image objects
+ * Creates template error files
  */
 const createTemplateErrorFiles = async (template, image, error) => {
     return new Promise((resolve) => {
@@ -229,11 +218,7 @@ const createTemplateErrorFiles = async (template, image, error) => {
 };
 
 /**
- * Creates screenshot preview for the template system
- * @async
- * @param {File} imageFile - Source image file
- * @param {string} screenshotUrl - Website URL for screenshots
- * @returns {Promise<File>} Screenshot preview file
+ * Creates screenshot preview
  */
 const createScreenshotPreview = async (imageFile, screenshotUrl) => {
     return new Promise((resolve) => {
@@ -319,16 +304,7 @@ const createScreenshotPreview = async (imageFile, screenshotUrl) => {
 };
 
 /**
- * Processes a single template.
- * @async
- * @param {Object} template - Template object
- * @param {Object} image - Original image object
- * @param {File} imageFile - Source image file
- * @param {boolean} useSmartCrop - Whether to use AI smart cropping
- * @param {boolean} aiModelLoaded - Whether AI model is loaded
- * @param {boolean} isLargeImage - Whether the image is large
- * @param {boolean} hasTransparency - Whether the image has transparency
- * @returns {Promise<Array<Object>>} Array of processed images for this template
+ * Processes a single template
  */
 const processSingleTemplate = async (template, image, imageFile, useSmartCrop, aiModelLoaded, isLargeImage, hasTransparency) => {
     const processedImages = [];
@@ -473,14 +449,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
 };
 
 /**
- * Processes images using social media templates.
- * @async
- * @param {Object} image - Image object to process
- * @param {Array<Object>} selectedTemplates - Array of template objects
- * @param {boolean} useSmartCrop - Whether to use AI smart cropping
- * @param {boolean} aiModelLoaded - Whether AI model is loaded
- * @param {Object} options - Additional options for favicon/screenshot generation
- * @returns {Promise<Array<Object>>} Array of processed template images
+ * Processes images using social media templates
  */
 export const processTemplateImages = async (image, selectedTemplates, useSmartCrop = false, aiModelLoaded = false, options = {}) => {
     const processedImages = [];
@@ -566,7 +535,7 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
         if (options.includeScreenshots === true && screenshotTemplates.length > 0 && options.screenshotUrl) {
             try {
                 const screenshotService = new UnifiedScreenshotService({
-                    useServerCapture: true,
+                    useServerCapture: false,
                     enableCaching: true,
                     enableCompression: true,
                     timeout: PROCESSING_DELAYS.SCREENSHOT_CAPTURE
@@ -616,17 +585,7 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
 };
 
 /**
- * Orchestrates template image processing workflow.
- * @async
- * @param {Object} selectedImage - Selected image object
- * @param {Array<string>} selectedTemplateIds - Selected template IDs
- * @param {Array<Object>} templateConfigs - Template configurations
- * @param {boolean} useSmartCrop - Whether to use AI smart cropping
- * @param {boolean} aiModelLoaded - Whether AI model is loaded
- * @param {Function} onProgress - Progress callback
- * @param {Object} processingOptions - Additional processing options for favicon/screenshot
- * @returns {Promise<Array<Object>>} Processed template images
- * @throws {Error} If no image or templates selected
+ * Orchestrates template image processing workflow
  */
 export const orchestrateTemplateProcessing = async (selectedImage, selectedTemplateIds, templateConfigs, useSmartCrop = false, aiModelLoaded = false, onProgress = null, processingOptions = {}) => {
     try {

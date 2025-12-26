@@ -89,35 +89,7 @@ function App() {
     const preloadLibraries = async () => {
       try {
         await loadUTIFLibrary();
-
-        if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
-          try {
-            const screenshotService = new UnifiedScreenshotService({
-              useServerCapture: true,
-              enableCaching: true,
-              enableCompression: true,
-              timeout: DEFAULT_SCREENSHOT_TIMEOUT
-            });
-
-            const apiAvailable = await screenshotService.isApiAvailable();
-
-            if (!apiAvailable && !screenshotUrl.trim()) {
-              setTimeout(() => {
-                showModal(
-                  t('message.info'),
-                  t('message.screenshotApiUnavailable'),
-                  MODAL_TYPES.INFO
-                );
-              }, 2000);
-            }
-
-            screenshotService.cleanup();
-
-          } catch {
-          }
-        }
-      } catch {
-      }
+      } catch { }
     };
 
     preloadLibraries();
@@ -167,6 +139,9 @@ function App() {
     };
   }, [images]);
 
+  /**
+   * Handles image upload
+   */
   const handleImageUpload = async (files) => {
     try {
       setIsLoading(true);
@@ -203,6 +178,9 @@ function App() {
     }
   };
 
+  /**
+   * Handles image selection
+   */
   const handleImageSelect = (imageId) => {
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
       setProcessingOptions(prev => ({
@@ -219,6 +197,9 @@ function App() {
     }
   };
 
+  /**
+   * Handles select all images
+   */
   const handleSelectAll = () => {
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) return;
 
@@ -229,6 +210,9 @@ function App() {
     }
   };
 
+  /**
+   * Handles removing selected images
+   */
   const handleRemoveSelected = () => {
     const imagesToRemove = processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
       ? [processingOptions.templateSelectedImage].filter(Boolean)
@@ -250,6 +234,9 @@ function App() {
     showModal(t('message.removed'), t('message.removedImages'), MODAL_TYPES.SUCCESS);
   };
 
+  /**
+   * Handles favicon toggle
+   */
   const handleFaviconToggle = (selected) => {
     setIsFaviconSelected(selected);
 
@@ -270,6 +257,9 @@ function App() {
     }
   };
 
+  /**
+   * Handles screenshot toggle
+   */
   const handleScreenshotToggle = (selected) => {
     setIsScreenshotSelected(selected);
 
@@ -288,6 +278,9 @@ function App() {
     }
   };
 
+  /**
+   * Handles screenshot URL change
+   */
   const handleScreenshotUrlChange = (url) => {
     setScreenshotUrl(url);
 
@@ -309,10 +302,16 @@ function App() {
     }
   };
 
+  /**
+   * Shows modal
+   */
   const showModal = (title, message, type = MODAL_TYPES.INFO) => {
     setModal({ isOpen: true, title, message, type });
   };
 
+  /**
+   * Shows summary modal
+   */
   const showSummaryModal = (summary) => {
     setProcessingSummary(summary);
     setModal({
@@ -323,11 +322,17 @@ function App() {
     });
   };
 
+  /**
+   * Closes modal
+   */
   const closeModal = () => {
     setModal({ isOpen: false, title: '', message: '', type: MODAL_TYPES.INFO });
     setProcessingSummary(null);
   };
 
+  /**
+   * Toggles resize/crop
+   */
   const toggleResizeCrop = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -336,6 +341,9 @@ function App() {
     }));
   };
 
+  /**
+   * Toggles crop mode
+   */
   const toggleCropMode = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -343,6 +351,9 @@ function App() {
     }));
   };
 
+  /**
+   * Handles format toggle
+   */
   const handleFormatToggle = (format) => {
     setProcessingOptions(prev => {
       const currentFormats = prev.output.formats || [];
@@ -362,6 +373,9 @@ function App() {
     });
   };
 
+  /**
+   * Handles select all formats
+   */
   const handleSelectAllFormats = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -372,6 +386,9 @@ function App() {
     }));
   };
 
+  /**
+   * Handles clear all formats
+   */
   const handleClearAllFormats = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -382,6 +399,9 @@ function App() {
     }));
   };
 
+  /**
+   * Toggles processing mode
+   */
   const toggleProcessingMode = (mode) => {
     const newMode = mode === PROCESSING_MODES.TEMPLATES ? PROCESSING_MODES.TEMPLATES : PROCESSING_MODES.CUSTOM;
 
@@ -412,6 +432,9 @@ function App() {
     }
   };
 
+  /**
+   * Handles template toggle
+   */
   const handleTemplateToggle = (templateId) => {
     setProcessingOptions(prev => {
       const newSelected = prev.selectedTemplates.includes(templateId)
@@ -422,6 +445,9 @@ function App() {
     });
   };
 
+  /**
+   * Handles select all templates
+   */
   const handleSelectAllTemplates = () => {
     const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id);
     setProcessingOptions(prev => ({
@@ -430,6 +456,9 @@ function App() {
     }));
   };
 
+  /**
+   * Handles select all in category
+   */
   const handleSelectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
@@ -441,6 +470,9 @@ function App() {
     }));
   };
 
+  /**
+   * Handles deselect all in category
+   */
   const handleDeselectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
@@ -452,6 +484,9 @@ function App() {
     }));
   };
 
+  /**
+   * Handles option change
+   */
   const handleOptionChange = (category, key, value) => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -462,6 +497,9 @@ function App() {
     }));
   };
 
+  /**
+   * Handles single option change
+   */
   const handleSingleOptionChange = (key, value) => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -469,6 +507,9 @@ function App() {
     }));
   };
 
+  /**
+   * Gets selected images for processing
+   */
   const getSelectedImagesForProcessing = () => {
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
       return processingOptions.templateSelectedImage
@@ -479,6 +520,9 @@ function App() {
     }
   };
 
+  /**
+   * Processes custom images
+   */
   const processCustomImages = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing();
     if (selectedImagesForProcessing.length === 0) {
@@ -532,6 +576,9 @@ function App() {
     }
   };
 
+  /**
+   * Processes templates
+   */
   const processTemplates = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing();
     if (selectedImagesForProcessing.length === 0) {
@@ -678,22 +725,34 @@ function App() {
     }
   };
 
+  /**
+   * Formats template name
+   */
   const formatTemplateName = (name) => {
     return t(`template.${name}`) || name;
   };
 
+  /**
+   * Increments value
+   */
   const incrementValue = (key, increment = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
     const currentValue = parseInt(processingOptions[key] || '0');
     const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue + increment);
     handleSingleOptionChange(key, String(newValue));
   };
 
+  /**
+   * Decrements value
+   */
   const decrementValue = (key, decrement = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
     const currentValue = parseInt(processingOptions[key] || '1');
     const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue - decrement);
     handleSingleOptionChange(key, String(newValue));
   };
 
+  /**
+   * Calculates categories applied
+   */
   const calculateCategoriesApplied = (selectedTemplates, SOCIAL_MEDIA_TEMPLATES) => {
     if (!selectedTemplates || selectedTemplates.length === 0) return 0;
 
@@ -1311,27 +1370,6 @@ function App() {
                                 alt={templateSelectedImageObj.name}
                                 className="w-full h-auto object-contain max-h-full"
                                 src={templateSelectedImageObj.url}
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  const container = e.target.parentElement;
-                                  const placeholder = document.createElement('div');
-                                  placeholder.className = 'tiff-preview-placeholder';
-                                  placeholder.innerHTML = `
-                                    <div class="text-center p-8">
-                                      <div class="tiff-preview-icon mb-4">
-                                        <i class="fas fa-file-image text-5xl text-gray-400"></i>
-                                      </div>
-                                      <div class="text-gray-700 font-medium mb-2">${templateSelectedImageObj.name}</div>
-                                      <div class="text-gray-500 text-sm">
-                                        TIFF Image • ${formatFileSize(templateSelectedImageObj.size)}
-                                      </div>
-                                      <div class="mt-4 px-4 py-2 bg-blue-100 text-blue-800 rounded-full inline-block text-sm font-medium">
-                                        <i class="fas fa-sync-alt mr-2"></i>Converted for preview
-                                      </div>
-                                    </div>
-                                  `;
-                                  container.appendChild(placeholder);
-                                }}
                               />
                               <div className="absolute bottom-4 right-4 bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
                                 <i className="fas fa-file-image mr-1"></i> TIFF
@@ -1342,18 +1380,6 @@ function App() {
                               alt={templateSelectedImageObj.name}
                               className="w-full h-auto object-contain max-h-96"
                               src={templateSelectedImageObj.url}
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                                const container = e.target.parentElement;
-                                container.innerHTML = `
-                                  <div class="w-full h-64 bg-gray-100 flex items-center justify-center">
-                                    <div class="text-center">
-                                      <i class="fas fa-image text-gray-400 text-4xl mb-2"></i>
-                                      <div class="text-gray-600">Cannot display image preview</div>
-                                    </div>
-                                  </div>
-                                `;
-                              }}
                             />
                           )}
                           <div className="absolute inset-0 border border-gray-200 rounded-lg pointer-events-none"></div>
@@ -1469,23 +1495,7 @@ function App() {
                             src={image.url}
                             alt={image.name}
                             className="image-preview"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              const parent = e.target.parentElement;
-                              const placeholder = parent.querySelector('.tiff-placeholder');
-                              if (placeholder) placeholder.style.display = 'flex';
-                            }}
                           />
-                          <div className="tiff-placeholder" style={{ display: 'none' }}>
-                            <div className="tiff-icon">
-                              <i className="fas fa-file-image"></i>
-                            </div>
-                            <div className="tiff-label">TIFF</div>
-                            <div className="tiff-info">
-                              <span className="tiff-name">{image.name}</span>
-                              <span className="tiff-size">{formatFileSize(image.size)}</span>
-                            </div>
-                          </div>
                           <div className="tiff-badge-overlay">
                             <span className="tiff-badge">TIFF</span>
                           </div>
@@ -1495,19 +1505,8 @@ function App() {
                           src={image.url}
                           alt={image.name}
                           className="image-preview"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            const parent = e.target.parentElement;
-                            const fallback = parent.querySelector('.image-fallback');
-                            if (fallback) fallback.style.display = 'flex';
-                          }}
                         />
                       )}
-
-                      <div className="image-fallback" style={{ display: 'none' }}>
-                        <i className="fas fa-image"></i>
-                        <span className="image-fallback-name">{image.name}</span>
-                      </div>
 
                       <div className="image-info">
                         <span className="image-name">{image.name}</span>

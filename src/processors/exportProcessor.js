@@ -11,9 +11,6 @@ import {
 
 /**
  * Generates export settings based on mode
- * @param {string} mode - Processing mode
- * @param {Object} additionalSettings - Additional settings
- * @returns {Object} Export settings
  */
 export const generateExportSettings = (mode, additionalSettings = {}) => {
     const baseDefaults = {
@@ -63,9 +60,6 @@ export const generateExportSettings = (mode, additionalSettings = {}) => {
 
 /**
  * Gets export folder structure based on mode
- * @param {string} mode - Processing mode
- * @param {Object} settings - Export settings
- * @returns {Array} Folder structure
  */
 export const getExportFolderStructure = (mode, settings = {}) => {
     if (mode === PROCESSING_MODES.CUSTOM) {
@@ -91,8 +85,6 @@ export const getExportFolderStructure = (mode, settings = {}) => {
 
 /**
  * Organizes images by format
- * @param {Array} processedImages - Processed images
- * @returns {Object} Images grouped by format
  */
 export const organizeImagesByFormat = (processedImages) => {
     const groupedByFormat = {};
@@ -112,8 +104,6 @@ export const organizeImagesByFormat = (processedImages) => {
 
 /**
  * Organizes templates by platform
- * @param {Array} socialTemplates - Social media templates
- * @returns {Object} Organized templates by platform
  */
 export const organizeTemplatesByPlatform = (socialTemplates) => {
     const organized = {};
@@ -144,9 +134,6 @@ export const organizeTemplatesByPlatform = (socialTemplates) => {
 
 /**
  * Filters screenshot templates by selected IDs
- * @param {Array} processedImages - Processed images
- * @param {Array} selectedTemplateIds - Selected template IDs
- * @returns {Array} Filtered screenshot templates
  */
 const filterScreenshotTemplates = (processedImages, selectedTemplateIds) => {
     if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
@@ -168,10 +155,6 @@ const filterScreenshotTemplates = (processedImages, selectedTemplateIds) => {
 
 /**
  * Processes favicon set
- * @param {File} sourceImage - Source image
- * @param {Object} settings - Export settings
- * @param {JSZip} zip - ZIP object
- * @returns {Promise<void>}
  */
 const processFaviconSet = async (sourceImage, settings, zip = null) => {
     try {
@@ -208,12 +191,6 @@ const processFaviconSet = async (sourceImage, settings, zip = null) => {
 
 /**
  * Creates export ZIP file
- * @param {Array} originalImages - Original images
- * @param {Array} processedImages - Processed images
- * @param {Object} settings - Export settings
- * @param {string} mode - Processing mode
- * @param {Array} formats - Output formats
- * @returns {Promise<Blob>} ZIP blob
  */
 export const createExportZip = async (originalImages, processedImages, settings, mode, formats = ['webp']) => {
     const zip = new JSZip();
@@ -435,9 +412,6 @@ export const createExportZip = async (originalImages, processedImages, settings,
 
 /**
  * Creates favicon ZIP file
- * @param {File} imageFile - Image file
- * @param {Object} settings - Export settings
- * @returns {Promise<Blob>} Favicon ZIP blob
  */
 export const createFaviconZip = async (imageFile, settings = {}) => {
     return await processFaviconSet(imageFile, settings);
@@ -445,9 +419,6 @@ export const createFaviconZip = async (imageFile, settings = {}) => {
 
 /**
  * Creates screenshot ZIP file
- * @param {string} url - Website URL
- * @param {Object} settings - Export settings
- * @returns {Promise<Blob>} Screenshot ZIP blob
  */
 export const createScreenshotZip = async (url, settings = {}) => {
     const templateIds = settings.selectedScreenshotTemplates || [];
@@ -461,11 +432,6 @@ export const createScreenshotZip = async (url, settings = {}) => {
 
 /**
  * Creates export summary text
- * @param {Array} originalImages - Original images
- * @param {Array} processedImages - Processed images
- * @param {Object} settings - Export settings
- * @param {string} mode - Processing mode
- * @returns {string} Export summary
  */
 const createExportSummary = (originalImages, processedImages, settings, mode) => {
     const timestamp = new Date().toISOString();
@@ -497,7 +463,7 @@ ${getExportFolderStructure(mode, settings).map(folder => `- ${folder}`).join('\n
 
 INCLUDED CONTENT:
 =================
-${getIncludedContentSummary(settings, mode)}
+${getIncludedContentSummary(settings, mode, processedImages)}
 
 NOTES:
 ======
@@ -515,11 +481,6 @@ Need help? Contact support or check the documentation.`;
 
 /**
  * Calculates total files in export
- * @param {Array} originalImages - Original images
- * @param {Array} processedImages - Processed images
- * @param {Object} settings - Export settings
- * @param {string} mode - Processing mode
- * @returns {number} Total file count
  */
 const calculateTotalFiles = (originalImages, processedImages, settings, mode) => {
     let total = 0;
@@ -563,11 +524,8 @@ const calculateTotalFiles = (originalImages, processedImages, settings, mode) =>
 
 /**
  * Gets included content summary
- * @param {Object} settings - Export settings
- * @param {string} mode - Processing mode
- * @returns {string} Content summary
  */
-const getIncludedContentSummary = (settings, mode) => {
+const getIncludedContentSummary = (settings, mode, processedImages) => {
     const items = [];
 
     if (settings.includeOriginal) items.push('Original images');
@@ -581,7 +539,10 @@ const getIncludedContentSummary = (settings, mode) => {
         if (settings.includeSocialMedia) items.push('Social media templates (organized by platform)');
         if (settings.includeFavicon === true) items.push(`${PLATFORM_NAMES.FAVICON || 'Favicon'} set (with manifest and documentation)`);
         if (settings.includeScreenshots === true && settings.screenshotUrl) {
-            items.push(`${PLATFORM_NAMES.SCREENSHOTS || 'Website'} screenshots (from: ${settings.screenshotUrl})`);
+            const screenshotCount = processedImages.filter(img =>
+                img.template?.category === 'screenshots'
+            ).length;
+            items.push(`${PLATFORM_NAMES.SCREENSHOTS || 'Website'} screenshots (${screenshotCount} images from: ${settings.screenshotUrl})`);
         }
     }
 
@@ -590,8 +551,6 @@ const getIncludedContentSummary = (settings, mode) => {
 
 /**
  * Gets export notes
- * @param {string} mode - Processing mode
- * @returns {string} Export notes
  */
 const getExportNotes = (mode) => {
     if (mode === PROCESSING_MODES.CUSTOM) {
@@ -609,8 +568,6 @@ const getExportNotes = (mode) => {
 
 /**
  * Downloads ZIP file
- * @param {Blob} zipBlob - ZIP blob
- * @param {string} prefix - File name prefix
  */
 export const downloadZip = (zipBlob, prefix) => {
     const url = URL.createObjectURL(zipBlob);
@@ -625,8 +582,6 @@ export const downloadZip = (zipBlob, prefix) => {
 
 /**
  * Downloads file
- * @param {Blob} blob - File blob
- * @param {string} filename - File name
  */
 export const downloadFile = (blob, filename) => {
     const url = URL.createObjectURL(blob);
