@@ -120,8 +120,6 @@ function getScreenshotTemplate(templateId) {
     return SCREENSHOT_TEMPLATE_CONFIGS[templateId] || SCREENSHOT_TEMPLATE_CONFIGS['screenshots-desktop'];
 }
 
-console.log('Browserless API Key exists:', !!BROWSERLESS_API_KEY);
-
 /**
  * Calculates viewport dimensions based on template and custom parameters
  * @param {string} templateId - Template identifier
@@ -149,7 +147,7 @@ function getTemplateViewport(templateId, customWidth, customHeight, customFullPa
         hasTouch: deviceConfig.hasTouch
     };
 }
-console.error('Browserless error:', errorText);
+
 /**
  * Validates and cleans URL string
  * @param {string} url - URL to validate
@@ -163,12 +161,10 @@ function validateAndCleanUrl(url) {
 
     let cleanUrl = url.trim();
 
-    // Basic validation
     if (cleanUrl.length === 0) {
         throw new Error('URL cannot be empty');
     }
 
-    // Check for common URL patterns
     const urlRegex = /^(https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w- .\/?%&=]*)?$/i;
     if (!urlRegex.test(cleanUrl)) {
         throw new Error('Invalid URL format');
@@ -218,14 +214,16 @@ function setResponseHeaders(res, headers, origin, isError = false) {
         res.setHeader('x-placeholder', headers['x-is-placeholder']);
     }
 
-    if (origin && allowedOrigins.some(allowed =>
-        origin.includes(allowed.replace('https://', '').replace('http://', '')))) {
+    // FIXED: Always set Access-Control-Allow-Origin for preflight
+    if (origin && allowedOrigins.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Expose-Headers', 'x-dimensions, x-method, x-device, x-template, x-is-placeholder, x-placeholder, x-warning, Content-Type, Content-Length, x-response-time');
     } else {
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        // For development, allow the requesting origin
+        res.setHeader('Access-Control-Allow-Origin', origin || 'http://localhost:5173');
     }
 
+    // These headers are CRITICAL for CORS
+    res.setHeader('Access-Control-Expose-Headers', 'x-dimensions, x-method, x-device, x-template, x-is-placeholder, x-placeholder, x-warning, Content-Type, Content-Length, x-response-time');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS, POST, PUT, PATCH, DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
@@ -252,7 +250,7 @@ function createErrorResponse(error, isPlaceholder = true) {
 }
 
 export default async function handler(req, res) {
-    const origin = req.headers.origin;
+    const origin = req.headers.origin || req.headers.host;
 
     if (req.method === 'OPTIONS') {
         setResponseHeaders(res, {}, origin);
@@ -311,15 +309,18 @@ export default async function handler(req, res) {
 
         const browserlessUrl = `https://production-sfo.browserless.io/screenshot?token=${BROWSERLESS_API_KEY}`;
 
+        const deviceConfig = getDeviceConfig(viewport.device);
+
         const browserlessBody = {
             url: cleanUrl,
             options: {
                 type: 'png',
                 encoding: 'binary',
                 fullPage: viewport.fullPage || false,
-                waitFor: 'networkidle2',
-                delay: 1000
-            }
+                waitFor: 'networkidle2', // Wait for page to fully load
+                delay: 1000 // Wait 1 second after page load
+            },
+            userAgent: deviceConfig.userAgent // Add user agent for bot detection avoidance
         };
 
         if (!viewport.fullPage) {
@@ -331,9 +332,6 @@ export default async function handler(req, res) {
                 hasTouch: deviceConfig.hasTouch
             };
         }
-
-        // CRITICAL: Add userAgent string for bot detection avoidance
-        browserlessBody.userAgent = deviceConfig.userAgent;
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
