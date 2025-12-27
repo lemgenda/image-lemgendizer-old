@@ -50,19 +50,21 @@ async function runCompleteTestSuite() {
             }
         },
         {
-            name: 'Timeout test (should fail)',
+            name: 'Timeout test (should fail with 1 second timeout)',
             body: {
                 url: 'https://lemgenda.hr',
                 templateId: 'screenshots-desktop',
-                timeout: 1000  // 1 second - should timeout
-            }
+                timeout: 1000
+            },
+            shouldPass: false
         },
         {
-            name: 'Invalid URL (should error)',
+            name: 'Invalid URL (should return validation error)',
             body: {
                 url: 'not-a-valid-url',
                 templateId: 'screenshots-desktop'
-            }
+            },
+            shouldPass: false
         },
         {
             name: 'Missing templateId (should use default)',

@@ -161,6 +161,17 @@ function validateAndCleanUrl(url) {
 
     let cleanUrl = url.trim();
 
+    // Basic validation
+    if (cleanUrl.length === 0) {
+        throw new Error('URL cannot be empty');
+    }
+
+    // Check for common URL patterns
+    const urlRegex = /^(https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w- .\/?%&=]*)?$/i;
+    if (!urlRegex.test(cleanUrl)) {
+        throw new Error('Invalid URL format');
+    }
+
     if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
         cleanUrl = 'https://' + cleanUrl;
     }
@@ -281,7 +292,7 @@ export default async function handler(req, res) {
         const customWidth = parseInt(body.width) || null;
         const customHeight = parseInt(body.height) || null;
         const customFullPage = body.fullPage !== undefined ? Boolean(body.fullPage) : undefined;
-        const timeout = Math.min(parseInt(body.timeout) || 30000, 60000);
+        const timeout = Math.max(Math.min(parseInt(body.timeout) || 30000, 60000), 5000);
 
         const cleanUrl = validateAndCleanUrl(url);
         const viewport = getTemplateViewport(templateId, customWidth, customHeight, customFullPage);
@@ -339,6 +350,13 @@ export default async function handler(req, res) {
                     errorText = await response.text();
                 } catch {
                     errorText = 'Could not read error response';
+                }
+
+                if (response.status === 500 && errorText.includes('net::ERR_NAME')) {
+                    setResponseHeaders(res, {}, origin, true);
+                    return res.status(200).json(createErrorResponse(
+                        new Error('Cannot resolve URL. Please check the website address.')
+                    ));
                 }
 
                 if (response.status === 401 || response.status === 403) {
