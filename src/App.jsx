@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-
 import {
   orchestrateCustomProcessing,
   orchestrateTemplateProcessing,
@@ -14,15 +13,13 @@ import {
   generateExportSettings,
   loadUTIFLibrary
 } from './processors';
-
 import {
   validateProcessingOptions,
   calculateTotalTemplateFiles,
-  formatFileSize,
-  captureScreenshot,
-  captureScreenshotsForTemplates
+  formatFileSize
 } from './utils';
 
+import { captureScreenshotsForTemplates } from './utils/screenshotUtils';
 import {
   getTemplateCategories,
   SOCIAL_MEDIA_TEMPLATES,
@@ -33,7 +30,6 @@ import {
   FAVICON_TEMPLATE_ID,
   DEFAULT_FAVICON_THEME_COLOR
 } from './configs/templateConfigs';
-
 import {
   PROCESSING_MODES,
   COMPRESSION_QUALITY_RANGE,
@@ -49,7 +45,6 @@ import {
   RESIZE_DIMENSION_RANGE,
   CROP_DIMENSION_RANGE
 } from './constants/sharedConstants';
-
 import {
   ImageUploader,
   Header,
@@ -58,7 +53,6 @@ import {
   RangeSlider,
   SiteScreenshots
 } from './components';
-
 import './styles/App.css';
 
 function App() {
@@ -294,17 +288,14 @@ function App() {
 
     if (url.trim()) {
       try {
-        // Clean the URL first
         let cleanUrl = url.trim();
         if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
           cleanUrl = `https://${cleanUrl}`;
         }
         cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
 
-        // Validate URL
         new URL(cleanUrl);
 
-        // Test if it's a valid website URL
         const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
 
         if (urlPattern.test(cleanUrl)) {
@@ -604,6 +595,16 @@ function App() {
   };
 
   /**
+   * Gets all templates combined
+   */
+  const getAllTemplates = () => {
+    return [
+      ...SOCIAL_MEDIA_TEMPLATES,
+      ...(SCREENSHOT_TEMPLATES ? Object.values(SCREENSHOT_TEMPLATES) : [])
+    ];
+  };
+
+  /**
    * Processes templates
    */
   const processTemplates = async () => {
@@ -646,7 +647,7 @@ function App() {
     setIsLoading(true);
 
     const hasScreenshotTemplates = processingOptions.selectedTemplates.some(id => {
-      const template = SOCIAL_MEDIA_TEMPLATES.find(t => t.id === id);
+      const template = getAllTemplates().find(t => t.id === id);
       return template && template.category === 'screenshots';
     });
 
@@ -667,13 +668,12 @@ function App() {
     try {
       const processingConfig = getProcessingConfiguration(processingOptions);
 
-      // FIXED: Use SCREENSHOT_TEMPLATES from config
       const screenshotTemplateIds = isScreenshotSelected && SCREENSHOT_TEMPLATES ?
         Object.keys(SCREENSHOT_TEMPLATES) : [];
 
       const processingOptionsWithExtras = {
         ...processingConfig,
-        useServerCapture: false, // Disable server capture, use your working API
+        useServerCapture: false,
         faviconSiteName: processingOptions.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
         faviconThemeColor: processingOptions.faviconThemeColor || DEFAULT_FAVICON_THEME_COLOR,
         faviconBackgroundColor: processingOptions.faviconBackgroundColor || DEFAULT_FAVICON_BACKGROUND_COLOR,
@@ -685,29 +685,26 @@ function App() {
         ...(isFaviconSelected && { faviconTemplateIds: [FAVICON_TEMPLATE_ID] })
       };
 
-      // FIXED: Use orchestrateTemplateProcessing with updated screenshot handling
+      const allTemplates = getAllTemplates();
       const processedImages = await orchestrateTemplateProcessing(
         selectedImagesForProcessing[0],
         processingOptions.selectedTemplates,
-        SOCIAL_MEDIA_TEMPLATES,
+        allTemplates,
         true,
         aiModelLoaded,
         null,
         processingOptionsWithExtras
       );
 
-      // FIXED: Handle screenshot results separately if needed
       let screenshotResults = [];
       if (isScreenshotSelected && screenshotUrl.trim()) {
         try {
-          // Capture screenshots using the working API
           screenshotResults = await captureScreenshotsForTemplates(
             screenshotUrl,
             screenshotTemplateIds,
             { timeout: 30000 }
           );
 
-          // Add screenshot results to processed images
           screenshotResults.forEach(result => {
             if (result.success) {
               processedImages.push({
@@ -718,10 +715,7 @@ function App() {
               });
             }
           });
-        } catch (screenshotError) {
-          console.warn('Screenshot capture failed:', screenshotError);
-          // Continue with template processing even if screenshots fail
-        }
+        } catch { }
       }
 
       const settings = generateExportSettings(EXPORT_SETTINGS.TEMPLATES, {
@@ -777,7 +771,6 @@ function App() {
       }
 
     } catch (error) {
-      console.error('Template processing error:', error);
       showModal(t('message.error'), `${t('message.errorApplying')}: ${error.message}`, MODAL_TYPES.ERROR);
     } finally {
       setIsLoading(false);

@@ -36,6 +36,9 @@ export const TEMPLATE_CATEGORIES_CONST = {
 export const FAVICON_SIZES = [
     { name: 'android-chrome-192x192', width: 192, height: 192 },
     { name: 'android-chrome-512x512', width: 512, height: 512 },
+    { name: 'i-pad-icon-1x', width: 76, height: 76 },
+    { name: 'i-pad-icon-2x', width: 152, height: 152 },
+    { name: 'i-phone-icon', width: 120, height: 120 },
     { name: 'apple-touch-icon', width: 180, height: 180 },
     { name: 'favicon-16x16', width: 16, height: 16 },
     { name: 'favicon-32x32', width: 32, height: 32 },

@@ -43,6 +43,9 @@ import {
 let cleanupInProgress = false;
 let aiUpscalingDisabled = false;
 
+/**
+ * Gets category constant from ID
+ */
 const getCategoryConstant = (categoryId) => {
     switch (categoryId) {
         case 'web': return 'web';
@@ -140,8 +143,8 @@ const createFaviconPreview = async (imageFile, siteName, themeColor = DEFAULT_FA
 const createTemplateErrorFiles = async (template, image, error) => {
     return new Promise((resolve) => {
         const errorImages = [];
-        const baseName = image.name.replace(/\.[^/.]+$/, '');
-        const templateName = template.name.replace(/\s+/g, '-').toLowerCase();
+        const baseName = image.name ? image.name.replace(/\.[^/.]+$/, '') : 'error';
+        const templateName = template.name ? template.name.replace(/\s+/g, '-').toLowerCase() : 'template';
 
         const errorFileName = `${templateName}-${baseName}-error.png`;
         const errorCanvas = document.createElement('canvas');
@@ -339,7 +342,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     }
                 } else {
                     const cropResults = await processLemGendaryCrop(
-                        [{ file: processedFile, name: image.name }],
+                        [{ file: processedFile, name: image.name || 'image' }],
                         targetWidth,
                         targetHeight,
                         'center',
@@ -351,7 +354,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                 }
             } else {
                 const resizeResults = await processLemGendaryResize(
-                    [{ file: processedFile, name: image.name }],
+                    [{ file: processedFile, name: image.name || 'image' }],
                     targetWidth,
                     { quality: DEFAULT_QUALITY, format: 'webp' }
                 );
@@ -363,7 +366,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
         }
 
         const webpFile = await optimizeForWeb(processedFile, DEFAULT_QUALITY, 'webp');
-        const baseName = `${template.platform}-${template.name}-${image.name.replace(/\.[^/.]+$/, '')}`;
+        const baseName = `${template.platform}-${template.name}-${image.name ? image.name.replace(/\.[^/.]+$/, '') : 'image'}`;
         const webpName = `${baseName}.webp`;
 
         processedImages.push({
@@ -453,8 +456,15 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
  */
 export const processTemplateImages = async (image, selectedTemplates, useSmartCrop = false, aiModelLoaded = false, options = {}) => {
     const processedImages = [];
+
+    if (!image || !selectedTemplates || selectedTemplates.length === 0) {
+        return processedImages;
+    }
+
     const imageFile = await ensureFileObject(image);
-    const isSVG = imageFile.type === 'image/svg+xml';
+    if (!imageFile) {
+        return processedImages;
+    }
 
     const transparencyInfo = await checkImageTransparencyDetailed(imageFile);
     const hasTransparency = transparencyInfo.hasTransparency;
@@ -472,18 +482,21 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
     const isLargeImage = totalPixels > LARGE_IMAGE_THRESHOLD;
 
     const regularTemplates = selectedTemplates.filter(t => {
+        if (!t || !t.category) return false;
         const category = getCategoryConstant(t.category);
         return category !== 'favicon' && category !== 'screenshots';
     });
 
-    const faviconTemplate = selectedTemplates.find(t => getCategoryConstant(t.category) === 'favicon');
-    const screenshotTemplates = selectedTemplates.filter(t => getCategoryConstant(t.category) === 'screenshots');
+    const faviconTemplate = selectedTemplates.find(t => t && getCategoryConstant(t.category) === 'favicon');
+    const screenshotTemplates = selectedTemplates.filter(t => t && getCategoryConstant(t.category) === 'screenshots');
 
     const wasCleanupInProgress = cleanupInProgress;
     cleanupInProgress = true;
 
     try {
         for (const template of regularTemplates) {
+            if (!template) continue;
+
             const templateResults = await processSingleTemplate(
                 template,
                 image,
@@ -547,7 +560,10 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
                     options
                 );
 
-                processedImages.push(...screenshotResults);
+                const validResults = screenshotResults.filter(result =>
+                    result && result.file && result.name
+                );
+                processedImages.push(...validResults);
 
                 const screenshotPlaceholder = await createScreenshotPreview(
                     imageFile,
@@ -571,8 +587,10 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
                 safeCleanupGPUMemory();
 
             } catch (screenshotError) {
-                const errorFiles = await createTemplateErrorFiles(screenshotTemplates[0], image, screenshotError);
-                processedImages.push(...errorFiles);
+                if (screenshotTemplates[0]) {
+                    const errorFiles = await createTemplateErrorFiles(screenshotTemplates[0], image, screenshotError);
+                    processedImages.push(...errorFiles);
+                }
             }
         }
 
@@ -581,7 +599,7 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
         setTimeout(safeCleanupGPUMemory, PROCESSING_DELAYS.MEMORY_CLEANUP);
     }
 
-    return processedImages;
+    return processedImages.filter(img => img && img.name && (img.file || img.blob));
 };
 
 /**
@@ -600,7 +618,8 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
         if (onProgress) onProgress('preparing', 10);
 
         const filteredTemplateIds = selectedTemplateIds.filter(id => {
-            const template = templateConfigs.find(t => t.id === id);
+            if (!id) return false;
+            const template = templateConfigs.find(t => t && t.id === id);
             if (!template) return false;
 
             const category = getCategoryConstant(template.category);
@@ -617,7 +636,7 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
         if (onProgress) onProgress('processing', 30);
 
         const selectedTemplates = filteredTemplateIds
-            .map(templateId => templateConfigs.find(t => t.id === templateId))
+            .map(templateId => templateConfigs.find(t => t && t.id === templateId))
             .filter(template => template !== null);
 
         if (selectedTemplates.length === 0) {
@@ -630,7 +649,7 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
 
         const screenshotTemplateIds = processingOptions.selectedScreenshotTemplates || [];
         const otherTemplates = selectedTemplates.filter(t =>
-            getCategoryConstant(t.category) !== 'screenshots'
+            t && getCategoryConstant(t.category) !== 'screenshots'
         );
 
         if (otherTemplates.length > 0) {
@@ -673,8 +692,8 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
                 );
 
                 Object.entries(screenshotResults.results).forEach(([templateId, result]) => {
-                    const template = screenshotTemplates.find(t => t.id === templateId);
-                    if (template && result.blob && result.blob instanceof Blob) {
+                    const template = screenshotTemplates.find(t => t && t.id === templateId);
+                    if (template && result && result.blob && result.blob instanceof Blob) {
                         const baseName = `${template.platform}-${template.name}-${Date.now()}`;
                         const extension = result.format || 'png';
                         const fileName = `${baseName}.${extension}`;
@@ -706,7 +725,7 @@ export const orchestrateTemplateProcessing = async (selectedImage, selectedTempl
 
         if (onProgress) onProgress('completed', 100);
 
-        return processedImages;
+        return processedImages.filter(img => img && img.name && (img.file || img.blob));
 
     } catch (error) {
         throw error;
