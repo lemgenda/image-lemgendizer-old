@@ -120,6 +120,8 @@ function getScreenshotTemplate(templateId) {
     return SCREENSHOT_TEMPLATE_CONFIGS[templateId] || SCREENSHOT_TEMPLATE_CONFIGS['screenshots-desktop'];
 }
 
+console.log('Browserless API Key exists:', !!BROWSERLESS_API_KEY);
+
 /**
  * Calculates viewport dimensions based on template and custom parameters
  * @param {string} templateId - Template identifier
@@ -147,7 +149,7 @@ function getTemplateViewport(templateId, customWidth, customHeight, customFullPa
         hasTouch: deviceConfig.hasTouch
     };
 }
-
+console.error('Browserless error:', errorText);
 /**
  * Validates and cleans URL string
  * @param {string} url - URL to validate
@@ -314,19 +316,24 @@ export default async function handler(req, res) {
             options: {
                 type: 'png',
                 encoding: 'binary',
-                fullPage: viewport.fullPage || false
+                fullPage: viewport.fullPage || false,
+                waitFor: 'networkidle2',
+                delay: 1000
             }
         };
 
-        if (!viewport.fullPage && viewport.height !== null && viewport.height !== undefined) {
+        if (!viewport.fullPage) {
             browserlessBody.viewport = {
                 width: viewport.width,
                 height: viewport.height,
                 deviceScaleFactor: viewport.deviceScaleFactor,
-                isMobile: viewport.isMobile,
-                hasTouch: viewport.hasTouch
+                isMobile: deviceConfig.isMobile,
+                hasTouch: deviceConfig.hasTouch
             };
         }
+
+        // CRITICAL: Add userAgent string for bot detection avoidance
+        browserlessBody.userAgent = deviceConfig.userAgent;
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
