@@ -1,132 +1,106 @@
-import {
-    VERCEL_ENDPOINTS,
-    DEFAULT_SCREENSHOT_TIMEOUT,
-    DEVICE_PRESETS
-} from './constants/sharedConstants';
-
+import { VERCEL_ENDPOINTS, DEFAULT_SCREENSHOT_TIMEOUT } from '../constants/sharedConstants';
 import { SCREENSHOT_TEMPLATES } from '../configs/templateConfigs';
-
 /**
- * Captures screenshot from URL
+ * Captures screenshot from URL using the working backend
+ * @param {string} url - Website URL
+ * @param {string} templateId - Template ID (e.g., 'screenshots-desktop')
+ * @param {Object} options - Additional options
+ * @returns {Promise<Object>} Screenshot result
  */
-export async function captureScreenshot(url, templateId = 'desktop', options = {}) {
+export async function captureScreenshot(url, templateId = 'screenshots-desktop', options = {}) {
     let controller = null;
     let timeoutId = null;
 
     try {
+        // Clean URL (same as backend)
         let cleanUrl = url.trim();
         if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
             cleanUrl = `https://${cleanUrl}`;
         }
         cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
 
-        const template = SCREENSHOT_TEMPLATES[templateId] || SCREENSHOT_TEMPLATES.desktop;
         const width = options.width || template?.width || 1280;
         const height = options.height || (template?.height === 'auto' ? null : template?.height) || 720;
-        const device = options.device || 'desktop';
-        const timeout = Math.min(options.timeout || DEFAULT_SCREENSHOT_TIMEOUT, 30000);
+        const timeout = Math.min(options.timeout || DEFAULT_SCREENSHOT_TIMEOUT, 60000);
 
         const requestBody = {
             url: cleanUrl,
-            device: device,
-            width: width,
-            height: height,
-            fullPage: options.fullPage || false,
             templateId: templateId,
             timeout: timeout
         };
 
-        let lastError = null;
+        // Add optional parameters only if provided
+        if (width !== null && width !== undefined) requestBody.width = width;
+        if (height !== null && height !== undefined) requestBody.height = height;
+        if (options.fullPage !== undefined) requestBody.fullPage = Boolean(options.fullPage);
 
-        for (const endpoint of VERCEL_ENDPOINTS) {
-            try {
-                controller = new AbortController();
-                timeoutId = setTimeout(() => controller.abort(), timeout);
+        // Use your working backend endpoint
+        const endpoint = 'https://image-lemgendizer-old-x2qz.vercel.app/api/screenshot';
 
-                const response = await fetch(endpoint.url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(requestBody),
-                    signal: controller.signal
-                });
+        controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), timeout);
 
-                clearTimeout(timeoutId);
-                controller = null;
-                timeoutId = null;
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'image/png, application/json'
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
+        });
 
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || `API error: ${response.status}`);
-                }
+        clearTimeout(timeoutId);
+        controller = null;
+        timeoutId = null;
 
-                const contentType = response.headers.get('content-type');
+        const contentType = response.headers.get('content-type');
 
-                if (contentType && contentType.includes('image')) {
-                    const blob = await response.blob();
-                    const dimensions = response.headers.get('x-dimensions');
-                    const method = response.headers.get('x-method') || 'api';
-                    const isPlaceholder = response.headers.get('x-is-placeholder') === 'true';
+        if (response.ok && contentType && contentType.includes('image')) {
+            const blob = await response.blob();
+            const dimensions = response.headers.get('x-dimensions');
+            const method = response.headers.get('x-method') || 'browserless';
+            const isPlaceholder = response.headers.get('x-is-placeholder') === 'true';
+            const device = response.headers.get('x-device') || 'desktop';
+            const template = SCREENSHOT_TEMPLATES[templateId] || SCREENSHOT_TEMPLATES['screenshots-desktop'];
 
-                    return {
-                        success: true,
-                        blob,
-                        url: URL.createObjectURL(blob),
-                        device,
-                        dimensions: dimensions ? JSON.parse(dimensions) : { width, height },
-                        method,
-                        isPlaceholder,
-                        warning: response.headers.get('x-warning') || null,
-                        responseTime: parseInt(response.headers.get('x-response-time') || '0')
-                    };
-                } else {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Unknown error from API');
-                }
-            } catch (error) {
-                if (controller) controller.abort();
-                if (timeoutId) clearTimeout(timeoutId);
-                controller = null;
-                timeoutId = null;
-                lastError = error;
-                continue;
-            }
-        }
-
-        if (lastError) {
-            const placeholder = await createPlaceholderScreenshot(cleanUrl, width, height, device, templateId);
             return {
                 success: true,
-                blob: placeholder.blob,
-                url: placeholder.url,
+                blob,
+                url: URL.createObjectURL(blob),
                 device,
-                dimensions: { width, height },
-                method: 'placeholder',
-                isPlaceholder: true,
-                warning: 'API endpoint failed, using placeholder',
-                responseTime: 0
+                template,
+                dimensions: dimensions ? JSON.parse(dimensions) : { width: 1280, height: 720 },
+                method,
+                isPlaceholder,
+                responseTime: parseInt(response.headers.get('x-response-time') || '0')
             };
+        } else {
+            // Handle JSON error response
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Unknown error from API');
         }
 
-        throw new Error('No endpoints available');
-
     } catch (error) {
-        const placeholder = await createPlaceholderScreenshot(url,
+        // Return placeholder instead of throwing
+        const placeholder = await createPlaceholderScreenshot(
+            url,
             options.width || 1280,
             options.height || 720,
-            options.device || 'desktop',
-            templateId);
+            'desktop',
+            templateId
+        );
 
         return {
             success: true,
             blob: placeholder.blob,
             url: placeholder.url,
-            device: options.device || 'desktop',
+            device: 'desktop',
+            template: templateId,
             dimensions: { width: options.width || 1280, height: options.height || 720 },
             method: 'placeholder-fallback',
             isPlaceholder: true,
-            warning: 'Capture failed, using placeholder',
+            warning: error.message || 'Capture failed, using placeholder',
             responseTime: 0
         };
     } finally {
@@ -136,7 +110,7 @@ export async function captureScreenshot(url, templateId = 'desktop', options = {
 }
 
 /**
- * Creates placeholder screenshot
+ * Creates placeholder screenshot for fallback
  */
 async function createPlaceholderScreenshot(url, width, height, device, templateId) {
     return new Promise((resolve) => {
@@ -146,15 +120,18 @@ async function createPlaceholderScreenshot(url, width, height, device, templateI
         canvas.width = width;
         canvas.height = height;
 
+        // Background gradient
         const gradient = ctx.createLinearGradient(0, 0, width, height);
         gradient.addColorStop(0, '#f0f9ff');
         gradient.addColorStop(1, '#e0f2fe');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
+        // Browser window
         ctx.fillStyle = '#e5e5e5';
         ctx.fillRect(20, 20, width - 40, 60);
 
+        // Browser buttons
         ctx.fillStyle = '#ff5f57';
         ctx.beginPath();
         ctx.arc(45, 50, 8, 0, Math.PI * 2);
@@ -170,6 +147,7 @@ async function createPlaceholderScreenshot(url, width, height, device, templateI
         ctx.arc(95, 50, 8, 0, Math.PI * 2);
         ctx.fill();
 
+        // URL bar
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(120, 35, width - 160, 30);
         ctx.strokeStyle = '#d1d5db';
@@ -180,11 +158,13 @@ async function createPlaceholderScreenshot(url, width, height, device, templateI
         const displayUrl = url.length > 40 ? url.substring(0, 37) + '...' : url;
         ctx.fillText(displayUrl, 125, 56);
 
+        // Content area
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(20, 100, width - 40, height - 140);
         ctx.strokeStyle = '#e5e7eb';
         ctx.strokeRect(20, 100, width - 40, height - 140);
 
+        // Template info
         ctx.fillStyle = '#1e40af';
         ctx.font = 'bold 24px Arial, sans-serif';
         ctx.textAlign = 'center';
@@ -201,7 +181,7 @@ async function createPlaceholderScreenshot(url, width, height, device, templateI
 
         ctx.fillStyle = '#9ca3af';
         ctx.font = '14px Arial, sans-serif';
-        ctx.fillText('Placeholder - Real screenshot requires API configuration', width / 2, height / 2 + 60);
+        ctx.fillText('Placeholder - Configure Browserless API for real screenshots', width / 2, height / 2 + 60);
 
         canvas.toBlob((blob) => {
             resolve({
@@ -213,7 +193,7 @@ async function createPlaceholderScreenshot(url, width, height, device, templateI
 }
 
 /**
- * Captures screenshots for multiple templates
+ * Captures screenshots for multiple templates at once
  */
 export async function captureScreenshotsForTemplates(url, templateIds, options = {}) {
     const results = [];
@@ -238,36 +218,25 @@ export async function captureScreenshotsForTemplates(url, templateIds, options =
 }
 
 /**
- * Tests screenshot API availability
+ * Tests if the screenshot API is available
  */
 export async function testScreenshotAPI() {
     try {
-        for (const endpoint of VERCEL_ENDPOINTS) {
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const response = await fetch('https://image-lemgendizer-old-x2qz.vercel.app/api/health');
 
-                const response = await fetch(`${endpoint.url.replace('/screenshot', '')}/health`, {
-                    signal: controller.signal
-                });
-
-                clearTimeout(timeoutId);
-
-                if (response.ok) {
-                    return {
-                        available: true,
-                        endpoint: endpoint.url,
-                        message: 'Screenshot API is available'
-                    };
-                }
-            } catch {
-                continue;
-            }
+        if (response.ok) {
+            const data = await response.json();
+            return {
+                available: true,
+                endpoint: 'https://image-lemgendizer-old-x2qz.vercel.app/api/screenshot',
+                message: 'Screenshot API is available',
+                health: data
+            };
         }
 
         return {
             available: false,
-            message: 'No screenshot API endpoints available'
+            message: 'Health check failed'
         };
     } catch (error) {
         return {
@@ -275,34 +244,4 @@ export async function testScreenshotAPI() {
             message: `API test failed: ${error.message}`
         };
     }
-}
-
-/**
- * Gets device configuration
- */
-export function getDeviceConfig(device) {
-    return DEVICE_PRESETS[device] || DEVICE_PRESETS.desktop;
-}
-
-/**
- * Gets screenshot template
- */
-export function getScreenshotTemplate(id) {
-    return SCREENSHOT_TEMPLATES[id] || null;
-}
-
-/**
- * Gets all screenshot templates
- */
-export function getAllScreenshotTemplates() {
-    return Object.values(SCREENSHOT_TEMPLATES);
-}
-
-/**
- * Gets screenshot templates by category
- */
-export function getScreenshotTemplatesByCategory(category) {
-    return getAllScreenshotTemplates().filter(template =>
-        template.category === category
-    );
 }

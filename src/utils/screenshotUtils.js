@@ -937,55 +937,98 @@ TROUBLESHOOTING:
 /**
  * React hook for screenshot service
  */
-export function useScreenshotService() {
+export function useScreenshotService(options = {}) {
     const [isLoading, setIsLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState(null);
 
-    const service = useRef(new UnifiedScreenshotService({
-        useServerCapture: false,
-        enableCaching: true,
-        enableCompression: true,
-        timeout: DEFAULT_SCREENSHOT_TIMEOUT
-    }));
-
-    const captureTemplates = useCallback(async (url, templateIds, options = {}) => {
+    const captureScreenshot = useCallback(async (url, templateId, screenshotOptions = {}) => {
         setIsLoading(true);
         setError(null);
         setProgress(10);
 
         try {
-            const results = await service.current.captureByTemplates(url, templateIds, options);
-            setProgress(90);
+            // Use the working backend directly
+            const response = await fetch('https://image-lemgendizer-old-x2qz.vercel.app/api/screenshot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'image/png, application/json'
+                },
+                body: JSON.stringify({
+                    url: url,
+                    templateId: templateId,
+                    ...screenshotOptions
+                })
+            });
 
-            const zipBlob = await service.current.createScreenshotZip(url, results, options);
-            setProgress(100);
+            setProgress(50);
 
-            const downloadUrl = URL.createObjectURL(zipBlob);
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = `screenshots-${Date.now()}.zip`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(downloadUrl);
+            const contentType = response.headers.get('content-type');
 
-            return {
-                success: true,
-                results,
-                zipSize: zipBlob.size
-            };
+            if (response.ok && contentType && contentType.includes('image')) {
+                const blob = await response.blob();
+                const dimensions = response.headers.get('x-dimensions');
+
+                setProgress(100);
+
+                return {
+                    success: true,
+                    blob,
+                    url: URL.createObjectURL(blob),
+                    dimensions: dimensions ? JSON.parse(dimensions) : null,
+                    templateId,
+                    isPlaceholder: false
+                };
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Screenshot capture failed');
+            }
         } catch (err) {
             setError(err.message);
-            throw err;
+            // Create placeholder as fallback
+            return await createPlaceholder(url, templateId, screenshotOptions);
         } finally {
             setIsLoading(false);
             setTimeout(() => setProgress(0), 1000);
         }
     }, []);
 
+    const captureMultiple = useCallback(async (url, templateIds, options = {}) => {
+        setIsLoading(true);
+        setError(null);
+
+        const results = [];
+        const total = templateIds.length;
+
+        for (let i = 0; i < templateIds.length; i++) {
+            const templateId = templateIds[i];
+            setProgress(Math.round((i / total) * 100));
+
+            try {
+                const result = await captureScreenshot(url, templateId, options);
+                results.push({
+                    templateId,
+                    ...result
+                });
+            } catch (error) {
+                results.push({
+                    templateId,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+
+        setProgress(100);
+        setIsLoading(false);
+
+        return results;
+    }, [captureScreenshot]);
+
     return {
-        captureTemplates,
+        captureScreenshot,
+        captureMultiple,
         isLoading,
         progress,
         error,

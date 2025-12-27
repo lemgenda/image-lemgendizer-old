@@ -141,6 +141,10 @@ const resources = {
             'button.generateFavicon': 'Generate Favicon Set',
             'button.generateScreenshots': 'Generate Screenshots',
             'button.test': 'Test URL',
+            'button.capture': 'Capture Screenshots',
+            'button.capturing': 'Capturing...',
+            'button.downloadAll': 'Download All Screenshots',
+            'button.download': 'Download',
 
             // Messages
             'message.success': 'Success',
@@ -179,6 +183,10 @@ const resources = {
             'message.faviconPreview': 'Favicon preview generated. Complete set will be created during export.',
             'message.errorSelectImageForFavicon': 'Please select an image for favicon/screenshot generation',
             'message.errorInvalidUrl': 'Please enter a valid URL for screenshot capture',
+            'message.capturingScreenshots': 'Capturing website screenshots...',
+            'message.screenshotsCaptured': 'Successfully captured {{count}} screenshots',
+            'message.screenshotReady': 'Screenshot ready for download',
+            'message.urlValidated': 'Valid URL - ready for screenshot capture',
 
             // Loading States
             'loading.preparing': 'Preparing your ZIP file...',
@@ -190,6 +198,9 @@ const resources = {
             'loading.aiForSmartCrop': 'AI model loading for smart crop',
             'loading.capturingScreenshot': 'Capturing website screenshot...',
             'loading.creatingFavicon': 'Creating favicon set...',
+            'loading.capturingScreenshots': 'Capturing website screenshots...',
+            'loading.screenshotProcess': 'This may take a moment depending on the website',
+            'loading.processingTemplates': 'Processing templates...',
 
             // Summary Modal
             'summary.title': 'Processing Complete',
@@ -217,6 +228,7 @@ const resources = {
             'summary.screenshotsCaptured': 'Screenshots captured',
             'summary.faviconFiles': '15+ favicon files',
             'summary.screenshotFiles': 'Desktop & mobile screenshots',
+            'summary.screenshotCount': 'Screenshots captured',
 
             // Common words for pluralization
             'common.image_one': 'image',
@@ -229,6 +241,8 @@ const resources = {
             'common.favicon_other': 'favicons',
             'common.screenshot_one': 'screenshot',
             'common.screenshot_other': 'screenshots',
+            'common.device_one': 'device',
+            'common.device_other': 'devices',
 
             // Footer
             'footer.createdBy': 'Created by',
@@ -295,6 +309,18 @@ const resources = {
             'template.FaviconSet': 'Favicon Set',
             'template.ScreenshotsDesktop': 'Desktop Screenshot',
             'template.ScreenshotsMobile': 'Mobile Screenshot',
+            'template.ScreenshotsTablet': 'Tablet Screenshot',
+            'template.ScreenshotsDesktopHd': 'Desktop HD Screenshot',
+            'template.ScreenshotsMobileFull': 'Mobile Full Page',
+            'template.ScreenshotsTabletFull': 'Tablet Full Page',
+            'template.ScreenshotsDesktopFull': 'Desktop Full Page',
+            'template.ScreenshotsDesktopHdFull': 'Desktop HD Full Page',
+
+            // Device Names
+            'device.mobile': 'Mobile',
+            'device.tablet': 'Tablet',
+            'device.desktop': 'Desktop',
+            'device.desktopHd': 'Desktop HD',
 
             // Color Labels
             'color.white': 'White',
@@ -308,8 +334,27 @@ const resources = {
             'color.gray': 'Gray',
 
             // Screenshots translations
-            'screenshots.title': 'Generate Screenshots',
-            'screenshots.warning': 'Note: Some websites block screenshot capture due to security settings.'
+            'screenshots.title': 'Website Screenshots',
+            'screenshots.warning': 'Note: Some websites block screenshot capture due to security settings.',
+            'screenshots.selectDevices': 'Select Devices:',
+            'screenshots.capturesFullPage': 'Captures full-page screenshots',
+            'screenshots.crossOrigin': 'Cross-origin compatible',
+            'screenshots.noIframe': 'No iframe restrictions',
+            'screenshots.fastProcessing': 'Fast serverless processing',
+            'screenshots.productionBackend': 'Uses production backend API',
+            'screenshots.realBrowser': 'Real browser screenshots',
+            'screenshots.urlPlaceholder': 'https://example.com or example.com',
+            'screenshots.enterUrl': 'Enter website URL',
+            'screenshots.captureResults': 'Capture Results',
+            'screenshots.successful': 'successful',
+            'screenshots.method': 'Method:',
+            'screenshots.placeholder': 'Placeholder',
+            'screenshots.dimensions': 'Dimensions:',
+            'screenshots.device': 'Device:',
+            'screenshots.template': 'Template:',
+            'screenshots.screenshotInfo': 'Note about screenshot capture:',
+            'screenshots.securityWarning': 'Some websites use security headers that prevent automated screenshot capture. If screenshots fail, try entering the full URL (including https://) or check if the website allows access.',
+            'screenshots.availableTemplates': 'Available Screenshot Templates:'
         }
     },
     hr: {
@@ -453,6 +498,10 @@ const resources = {
             'button.generateFavicon': 'Generiraj favicon set',
             'button.generateScreenshots': 'Generiraj screenshotove',
             'button.test': 'Testiraj URL',
+            'button.capture': 'Snimi Screenshotove',
+            'button.capturing': 'Snimanje...',
+            'button.downloadAll': 'Preuzmi sve screenshotove',
+            'button.download': 'Preuzmi',
 
             // Messages
             'message.success': 'Uspjeh',
@@ -493,6 +542,10 @@ const resources = {
             'message.faviconPreview': 'Favicon pregled generiran. Kompletan set će biti kreiran tijekom izvoza.',
             'message.errorSelectImageForFavicon': 'Molimo odaberite sliku za generiranje favicona/screenshotova',
             'message.errorInvalidUrl': 'Molimo unesite valjani URL za snimanje screenshotova',
+            'message.capturingScreenshots': 'Snimam screenshotove web stranice...',
+            'message.screenshotsCaptured': 'Uspješno snimljeno {{count}} screenshotova',
+            'message.screenshotReady': 'Screenshot spreman za preuzimanje',
+            'message.urlValidated': 'Valjani URL - spreman za snimanje screenshotova',
 
             // Loading States
             'loading.preparing': 'Pripremam vašu ZIP datoteku...',
@@ -504,6 +557,9 @@ const resources = {
             'loading.aiForSmartCrop': 'Učitavam AI model za pametno obrezivanje',
             'loading.capturingScreenshot': 'Snimam screenshot web stranice...',
             'loading.creatingFavicon': 'Kreiram favicon set...',
+            'loading.capturingScreenshots': 'Snimam screenshotove web stranice...',
+            'loading.screenshotProcess': 'Ovo može potrajati nekoliko trenutaka ovisno o web stranici',
+            'loading.processingTemplates': 'Obrađujem predloške...',
 
             // Summary Modal
             'summary.title': 'Obrada Završena',
@@ -534,6 +590,7 @@ const resources = {
             'summary.screenshotsCaptured': 'Screenshotovi snimljeni',
             'summary.faviconFiles': '15+ favicon datoteka',
             'summary.screenshotFiles': 'Desktop i mobilni screenshotovi',
+            'summary.screenshotCount': 'Snimljenih Screenshots',
 
             // Common words for pluralization
             'common.image_one': 'slika',

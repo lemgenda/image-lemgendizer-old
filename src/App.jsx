@@ -18,6 +18,9 @@ import {
   calculateTotalTemplateFiles,
   formatFileSize
 } from './utils';
+
+import { captureScreenshot, captureScreenshotsForTemplates } from './utils/api';
+import { captureScreenshot as captureScreenshotUtil } from './utils/screenshotUtils';
 import {
   getTemplateCategories,
   SOCIAL_MEDIA_TEMPLATES,
@@ -286,11 +289,30 @@ function App() {
 
     if (url.trim()) {
       try {
-        new URL(url.startsWith('http') ? url : `${URL_CONSTANTS.DEFAULT_PROTOCOL}${url}`);
-        setScreenshotValidation({
-          isValid: true,
-          message: 'Valid URL format'
-        });
+        // Clean the URL first
+        let cleanUrl = url.trim();
+        if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+          cleanUrl = `https://${cleanUrl}`;
+        }
+        cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
+
+        // Validate URL
+        new URL(cleanUrl);
+
+        // Test if it's a valid website URL
+        const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
+
+        if (urlPattern.test(cleanUrl)) {
+          setScreenshotValidation({
+            isValid: true,
+            message: 'Valid website URL - ready for screenshots'
+          });
+        } else {
+          setScreenshotValidation({
+            isValid: false,
+            message: 'Please enter a valid website URL'
+          });
+        }
       } catch {
         setScreenshotValidation({
           isValid: false,
@@ -640,16 +662,17 @@ function App() {
     try {
       const processingConfig = getProcessingConfiguration(processingOptions);
 
+      // FIXED: Use SCREENSHOT_TEMPLATES from config
       const screenshotTemplateIds = isScreenshotSelected && SCREENSHOT_TEMPLATES ?
         Object.keys(SCREENSHOT_TEMPLATES) : [];
 
       const processingOptionsWithExtras = {
         ...processingConfig,
-        useServerCapture: false,
+        useServerCapture: false, // Disable server capture, use your working API
         faviconSiteName: processingOptions.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
         faviconThemeColor: processingOptions.faviconThemeColor || DEFAULT_FAVICON_THEME_COLOR,
         faviconBackgroundColor: processingOptions.faviconBackgroundColor || DEFAULT_FAVICON_BACKGROUND_COLOR,
-        screenshotUrl: isScreenshotSelected ? (screenshotUrl.startsWith('http') ? screenshotUrl : `https://${screenshotUrl}`).replace(/(https?:\/\/)\/+/g, '$1') : '',
+        screenshotUrl: isScreenshotSelected ? screenshotUrl : '',
         includeFavicon: isFaviconSelected,
         includeScreenshots: isScreenshotSelected,
         selectedTemplates: processingOptions.selectedTemplates,
@@ -657,6 +680,7 @@ function App() {
         ...(isFaviconSelected && { faviconTemplateIds: [FAVICON_TEMPLATE_ID] })
       };
 
+      // FIXED: Use orchestrateTemplateProcessing with updated screenshot handling
       const processedImages = await orchestrateTemplateProcessing(
         selectedImagesForProcessing[0],
         processingOptions.selectedTemplates,
@@ -666,6 +690,34 @@ function App() {
         null,
         processingOptionsWithExtras
       );
+
+      // FIXED: Handle screenshot results separately if needed
+      let screenshotResults = [];
+      if (isScreenshotSelected && screenshotUrl.trim()) {
+        try {
+          // Capture screenshots using the working API
+          screenshotResults = await captureScreenshotsForTemplates(
+            screenshotUrl,
+            screenshotTemplateIds,
+            { timeout: 30000 }
+          );
+
+          // Add screenshot results to processed images
+          screenshotResults.forEach(result => {
+            if (result.success) {
+              processedImages.push({
+                ...result,
+                template: SCREENSHOT_TEMPLATES[result.templateId],
+                category: 'screenshots',
+                processed: true
+              });
+            }
+          });
+        } catch (screenshotError) {
+          console.warn('Screenshot capture failed:', screenshotError);
+          // Continue with template processing even if screenshots fail
+        }
+      }
 
       const settings = generateExportSettings(EXPORT_SETTINGS.TEMPLATES, {
         faviconSiteName: processingOptions.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
@@ -702,7 +754,8 @@ function App() {
         imagesProcessed: 1,
         totalFiles: processedImages.length,
         success: true,
-        usedPlaceholders: hasScreenshotPlaceholders
+        usedPlaceholders: hasScreenshotPlaceholders,
+        screenshotCount: screenshotResults.filter(r => r.success).length
       }, processingConfig, t);
 
       closeModal();
@@ -719,6 +772,7 @@ function App() {
       }
 
     } catch (error) {
+      console.error('Template processing error:', error);
       showModal(t('message.error'), `${t('message.errorApplying')}: ${error.message}`, MODAL_TYPES.ERROR);
     } finally {
       setIsLoading(false);
@@ -782,13 +836,25 @@ function App() {
       {isLoading && (
         <div className="loading-overlay">
           <div className="loading-spinner">
-            <i className="fas fa-spinner fa-spin fa-3x"></i>
-            <p>{t('loading.preparing')}</p>
-            <p className="text-muted text-sm mt-2">
-              {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && aiModelLoaded
-                ? t('loading.aiCropping')
-                : t('loading.upscalingWhenNeeded')}
-            </p>
+            {isScreenshotSelected ? (
+              <>
+                <i className="fas fa-camera fa-spin fa-3x"></i>
+                <p>{t('loading.capturingScreenshots')}</p>
+                <p className="text-muted text-sm mt-2">
+                  {t('loading.screenshotProcess')}
+                </p>
+              </>
+            ) : (
+              <>
+                <i className="fas fa-spinner fa-spin fa-3x"></i>
+                <p>{t('loading.preparing')}</p>
+                <p className="text-muted text-sm mt-2">
+                  {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && aiModelLoaded
+                    ? t('loading.aiCropping')
+                    : t('loading.upscalingWhenNeeded')}
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1324,6 +1390,16 @@ function App() {
                                   onUrlChange={handleScreenshotUrlChange}
                                   screenshotUrl={screenshotUrl}
                                   validation={screenshotValidation}
+                                  onScreenshotComplete={(results) => {
+                                    // Handle screenshot completion if needed
+                                    if (results && results.success) {
+                                      showModal(
+                                        t('message.success'),
+                                        `Captured ${results.successful}/${results.total} screenshots successfully`,
+                                        MODAL_TYPES.SUCCESS
+                                      );
+                                    }
+                                  }}
                                 />
                               )}
                             </div>
@@ -1572,6 +1648,16 @@ function App() {
                       : processingSummary.imagesProcessed + ' images processed'}
                   </div>
                 </div>
+
+                {processingSummary.screenshotCount > 0 && (
+                  <div className="summary-item">
+                    <div className="summary-label">Screenshots Captured:</div>
+                    <div className="summary-value text-success">
+                      <i className="fas fa-camera mr-1"></i>
+                      {processingSummary.screenshotCount} screenshots
+                    </div>
+                  </div>
+                )}
 
                 {processingSummary.mode === 'templates' && (
                   <div className="summary-item">

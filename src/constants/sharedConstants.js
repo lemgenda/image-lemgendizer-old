@@ -342,8 +342,11 @@ export const ERROR_MESSAGES = {
     UPSCALING_FAILED: 'Upscaling failed',
     TIFF_CONVERSION_FAILED: 'TIFF conversion failed',
     SVG_CONVERSION_FAILED: 'SVG conversion failed',
-    SCREENSHOT_CAPTURE_FAILED: 'Screenshot capture failed',
-    FAVICON_GENERATION_FAILED: 'Favicon generation failed'
+    FAVICON_GENERATION_FAILED: 'Favicon generation failed',
+    SCREENSHOT_CAPTURE_FAILED: 'Failed to capture screenshots. The website might be blocking automated access or the URL is invalid.',
+    SCREENSHOT_URL_REQUIRED: 'Please enter a website URL for screenshots.',
+    SCREENSHOT_URL_INVALID: 'Please enter a valid website URL (e.g., example.com or https://example.com).',
+    SCREENSHOT_SERVICE_UNAVAILABLE: 'Screenshot service is temporarily unavailable. Please try again later.'
 };
 
 // ================================
