@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+
 import {
   orchestrateCustomProcessing,
   orchestrateTemplateProcessing,
@@ -13,14 +14,15 @@ import {
   generateExportSettings,
   loadUTIFLibrary
 } from './processors';
+
 import {
   validateProcessingOptions,
   calculateTotalTemplateFiles,
-  formatFileSize
+  formatFileSize,
+  captureScreenshot,
+  captureScreenshotsForTemplates
 } from './utils';
 
-import { captureScreenshot, captureScreenshotsForTemplates } from './utils/api';
-import { captureScreenshot as captureScreenshotUtil } from './utils/screenshotUtils';
 import {
   getTemplateCategories,
   SOCIAL_MEDIA_TEMPLATES,
@@ -31,6 +33,7 @@ import {
   FAVICON_TEMPLATE_ID,
   DEFAULT_FAVICON_THEME_COLOR
 } from './configs/templateConfigs';
+
 import {
   PROCESSING_MODES,
   COMPRESSION_QUALITY_RANGE,
@@ -46,6 +49,7 @@ import {
   RESIZE_DIMENSION_RANGE,
   CROP_DIMENSION_RANGE
 } from './constants/sharedConstants';
+
 import {
   ImageUploader,
   Header,
@@ -54,6 +58,7 @@ import {
   RangeSlider,
   SiteScreenshots
 } from './components';
+
 import './styles/App.css';
 
 function App() {

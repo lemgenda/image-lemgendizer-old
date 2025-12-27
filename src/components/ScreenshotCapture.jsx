@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { captureScreenshot } from '../utils/api'; // Import your working API
+import { captureScreenshot } from '../utils';
 import { DEVICE_PRESETS } from '../constants/sharedConstants';
 import { SCREENSHOT_TEMPLATES } from '../configs/templateConfigs';
 
