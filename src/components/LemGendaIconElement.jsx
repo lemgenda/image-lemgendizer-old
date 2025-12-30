@@ -1,3 +1,5 @@
+import { SVG_CONSTANTS } from '../constants';
+
 /**
  * LemGenda icon SVG component
  * @param {Object} props - Component props
@@ -5,11 +7,11 @@
  * @param {Object} props.props - Additional SVG props
  * @returns {JSX.Element} LemGendaIcon component
  */
-const LemGendaIcon = ({ className = "", ...props }) => (
+const LemGendaIconElement = ({ className = "", ...props }) => (
     <svg
         className={`header-icon ${className}`}
-        width="80"
-        height="80"
+        width={SVG_CONSTANTS.DEFAULT_WIDTH * 0.8}
+        height={SVG_CONSTANTS.DEFAULT_HEIGHT * 0.8}
         viewBox="0 0 213 223"
         fill="currentColor"
         {...props}
@@ -24,4 +26,4 @@ const LemGendaIcon = ({ className = "", ...props }) => (
     </svg>
 );
 
-export default LemGendaIcon;
+export default LemGendaIconElement;

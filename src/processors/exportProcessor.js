@@ -1,18 +1,15 @@
 import JSZip from 'jszip';
-import { PROCESSING_MODES } from '../constants/sharedConstants';
-import { generateFaviconSet, generateScreenshots } from '../utils';
+import { PROCESSING_MODES, IMAGE_FORMATS, APP_CONFIG } from '../constants';
+import { generateFaviconSet } from '../utils';
 import {
     EXPORT_FOLDERS,
     TEMPLATE_CATEGORIES_CONST as TEMPLATE_CATEGORIES,
-    PLATFORM_NAMES,
     TEMPLATE_NAMES,
-    SCREENSHOT_TEMPLATES
+    APP_TEMPLATE_CONFIG
 } from '../configs/templateConfigs';
 
 /**
  * Validates if an image object is valid
- * @param {Object} image - Image object to validate
- * @returns {boolean} True if image is valid
  */
 const validateImage = (image) => {
     return image &&
@@ -23,20 +20,24 @@ const validateImage = (image) => {
 };
 
 /**
- * Checks if file is a preview file
- * @param {Object} image - Image object
- * @returns {boolean} True if preview file
+ * Checks if file is a preview or error file
  */
-const isPreviewFile = (image) => {
+const isPreviewOrErrorFile = (image) => {
     try {
         if (!validateImage(image)) {
             return false;
         }
 
-        const name = image.name;
+        const name = image.name.toLowerCase();
+        const isErrorFile = name.includes('error') ||
+            name.includes('failed') ||
+            (image.error && image.processed === false) ||
+            !image.processed;
+
         return name.includes('favicon-preview') ||
             name.includes('screenshot-preview') ||
-            name.includes('-preview.');
+            name.includes('-preview.') ||
+            isErrorFile;
     } catch {
         return false;
     }
@@ -44,9 +45,6 @@ const isPreviewFile = (image) => {
 
 /**
  * Generates export settings based on mode
- * @param {string} mode - Processing mode
- * @param {Object} additionalSettings - Additional settings
- * @returns {Object} Export settings
  */
 export const generateExportSettings = (mode, additionalSettings = {}) => {
     const baseDefaults = {
@@ -58,22 +56,16 @@ export const generateExportSettings = (mode, additionalSettings = {}) => {
         includeFavicon: false,
         includeScreenshots: false,
         screenshotUrl: '',
-        faviconSiteName: 'My Website',
-        faviconThemeColor: '#ffffff',
-        faviconBackgroundColor: '#ffffff',
+        faviconSiteName: TEMPLATE_NAMES.FAVICON_SET || APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_SITE_NAME,
+        faviconThemeColor: APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_THEME_COLOR,
+        faviconBackgroundColor: APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_BACKGROUND_COLOR,
         createFolders: true
     };
 
     const mergedSettings = { ...baseDefaults };
 
     for (const key in additionalSettings) {
-        if (key === 'includeFavicon' || key === 'includeScreenshots') {
-            if (additionalSettings.hasOwnProperty(key)) {
-                mergedSettings[key] = additionalSettings[key];
-            }
-        } else {
-            mergedSettings[key] = additionalSettings[key];
-        }
+        mergedSettings[key] = additionalSettings[key];
     }
 
     if (mode === PROCESSING_MODES.CUSTOM) {
@@ -96,9 +88,6 @@ export const generateExportSettings = (mode, additionalSettings = {}) => {
 
 /**
  * Gets export folder structure based on mode
- * @param {string} mode - Processing mode
- * @param {Object} settings - Export settings
- * @returns {Array<string>} Folder structure
  */
 export const getExportFolderStructure = (mode, settings = {}) => {
     if (mode === PROCESSING_MODES.CUSTOM) {
@@ -111,10 +100,10 @@ export const getExportFolderStructure = (mode, settings = {}) => {
         ];
 
         if (settings.includeFavicon) {
-            folders.push(PLATFORM_NAMES.FAVICON || 'FaviconSet');
+            folders.push(APP_TEMPLATE_CONFIG.FAVICON.FOLDER_NAME);
         }
         if (settings.includeScreenshots && settings.screenshotUrl) {
-            folders.push(PLATFORM_NAMES.SCREENSHOTS || 'Screenshots');
+            folders.push(APP_TEMPLATE_CONFIG.SCREENSHOTS.FOLDER_NAME);
         }
 
         return folders;
@@ -124,8 +113,6 @@ export const getExportFolderStructure = (mode, settings = {}) => {
 
 /**
  * Organizes images by format
- * @param {Array<Object>} processedImages - Processed images
- * @returns {Object} Images grouped by format
  */
 export const organizeImagesByFormat = (processedImages) => {
     const groupedByFormat = {};
@@ -133,7 +120,7 @@ export const organizeImagesByFormat = (processedImages) => {
     const validImages = processedImages.filter(validateImage);
 
     validImages.forEach(image => {
-        const format = image.format || 'webp';
+        const format = image.format || APP_CONFIG.IMAGE_DEFAULTS.DEFAULT_FORMAT;
         if (!groupedByFormat[format]) {
             groupedByFormat[format] = [];
         }
@@ -146,33 +133,94 @@ export const organizeImagesByFormat = (processedImages) => {
 };
 
 /**
- * Organizes templates by platform
- * @param {Array<Object>} socialTemplates - Social media templates
- * @returns {Object} Templates organized by platform
+ * Formats template name for display
  */
-export const organizeTemplatesByPlatform = (socialTemplates) => {
+export const getTranslatedTemplateName = (template, t) => {
+    if (!template) return '';
+
+    const translatedTemplate = t(template);
+
+    return translatedTemplate;
+};
+
+/**
+ * Gets template dimensions for display
+ */
+export const getTemplateDimensions = (template) => {
+    if (!template) return '';
+
+    if (template.height === 'auto') {
+        return `${template.width}×auto`;
+    }
+
+    return `${template.width}×${template.height}`;
+};
+
+/**
+ * Gets translated platform name
+ */
+const getTranslatedPlatformName = (platform, t) => {
+    if (!platform) return '';
+
+    const translatedPlatform = t(platform);
+
+    return translatedPlatform;
+};
+
+/**
+ * Gets translated image name
+ */
+const getTranslatedImageName = (image, t) => {
+    if (!image.template) return image.name;
+
+    // Get translated platform name
+    const platform = image.template.platform || '';
+    const displayPlatform = getTranslatedPlatformName(platform, t);
+
+    // Get translated template name
+    const template = image.template.name || '';
+    const templateName = getTranslatedTemplateName(template, t);
+
+    // Clean up platform name for filename
+    const cleanPlatform = displayPlatform
+        .replace(/\s*\/\s*X/g, '')
+        .replace(/\s+/g, APP_CONFIG.FILE_NAMING.NAME_SEPARATOR)
+        .trim();
+
+    // Format dimensions
+    const dimensions = getTemplateDimensions(image.template);
+
+    const format = image.format || APP_TEMPLATE_CONFIG.SCREENSHOTS.DEFAULT_FORMAT;
+
+    return `${cleanPlatform} - ${templateName} (${dimensions})${APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR}${format}`;
+};
+
+/**
+ * Organizes templates by platform with translation support
+ */
+export const organizeTemplatesByPlatform = (socialTemplates, t = null) => {
     const organized = {};
 
     const validTemplates = socialTemplates.filter(img =>
         validateImage(img) &&
         img.template &&
-        img.format === 'jpg'
+        (img.format === APP_TEMPLATE_CONFIG.SCREENSHOTS.DEFAULT_FORMAT ||
+            img.format === IMAGE_FORMATS.WEBP ||
+            img.format === IMAGE_FORMATS.PNG)
     );
 
     validTemplates.forEach(img => {
-        const platform = img.template.platform;
-        const cleanPlatform = platform.replace(/\s*\/\s*X/g, '').replace(/Twitter\/X/, PLATFORM_NAMES.TWITTER || 'Twitter').trim();
+        let platform = img.template.platform || '';
+        const displayPlatform = getTranslatedPlatformName(platform, t);
+        const cleanPlatform = displayPlatform.replace(/\s*\/\s*X/g, '').trim();
 
         if (!organized[cleanPlatform]) {
             organized[cleanPlatform] = [];
         }
 
-        const cleanFileName = img.name
-            .replace(`${platform}-`, '')
-            .replace(/Twitter\/X/g, PLATFORM_NAMES.TWITTER || 'Twitter');
         const cleanImage = {
             ...img,
-            name: cleanFileName
+            name: getTranslatedImageName(img, t)
         };
 
         organized[cleanPlatform].push(cleanImage);
@@ -182,48 +230,18 @@ export const organizeTemplatesByPlatform = (socialTemplates) => {
 };
 
 /**
- * Filters screenshot templates by selected IDs
- * @param {Array<Object>} processedImages - Processed images
- * @param {Array<string>} selectedTemplateIds - Selected template IDs
- * @returns {Array<Object>} Filtered screenshot templates
- */
-const filterScreenshotTemplates = (processedImages, selectedTemplateIds) => {
-    if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
-        return [];
-    }
-
-    const allTemplates = [];
-
-    if (SCREENSHOT_TEMPLATES && typeof SCREENSHOT_TEMPLATES === 'object') {
-        Object.values(SCREENSHOT_TEMPLATES).forEach(template => {
-            if (selectedTemplateIds.includes(template.id)) {
-                allTemplates.push(template);
-            }
-        });
-    }
-
-    return allTemplates;
-};
-
-/**
  * Processes favicon set
- * @param {File} sourceImage - Source image file
- * @param {Object} settings - Export settings
- * @param {JSZip} zip - ZIP file instance
- * @returns {Promise<void>}
  */
 const processFaviconSet = async (sourceImage, settings, zip = null) => {
     try {
         const faviconZipBlob = await generateFaviconSet(
             sourceImage,
-            settings.faviconSiteName || TEMPLATE_NAMES.FAVICON_SITE_NAME || 'My Website',
-            settings.faviconThemeColor || '#ffffff',
-            settings.faviconBackgroundColor || '#ffffff'
+            settings.faviconSiteName || TEMPLATE_NAMES.FAVICON_SET || APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_SITE_NAME
         );
 
         if (zip) {
             const faviconZip = await JSZip.loadAsync(faviconZipBlob);
-            const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/${PLATFORM_NAMES.FAVICON || 'FaviconSet'}`);
+            const faviconFolder = zip.folder(APP_TEMPLATE_CONFIG.FAVICON.FOLDER_NAME);
 
             const files = faviconZip.files;
             for (const [fileName, fileData] of Object.entries(files)) {
@@ -232,51 +250,78 @@ const processFaviconSet = async (sourceImage, settings, zip = null) => {
                     faviconFolder.file(fileName, content);
                 }
             }
-            return;
+            return APP_TEMPLATE_CONFIG.FAVICON.FILES_COUNT;
         } else {
             return faviconZipBlob;
         }
-    } catch {
+    } catch (error) {
         if (zip) {
-            const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/${PLATFORM_NAMES.FAVICON || 'FaviconSet'}`);
-            faviconFolder.file('error.txt', 'Favicon generation failed');
+            const faviconFolder = zip.folder(APP_TEMPLATE_CONFIG.FAVICON.FOLDER_NAME);
+            faviconFolder.file(
+                `${APP_CONFIG.ERROR_HANDLING.DEFAULT_ERROR_PREFIX}${APP_CONFIG.ERROR_HANDLING.ERROR_FILE_EXTENSION}`,
+                `Favicon generation failed: ${error.message.substring(0, APP_CONFIG.ERROR_HANDLING.MAX_ERROR_LENGTH)}`
+            );
         }
-        throw new Error('Favicon generation failed');
+        return 0;
     }
 };
 
 /**
- * Creates export ZIP file
- * @param {Array<Object>} originalImages - Original images
- * @param {Array<Object>} processedImages - Processed images
- * @param {Object} settings - Export settings
- * @param {string} mode - Processing mode
- * @param {Array<string>} formats - Output formats
- * @returns {Promise<Blob>} ZIP file blob
+ * Creates export ZIP file with translation support
  */
-export const createExportZip = async (originalImages, processedImages, settings, mode, formats = ['webp']) => {
+export const createExportZip = async (originalImages, processedImages, settings, mode, formats = [APP_CONFIG.IMAGE_DEFAULTS.DEFAULT_FORMAT], t = null) => {
+    console.log('=== CREATE EXPORT ZIP ===');
+    console.log('Mode:', mode);
+    console.log('Settings:', {
+        includeWebImages: settings.includeWebImages,
+        includeLogoImages: settings.includeLogoImages,
+        includeSocialMedia: settings.includeSocialMedia,
+        includeFavicon: settings.includeFavicon,
+        includeScreenshots: settings.includeScreenshots
+    });
+
     const zip = new JSZip();
 
     const validOriginalImages = originalImages.filter(validateImage);
-    const validProcessedImages = processedImages.filter(validateImage);
+    const validProcessedImages = processedImages.filter(img =>
+        validateImage(img) && !isPreviewOrErrorFile(img)
+    );
+
+    console.log('Total processed images:', validProcessedImages.length);
+
+    // Log all images with their categories
+    validProcessedImages.forEach((img, idx) => {
+        console.log(`Image ${idx}:`, {
+            name: img.name,
+            category: img.template?.category,
+            platform: img.template?.platform,
+            format: img.format
+        });
+    });
 
     if (settings.includeOriginal && validOriginalImages.length > 0) {
-        const originalFolder = zip.folder(EXPORT_FOLDERS.ORIGINAL_IMAGES);
+        const originalFolderName = t ? t('export.folders.original') : EXPORT_FOLDERS.ORIGINAL_IMAGES;
+        const originalFolder = zip.folder(originalFolderName);
         for (const image of validOriginalImages) {
             originalFolder.file(image.name, image.file || image.blob);
         }
     }
 
+    let faviconFilesCount = 0;
+
     if (mode === PROCESSING_MODES.CUSTOM && settings.includeOptimized && validProcessedImages.length > 0) {
         const groupedByFormat = organizeImagesByFormat(validProcessedImages);
+        const optimizedFolderName = t ? t('export.folders.optimized') : EXPORT_FOLDERS.OPTIMIZED_IMAGES;
+        const optimizedFolder = zip.folder(optimizedFolderName);
 
         for (const [format, images] of Object.entries(groupedByFormat)) {
             if (images.length > 0) {
-                const formatFolder = zip.folder(`${EXPORT_FOLDERS.OPTIMIZED_IMAGES}/${format.toUpperCase()}`);
+                const formatFolderName = format.toUpperCase();
+                const formatFolder = optimizedFolder.folder(formatFolderName);
                 for (const image of images) {
                     let fileName = image.name;
-                    if (!fileName.includes('.')) {
-                        fileName = `${fileName}.${format}`;
+                    if (!fileName.includes(APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR)) {
+                        fileName = `${fileName}${APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR}${format}`;
                     }
                     formatFolder.file(fileName, image.file || image.blob);
                 }
@@ -284,51 +329,42 @@ export const createExportZip = async (originalImages, processedImages, settings,
         }
     }
 
+    // WEB TEMPLATES - FIXED: Using 'web' category directly
     if (mode === PROCESSING_MODES.TEMPLATES && settings.includeWebImages && validProcessedImages.length > 0) {
         const webTemplates = validProcessedImages.filter(img =>
-            img.template &&
-            img.template.category === TEMPLATE_CATEGORIES.WEB &&
-            !isPreviewFile(img)
+            img.template && img.template.category === 'web'
         );
 
+        console.log('Web templates found:', webTemplates.length);
+
         if (webTemplates.length > 0) {
-            const webFolder = zip.folder(EXPORT_FOLDERS.WEB_IMAGES);
-            const webpImages = webTemplates.filter(img => img.format === 'webp');
-            const pngImages = webTemplates.filter(img => img.format === 'png');
-            const jpgImages = webTemplates.filter(img => img.format === 'jpg');
+            const webFolderName = t ? t('export.folders.web') : EXPORT_FOLDERS.WEB_IMAGES;
+            const webFolder = zip.folder(webFolderName);
 
-            for (const image of webpImages) {
-                webFolder.file(image.name, image.file || image.blob);
-            }
-
-            for (const image of pngImages) {
-                webFolder.file(image.name, image.file || image.blob);
-            }
-
-            for (const image of jpgImages) {
-                webFolder.file(image.name, image.file || image.blob);
+            for (const image of webTemplates) {
+                const fileName = getTranslatedImageName(image, t);
+                webFolder.file(fileName, image.file || image.blob);
+                console.log('Added web image:', fileName);
             }
         }
     }
 
+    // LOGO TEMPLATES - FIXED: Using 'logo' category directly
     if (mode === PROCESSING_MODES.TEMPLATES && settings.includeLogoImages && validProcessedImages.length > 0) {
         const logoTemplates = validProcessedImages.filter(img =>
-            img.template &&
-            img.template.category === TEMPLATE_CATEGORIES.LOGO &&
-            !isPreviewFile(img)
+            img.template && img.template.category === 'logo'
         );
 
+        console.log('Logo templates found:', logoTemplates.length);
+
         if (logoTemplates.length > 0) {
-            const logoFolder = zip.folder(EXPORT_FOLDERS.LOGO_IMAGES);
-            const pngImages = logoTemplates.filter(img => img.format === 'png');
-            const jpgImages = logoTemplates.filter(img => img.format === 'jpg');
+            const logoFolderName = t ? t('export.folders.logo') : EXPORT_FOLDERS.LOGO_IMAGES;
+            const logoFolder = zip.folder(logoFolderName);
 
-            for (const image of pngImages) {
-                logoFolder.file(image.name, image.file || image.blob);
-            }
-
-            for (const image of jpgImages) {
-                logoFolder.file(image.name, image.file || image.blob);
+            for (const image of logoTemplates) {
+                const fileName = getTranslatedImageName(image, t);
+                logoFolder.file(fileName, image.file || image.blob);
+                console.log('Added logo image:', fileName);
             }
         }
     }
@@ -336,127 +372,77 @@ export const createExportZip = async (originalImages, processedImages, settings,
     if (mode === PROCESSING_MODES.TEMPLATES && settings.includeSocialMedia && validProcessedImages.length > 0) {
         const socialTemplates = validProcessedImages.filter(img =>
             img.template &&
-            img.template.category !== TEMPLATE_CATEGORIES.WEB &&
-            img.template.category !== TEMPLATE_CATEGORIES.LOGO &&
+            img.template.category !== 'web' &&
+            img.template.category !== 'logo' &&
             img.template.category !== 'favicon' &&
-            img.template.category !== 'screenshots' &&
-            !isPreviewFile(img)
+            img.template.category !== 'screenshots'
         );
 
+        console.log('Social templates found:', socialTemplates.length);
+
         if (socialTemplates.length > 0) {
-            const organizedPlatforms = organizeTemplatesByPlatform(socialTemplates);
+            const socialFolderName = t ? t('export.folders.social') : EXPORT_FOLDERS.SOCIAL_MEDIA_IMAGES;
+            const socialFolder = zip.folder(socialFolderName);
+            const organizedPlatforms = organizeTemplatesByPlatform(socialTemplates, t);
 
             for (const [platform, platformImages] of Object.entries(organizedPlatforms)) {
-                const platformFolder = zip.folder(`${EXPORT_FOLDERS.SOCIAL_MEDIA_IMAGES}/${platform}`);
+                const platformFolderName = platform;
+                const platformFolder = socialFolder.folder(platformFolderName);
                 for (const image of platformImages) {
-                    platformFolder.file(image.name, image.file || image.blob);
+                    const fileName = getTranslatedImageName(image, t);
+                    platformFolder.file(fileName, image.file || image.blob);
                 }
+            }
+        }
+    }
+
+    if (mode === PROCESSING_MODES.TEMPLATES && settings.includeScreenshots && settings.screenshotUrl && validProcessedImages.length > 0) {
+        const screenshotTemplates = validProcessedImages.filter(img =>
+            validateImage(img) &&
+            img.template &&
+            img.template.category === 'screenshots'
+        );
+
+        if (screenshotTemplates.length > 0) {
+            const screenshotFolderName = t ? t('platform.screenshots') : APP_TEMPLATE_CONFIG.SCREENSHOTS.FOLDER_NAME;
+            const screenshotFolder = zip.folder(screenshotFolderName);
+            for (const image of screenshotTemplates) {
+                const fileName = getTranslatedImageName(image, t);
+                screenshotFolder.file(fileName, image.file || image.blob);
             }
         }
     }
 
     if (mode === PROCESSING_MODES.TEMPLATES && settings.includeFavicon === true) {
-        const faviconPreview = validProcessedImages.find(img =>
-            isPreviewFile(img) &&
-            img.name.includes('favicon-preview') &&
-            img.template &&
-            img.template.category === 'favicon'
-        );
-
         const faviconSource = validProcessedImages.find(img =>
             img.template &&
-            (img.template.category === TEMPLATE_CATEGORIES.WEB ||
-                img.template.category === TEMPLATE_CATEGORIES.LOGO) &&
-            img.format === 'png'
-        );
+            (img.template.category === 'web' ||
+                img.template.category === 'logo') &&
+            img.format === IMAGE_FORMATS.PNG
+        ) || validOriginalImages[0];
 
-        if (faviconPreview || faviconSource || validOriginalImages.length > 0) {
+        if (faviconSource) {
             try {
                 let sourceImage = null;
 
-                if (faviconPreview && (faviconPreview.file || faviconPreview.blob)) {
-                    sourceImage = faviconPreview.file || faviconPreview.blob;
-                } else if (faviconSource && (faviconSource.file || faviconSource.blob)) {
+                if (faviconSource.file || faviconSource.blob) {
                     sourceImage = faviconSource.file || faviconSource.blob;
-                } else if (validOriginalImages.length > 0 && (validOriginalImages[0].file || validOriginalImages[0].blob)) {
-                    sourceImage = validOriginalImages[0].file || validOriginalImages[0].blob;
                 }
 
                 if (sourceImage) {
-                    await processFaviconSet(sourceImage, settings, zip);
+                    faviconFilesCount = await processFaviconSet(sourceImage, settings, zip);
                 }
-            } catch {
-                const faviconFolder = zip.folder(`${EXPORT_FOLDERS.WEB_IMAGES}/${PLATFORM_NAMES.FAVICON || 'FaviconSet'}`);
-                faviconFolder.file('error.txt', 'Favicon generation failed');
+            } catch (error) {
+                const faviconFolder = zip.folder(APP_TEMPLATE_CONFIG.FAVICON.FOLDER_NAME);
+                faviconFolder.file(
+                    `${APP_CONFIG.ERROR_HANDLING.DEFAULT_ERROR_PREFIX}${APP_CONFIG.ERROR_HANDLING.ERROR_FILE_EXTENSION}`,
+                    `Favicon generation failed: ${error.message.substring(0, APP_CONFIG.ERROR_HANDLING.MAX_ERROR_LENGTH)}`
+                );
             }
         }
     }
 
-    if (mode === PROCESSING_MODES.TEMPLATES &&
-        settings.includeScreenshots === true &&
-        settings.screenshotUrl &&
-        settings.screenshotUrl.trim()) {
-        try {
-            const selectedScreenshotTemplateIds = settings.selectedScreenshotTemplates || [];
-
-            if (selectedScreenshotTemplateIds.length === 0) {
-                const screenshotFolder = zip.folder(PLATFORM_NAMES.SCREENSHOTS || 'Screenshots');
-                screenshotFolder.file('NOTE.txt',
-                    'No screenshot templates were selected for generation.'
-                );
-            } else {
-                const selectedScreenshotTemplates = filterScreenshotTemplates(validProcessedImages, selectedScreenshotTemplateIds);
-
-                let cleanUrl = settings.screenshotUrl.trim();
-                if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-                    cleanUrl = `https://${cleanUrl}`;
-                }
-                cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
-
-                const screenshotZipBlob = await generateScreenshots(
-                    cleanUrl,
-                    settings.faviconSiteName || TEMPLATE_NAMES.SCREENSHOT_SITE_NAME || 'Website Screenshots',
-                    selectedScreenshotTemplateIds,
-                    {
-                        selectedScreenshotTemplates: selectedScreenshotTemplateIds,
-                        ...settings
-                    }
-                );
-
-                if (!(screenshotZipBlob instanceof Blob)) {
-                    throw new Error('Failed to create screenshot ZIP file');
-                }
-
-                const screenshotZip = await JSZip.loadAsync(screenshotZipBlob);
-                const screenshotFolder = zip.folder(PLATFORM_NAMES.SCREENSHOTS || 'Screenshots');
-
-                const files = screenshotZip.files;
-                let hasActualScreenshots = false;
-
-                for (const [fileName, fileData] of Object.entries(files)) {
-                    if (!fileData.dir) {
-                        const content = await fileData.async('blob');
-                        screenshotFolder.file(fileName, content);
-
-                        if (fileName.includes('screenshot-') && !fileName.includes('error')) {
-                            hasActualScreenshots = true;
-                        }
-                    }
-                }
-
-                if (!hasActualScreenshots) {
-                    screenshotFolder.file('NOTE.txt',
-                        `The website ${cleanUrl} uses security headers that prevent automated screenshot capture.`
-                    );
-                }
-            }
-        } catch {
-            const screenshotFolder = zip.folder(PLATFORM_NAMES.SCREENSHOTS || 'Screenshots');
-            screenshotFolder.file('error.txt', 'Screenshot generation failed');
-        }
-    }
-
-    const summary = createExportSummary(validOriginalImages, validProcessedImages, settings, mode);
+    const summary = createExportSummary(validOriginalImages, validProcessedImages, settings, mode, faviconFilesCount, t);
     zip.file('export-summary.txt', summary);
 
     const zipBlob = await zip.generateAsync({
@@ -467,14 +453,12 @@ export const createExportZip = async (originalImages, processedImages, settings,
         }
     });
 
+    console.log('=== ZIP CREATION COMPLETE ===');
     return zipBlob;
 };
 
 /**
  * Creates favicon ZIP file
- * @param {File} imageFile - Image file
- * @param {Object} settings - Export settings
- * @returns {Promise<Blob>} Favicon ZIP blob
  */
 export const createFaviconZip = async (imageFile, settings = {}) => {
     return await processFaviconSet(imageFile, settings);
@@ -482,29 +466,55 @@ export const createFaviconZip = async (imageFile, settings = {}) => {
 
 /**
  * Creates screenshot ZIP file
- * @param {string} url - Website URL
- * @param {Object} settings - Export settings
- * @returns {Promise<Blob>} Screenshot ZIP blob
  */
-export const createScreenshotZip = async (url, settings = {}) => {
-    const templateIds = settings.selectedScreenshotTemplates || [];
-    return await generateScreenshots(
-        url,
-        settings.faviconSiteName || 'Website Screenshots',
-        templateIds,
-        settings
+export const createScreenshotZip = async (screenshotImages, url) => {
+    const zip = new JSZip();
+
+    const validImages = screenshotImages.filter(img =>
+        validateImage(img) && !isPreviewOrErrorFile(img)
     );
+
+    if (validImages.length === 0) {
+        throw new Error('No valid screenshot images to export');
+    }
+
+    for (const image of validImages) {
+        let fileName = image.name;
+        if (!fileName || fileName === '') {
+            const timestamp = new Date().toISOString().split('T')[0];
+            const templateName = image.template?.name?.replace(/\s+/g, APP_CONFIG.FILE_NAMING.NAME_SEPARATOR).toLowerCase() || APP_CONFIG.FILE_NAMING.DEFAULT_BASE_NAME;
+            fileName = `${templateName}${APP_CONFIG.FILE_NAMING.NAME_SEPARATOR}${timestamp}${APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR}${image.format}`;
+        }
+        zip.file(fileName, image.file || image.blob);
+    }
+
+    const summary = `Screenshot Export Summary
+============================
+
+Export Date: ${new Date().toISOString()}
+Website URL: ${url}
+Total Screenshots: ${validImages.length}
+Template Types: ${[...new Set(validImages.map(img => img.template?.name))].join(', ')}
+Dimensions: ${[...new Set(validImages.map(img => `${img.template?.width || '?'}×${img.template?.height || '?'}`))].join(', ')}
+
+Files:
+${validImages.map((img, i) => `${i + 1}. ${img.name} (${img.format}, ${img.template?.width || '?'}×${img.template?.height || '?'})`).join('\n')}`;
+
+    zip.file('screenshot-summary.txt', summary);
+
+    return await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: {
+            level: 6
+        }
+    });
 };
 
 /**
- * Calculates total files in export
- * @param {Array<Object>} originalImages - Original images
- * @param {Array<Object>} processedImages - Processed images
- * @param {Object} settings - Export settings
- * @param {string} mode - Processing mode
- * @returns {number} Total files count
+ * Calculates total files in export - FIXED
  */
-const calculateTotalFiles = (originalImages, processedImages, settings, mode) => {
+const calculateTotalFiles = (originalImages, processedImages, settings, mode, faviconFilesCount = 0) => {
     let total = 0;
 
     if (settings.includeOriginal) {
@@ -512,67 +522,127 @@ const calculateTotalFiles = (originalImages, processedImages, settings, mode) =>
     }
 
     if (mode === PROCESSING_MODES.CUSTOM && settings.includeOptimized) {
-        total += processedImages.filter(validateImage).length;
+        total += processedImages.filter(img => validateImage(img) && !isPreviewOrErrorFile(img)).length;
     } else if (mode === PROCESSING_MODES.TEMPLATES) {
-        const actualImages = processedImages.filter(img => validateImage(img) && !isPreviewFile(img));
+        const actualImages = processedImages.filter(img =>
+            validateImage(img) && !isPreviewOrErrorFile(img)
+        );
 
         if (settings.includeWebImages) {
-            total += actualImages.filter(img => img.template && img.template.category === 'web').length;
+            const webImages = actualImages.filter(img =>
+                img.template && img.template.category === 'web'
+            );
+            total += webImages.length;
         }
+
         if (settings.includeLogoImages) {
-            total += actualImages.filter(img => img.template && img.template.category === 'logo').length;
+            const logoImages = actualImages.filter(img =>
+                img.template && img.template.category === 'logo'
+            );
+            total += logoImages.length;
         }
+
         if (settings.includeSocialMedia) {
-            total += actualImages.filter(img =>
+            const socialImages = actualImages.filter(img =>
                 img.template &&
                 img.template.category !== 'web' &&
-                img.template.category !== 'logo'
-            ).length;
+                img.template.category !== 'logo' &&
+                img.template.category !== 'favicon' &&
+                img.template.category !== 'screenshots'
+            );
+            total += socialImages.length;
         }
-        if (settings.includeFavicon === true) total += 15;
+
+        if (settings.includeFavicon === true) total += faviconFilesCount;
+
         if (settings.includeScreenshots === true && settings.screenshotUrl) {
-            const selectedScreenshotCount = processedImages
-                .filter(img =>
-                    validateImage(img) &&
-                    img.template &&
-                    img.template.category === 'screenshots' &&
-                    !isPreviewFile(img)
-                )
-                .length;
-            total += selectedScreenshotCount || 3;
+            const screenshotImages = actualImages.filter(img =>
+                img.template && img.template.category === 'screenshots'
+            );
+            total += screenshotImages.length;
         }
     }
+
+    total += 1; // for summary file
 
     return total;
 };
 
 /**
- * Gets included content summary
- * @param {Object} settings - Export settings
- * @param {string} mode - Processing mode
- * @param {Array<Object>} processedImages - Processed images
- * @returns {string} Content summary
+ * Gets included content summary - FIXED
  */
-const getIncludedContentSummary = (settings, mode, processedImages) => {
+const getIncludedContentSummary = (settings, mode, processedImages, faviconFilesCount, t) => {
     const items = [];
 
-    if (settings.includeOriginal) items.push('Original images');
+    if (settings.includeOriginal) items.push(t ? t('export.summary.originalImages') : 'Original images');
     if (mode === PROCESSING_MODES.CUSTOM && settings.includeOptimized) {
-        items.push('Optimized images (organized by format)');
+        items.push(t ? t('export.summary.optimizedImages') : 'Optimized images (organized by format)');
     }
 
     if (mode === PROCESSING_MODES.TEMPLATES) {
-        if (settings.includeWebImages) items.push('Web-optimized images');
-        if (settings.includeLogoImages) items.push('Logo variations');
-        if (settings.includeSocialMedia) items.push('Social media templates (organized by platform)');
-        if (settings.includeFavicon === true) items.push(`${PLATFORM_NAMES.FAVICON || 'Favicon'} set (with manifest and documentation)`);
+        const actualImages = processedImages.filter(img =>
+            validateImage(img) && !isPreviewOrErrorFile(img)
+        );
+
+        if (settings.includeWebImages) {
+            const webImages = actualImages.filter(img =>
+                img.template && img.template.category === 'web'
+            );
+            if (webImages.length > 0) {
+                items.push(t ? t('export.summary.webImages', { count: webImages.length }) :
+                    `Web images (${webImages.length} files)`);
+            }
+        }
+
+        if (settings.includeLogoImages) {
+            const logoImages = actualImages.filter(img =>
+                img.template && img.template.category === 'logo'
+            );
+            if (logoImages.length > 0) {
+                items.push(t ? t('export.summary.logoVariations', { count: logoImages.length }) :
+                    `Logo variations (${logoImages.length} files)`);
+            }
+        }
+
+        if (settings.includeSocialMedia) {
+            const socialImages = actualImages.filter(img =>
+                img.template &&
+                img.template.category !== 'web' &&
+                img.template.category !== 'logo' &&
+                img.template.category !== 'favicon' &&
+                img.template.category !== 'screenshots'
+            );
+            if (socialImages.length > 0) {
+                const platforms = new Set();
+                socialImages.forEach(img => {
+                    if (img.template && img.template.platform) {
+                        platforms.add(img.template.platform);
+                    }
+                });
+                items.push(t ? t('export.summary.socialMediaTemplates', {
+                    count: socialImages.length,
+                    platforms: Array.from(platforms).join(', ')
+                }) : `Social media templates (${socialImages.length} files across ${platforms.size} platforms)`);
+            }
+        }
+
+        if (settings.includeFavicon === true && faviconFilesCount > 0) {
+            items.push(t ? t('export.summary.faviconSet', { count: faviconFilesCount }) :
+                `Favicon set (${faviconFilesCount} files with manifest and documentation)`);
+        }
+
         if (settings.includeScreenshots === true && settings.screenshotUrl) {
-            const screenshotCount = processedImages.filter(img =>
+            const screenshotImages = actualImages.filter(img =>
                 validateImage(img) &&
                 img.template &&
                 img.template.category === 'screenshots'
-            ).length;
-            items.push(`${PLATFORM_NAMES.SCREENSHOTS || 'Website'} screenshots (${screenshotCount} images from: ${settings.screenshotUrl})`);
+            );
+            if (screenshotImages.length > 0) {
+                items.push(t ? t('export.summary.screenshots', {
+                    count: screenshotImages.length,
+                    url: settings.screenshotUrl
+                }) : `Website screenshots (${screenshotImages.length} images from: ${settings.screenshotUrl})`);
+            }
         }
     }
 
@@ -581,18 +651,16 @@ const getIncludedContentSummary = (settings, mode, processedImages) => {
 
 /**
  * Gets export notes
- * @param {string} mode - Processing mode
- * @returns {string} Export notes
  */
-const getExportNotes = (mode) => {
+const getExportNotes = (mode, t) => {
     if (mode === PROCESSING_MODES.CUSTOM) {
-        return `- Images are organized by format in subfolders
+        return t ? t('export.notes.custom') : `- Images are organized by format in subfolders
 - Original files are preserved in the OriginalImages folder
 - Processed files include any applied optimizations`;
     } else if (mode === PROCESSING_MODES.TEMPLATES) {
-        return `- Social media images are organized by platform
-- ${PLATFORM_NAMES.FAVICON || 'Favicon'} set includes all required sizes and documentation
-- ${PLATFORM_NAMES.SCREENSHOTS || 'Screenshots'} are captured at standard responsive sizes
+        return t ? t('export.notes.templates') : `- Social media images are organized by platform
+- Favicon set includes all required sizes and documentation
+- Screenshots are captured at standard responsive sizes
 - Web and logo images are optimized for their specific use cases`;
     }
     return '';
@@ -600,58 +668,72 @@ const getExportNotes = (mode) => {
 
 /**
  * Creates export summary text
- * @param {Array<Object>} originalImages - Original images
- * @param {Array<Object>} processedImages - Processed images
- * @param {Object} settings - Export settings
- * @param {string} mode - Processing mode
- * @returns {string} Export summary
  */
-const createExportSummary = (originalImages, processedImages, settings, mode) => {
+const createExportSummary = (originalImages, processedImages, settings, mode, faviconFilesCount = 0, t = null) => {
     const timestamp = new Date().toISOString();
 
     const validOriginalImages = originalImages.filter(validateImage);
-    const validProcessedImages = processedImages.filter(validateImage);
-    const actualProcessedImages = validProcessedImages.filter(img => !isPreviewFile(img));
+    const validProcessedImages = processedImages.filter(img =>
+        validateImage(img) && !isPreviewOrErrorFile(img)
+    );
 
-    let summary = `Image Processing Export Summary
-================================
+    const formatsUsed = new Set();
+    validProcessedImages.forEach(img => {
+        if (img.format) formatsUsed.add(img.format.toUpperCase());
+    });
 
-Export Date: ${timestamp}
-Processing Mode: ${mode}
-Export Settings: ${JSON.stringify(settings, null, 2)}
+    if (settings.includeFavicon) {
+        formatsUsed.add('PNG');
+        formatsUsed.add('ICO');
+    }
 
-STATISTICS:
-===========
-Original Images: ${validOriginalImages.length}
-Processed Images: ${actualProcessedImages.length}
-Total Files in Export: ${calculateTotalFiles(validOriginalImages, validProcessedImages, settings, mode)}
+    const categoriesUsed = new Set();
+    validProcessedImages.forEach(img => {
+        if (img.template && img.template.category) {
+            categoriesUsed.add(img.template.category);
+        }
+    });
 
-FOLDERS STRUCTURE:
-==================
+    let templateCount = 0;
+    if (mode === PROCESSING_MODES.TEMPLATES) {
+        templateCount = validProcessedImages.filter(img => img.template).length;
+    }
+
+    let summary = `${t ? t('export.summary.title') : 'Image Processing Export Summary'}
+${'='.repeat(t ? t('export.summary.title').length : 30)}
+
+${t ? t('export.summary.exportDate') : 'Export Date'}: ${timestamp}
+${t ? t('export.summary.processingMode') : 'Processing Mode'}: ${mode}
+${t ? t('export.summary.exportSettings') : 'Export Settings'}: ${JSON.stringify(settings, null, 2)}
+
+${t ? t('export.summary.statistics') : 'STATISTICS'}:${'='.repeat(t ? t('export.summary.statistics').length : 11)}
+${t ? t('export.summary.originalImages') : 'Original Images'}: ${validOriginalImages.length}
+${t ? t('export.summary.processedImages') : 'Processed Images'}: ${validProcessedImages.length}
+${t ? t('export.summary.templatesApplied') : 'Templates Applied'}: ${templateCount}
+${t ? t('export.summary.categoriesApplied') : 'Categories Applied'}: ${categoriesUsed.size}
+${t ? t('export.summary.formatsExported') : 'Formats Exported'}: ${Array.from(formatsUsed).join(', ')}
+${t ? t('export.summary.totalFiles') : 'Total Files in Export'}: ${calculateTotalFiles(validOriginalImages, processedImages, settings, mode, faviconFilesCount)}
+
+${t ? t('export.summary.foldersStructure') : 'FOLDERS STRUCTURE'}:${'='.repeat(t ? t('export.summary.foldersStructure').length : 18)}
 ${getExportFolderStructure(mode, settings).map(folder => `- ${folder}`).join('\n')}
 
-INCLUDED CONTENT:
-=================
-${getIncludedContentSummary(settings, mode, validProcessedImages)}
+${t ? t('export.summary.includedContent') : 'INCLUDED CONTENT'}:${'='.repeat(t ? t('export.summary.includedContent').length : 17)}
+${getIncludedContentSummary(settings, mode, processedImages, faviconFilesCount, t)}
 
-NOTES:
-======
-${getExportNotes(mode)}
+${t ? t('export.summary.notes') : 'NOTES'}:${'='.repeat(t ? t('export.summary.notes').length : 6)}
+${getExportNotes(mode, t)}
 
-GENERATED BY:
-=============
-Image Processing Tool
+${t ? t('export.summary.generatedBy') : 'GENERATED BY'}:${'='.repeat(t ? t('export.summary.generatedBy').length : 13)}
+${t ? t('export.summary.appName') : 'Image Processing Tool'}
 ${window.location.origin}
 
-Need help? Contact support or check the documentation.`;
+${t ? t('export.summary.supportNote') : 'Need help? Contact support or check the documentation.'}`;
 
     return summary;
 };
 
 /**
  * Downloads ZIP file
- * @param {Blob} zipBlob - ZIP file blob
- * @param {string} prefix - File name prefix
  */
 export const downloadZip = (zipBlob, prefix) => {
     const url = URL.createObjectURL(zipBlob);
@@ -666,8 +748,6 @@ export const downloadZip = (zipBlob, prefix) => {
 
 /**
  * Downloads file
- * @param {Blob} blob - File blob
- * @param {string} filename - File name
  */
 export const downloadFile = (blob, filename) => {
     const url = URL.createObjectURL(blob);

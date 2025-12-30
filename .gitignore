@@ -25,3 +25,8 @@ dist-ssr
 .vercel
 .env.local
 .env.*.local
+
+# Proxy server files
+proxy-server.js
+proxy-server.mjs
+proxy-server.cjs

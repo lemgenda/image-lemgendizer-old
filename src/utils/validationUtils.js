@@ -1,3 +1,4 @@
+// validationUtils.js - Complete version
 import {
     MAX_TARGET_FILESIZE_KB,
     MAX_CROP_DIMENSION,
@@ -6,7 +7,7 @@ import {
     CROP_MODES,
     CROP_POSITIONS,
     URL_CONSTANTS
-} from '../constants/sharedConstants.js';
+} from '../constants';
 
 /**
  * Validates processing options before starting.
@@ -15,6 +16,11 @@ import {
  */
 export const validateProcessingOptions = (processingOptions) => {
     const errors = [];
+
+    if (!processingOptions) {
+        errors.push('Processing options are required');
+        return { isValid: false, errors };
+    }
 
     if (processingOptions.compression?.quality) {
         const quality = parseInt(processingOptions.compression.quality);

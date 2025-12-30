@@ -1,4 +1,4 @@
-import { AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE } from '../constants/sharedConstants.js';
+import { AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE } from '../constants';
 
 /**
  * Gets available languages.

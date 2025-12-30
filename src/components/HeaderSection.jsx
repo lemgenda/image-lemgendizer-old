@@ -1,12 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import LanguageSwitcher from './LanguageSwitcher';
-import LemGendaIcon from './LemGendaIcon';
+import LanguageSwitcherElement from './LanguageSwitcherElement';
+import LemGendaIconElement from './LemGendaIconElement';
+import ThemeSwitcherElement from './ThemeSwitcherElement';
+import { FONT_CONSTANTS, SPACING } from '../constants';
 
-/**
- * Header component displaying application logo and language switcher
- * @returns {JSX.Element} Header component
- */
-function Header() {
+function HeaderSection() {
     const { t } = useTranslation();
 
     return (
@@ -16,7 +14,7 @@ function Header() {
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
-                    padding: var(--space-lg) 0;
+                    padding: ${SPACING.LG} 0;
                     border-bottom: 1px solid var(--border-color);
                     position: relative;
                 }
@@ -24,7 +22,7 @@ function Header() {
                 .app-header-logo {
                     display: flex;
                     align-items: center;
-                    gap: var(--space-lg);
+                    gap: ${SPACING.LG};
                 }
 
                 .header-icon {
@@ -43,28 +41,29 @@ function Header() {
                 .header-title h1 {
                     color: var(--color-primary);
                     margin: 0;
-                    font-size: 1.8rem;
+                    font-size: ${FONT_CONSTANTS.HEADLINE_FONT_SIZE * 0.75}px;
                     line-height: 1.2;
                 }
 
                 .app-subtitle {
                     color: var(--color-text-muted);
-                    font-size: 1rem;
+                    font-size: ${FONT_CONSTANTS.BODY_FONT_SIZE}px;
                     font-weight: 400;
-                    margin-top: var(--space-xs);
+                    margin-top: ${SPACING.XS};
                     margin-bottom: 0;
                 }
 
                 .header-right {
                     display: flex;
                     align-items: center;
+                    gap: ${SPACING.SM};
                 }
 
                 @media (max-width: 768px) {
                     .app-header {
                         flex-direction: column;
                         align-items: stretch;
-                        gap: var(--space-md);
+                        gap: ${SPACING.MD};
                     }
 
                     .app-header-logo {
@@ -73,19 +72,26 @@ function Header() {
                     }
 
                     .header-title h1 {
-                        font-size: 1.6rem;
+                        font-size: ${FONT_CONSTANTS.HEADLINE_FONT_SIZE * 0.67}px;
                     }
 
                     .header-icon {
                         width: 60px;
                         height: 60px;
                     }
+
+                    .header-right {
+                        position: absolute;
+                        top: ${SPACING.MD};
+                        right: 0;
+                        gap: ${SPACING.XS};
+                    }
                 }
 
                 @media (max-width: 480px) {
                     .app-header-logo {
                         flex-direction: column;
-                        gap: var(--space-md);
+                        gap: ${SPACING.MD};
                     }
 
                     .header-title {
@@ -93,30 +99,36 @@ function Header() {
                     }
 
                     .header-title h1 {
-                        font-size: 1.4rem;
+                        font-size: ${FONT_CONSTANTS.HEADLINE_FONT_SIZE * 0.58}px;
                     }
 
                     .header-icon {
                         width: 50px;
                         height: 50px;
                     }
+
+                    .header-right {
+                        top: ${SPACING.SM};
+                        gap: ${SPACING.XS};
+                    }
                 }
             `}</style>
 
             <header className="app-header">
                 <div className="app-header-logo">
-                    <LemGendaIcon className="header-icon" />
+                    <LemGendaIconElement className="header-icon" />
                     <div className="header-title">
                         <h1>{t('app.title')}</h1>
                         <p className="app-subtitle">{t('app.subtitle')}</p>
                     </div>
                 </div>
                 <div className="header-right">
-                    <LanguageSwitcher />
+                    <ThemeSwitcherElement />
+                    <LanguageSwitcherElement />
                 </div>
             </header>
         </>
     );
 }
 
-export default Header;
+export default HeaderSection;

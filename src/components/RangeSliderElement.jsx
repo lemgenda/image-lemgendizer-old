@@ -1,22 +1,10 @@
 import { useTranslation } from 'react-i18next';
+import { COMPRESSION_QUALITY_RANGE, NUMBER_INPUT_CONSTANTS, SPACING, BORDER_RADIUS } from '../constants';
 
-/**
- * Calculates the percentage value for the slider
- * @param {number} min - Minimum value
- * @param {number} max - Maximum value
- * @param {number} value - Current value
- * @returns {number} Percentage value
- */
 const calculatePercentage = (min, max, value) => {
   return ((value - min) / (max - min)) * 100;
 };
 
-/**
- * Generates tick marks for the slider
- * @param {number} min - Minimum value
- * @param {number} max - Maximum value
- * @returns {Array} Array of tick values
- */
 const generateTicks = (min, max) => {
   const ticks = [min];
   const mid = Math.round((min + max) / 2);
@@ -25,24 +13,11 @@ const generateTicks = (min, max) => {
   return ticks;
 };
 
-/**
- * A customizable range slider component with visual feedback and tick marks.
- * @param {Object} props - Component props
- * @param {number} props.min - Minimum slider value
- * @param {number} props.max - Maximum slider value
- * @param {number} props.step - Step value
- * @param {number} props.value - Current slider value
- * @param {Function} props.onChange - Change handler function
- * @param {string} props.label - Slider label
- * @param {string} props.unit - Value unit
- * @param {boolean} props.showTicks - Whether to show tick marks
- * @returns {JSX.Element} RangeSlider component
- */
-function RangeSlider({
-  min = 0,
-  max = 100,
-  step = 1,
-  value,
+function RangeSliderElement({
+  min = COMPRESSION_QUALITY_RANGE.MIN,
+  max = COMPRESSION_QUALITY_RANGE.MAX,
+  step = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT,
+  value = COMPRESSION_QUALITY_RANGE.DEFAULT,
   onChange,
   label,
   unit = '%',
@@ -139,10 +114,11 @@ function RangeSlider({
 
         .form-label {
           display: block;
-          margin-bottom: var(--space-sm);
+          margin-bottom: ${SPACING.SM};
           color: var(--color-text-secondary);
           font-weight: 500;
           font-size: 0.875rem;
+          border-radius: ${BORDER_RADIUS.SM};
         }
       `}</style>
 
@@ -179,4 +155,4 @@ function RangeSlider({
   )
 }
 
-export default RangeSlider;
+export default RangeSliderElement;

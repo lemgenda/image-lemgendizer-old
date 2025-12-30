@@ -1,7 +1,7 @@
 import {
     MEMORY_CLEANUP_INTERVAL,
     UPSCALER_IDLE_TIMEOUT
-} from '../constants/sharedConstants.js';
+} from '../constants';
 
 let aiModel = null;
 let upscalerInstances = {};

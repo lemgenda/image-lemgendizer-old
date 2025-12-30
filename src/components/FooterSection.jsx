@@ -1,27 +1,24 @@
 import { useTranslation } from 'react-i18next';
-import LemGendaLogo from './LemGendaLogo';
+import LemGendaLogoElement from './LemGendaLogoElement';
+import { SPACING } from '../constants';
 
-/**
- * Footer component displaying application information and logo
- * @returns {JSX.Element} Footer component
- */
-function Footer() {
+function FooterSection() {
     const { t } = useTranslation();
 
     return (
         <>
             <style>{`
                 .app-footer {
-                    margin-top: var(--space-sm);
+                    margin-top: ${SPACING.SM};
                     color: var(--color-text-muted);
-                    padding-top: var(--space-xs);
+                    padding-top: ${SPACING.XS};
                     border-top: 1px solid var(--border-color);
                     font-size: 0.875rem;
                     display: flex;
                     justify-content: space-between;
                     align-items: flex-start;
                     flex-wrap: wrap;
-                    gap: var(--space-lg);
+                    gap: ${SPACING.LG};
                 }
 
                 .footer-left {
@@ -37,7 +34,7 @@ function Footer() {
                 }
 
                 .footer-logo-container {
-                    margin-bottom: var(--space-xs);
+                    margin-bottom: ${SPACING.XS};
                 }
 
                 .footer-logo {
@@ -52,7 +49,7 @@ function Footer() {
                 }
 
                 .footer-text {
-                    margin-bottom: var(--space-xs);
+                    margin-bottom: ${SPACING.XS};
                 }
 
                 .text-muted {
@@ -60,11 +57,11 @@ function Footer() {
                 }
 
                 .mb-xs {
-                    margin-bottom: var(--space-xs);
+                    margin-bottom: ${SPACING.XS};
                 }
 
                 .mt-xs {
-                    margin-top: var(--space-xs);
+                    margin-top: ${SPACING.XS};
                 }
 
                 .text-sm {
@@ -79,7 +76,7 @@ function Footer() {
                     .app-footer {
                         flex-direction: column;
                         text-align: center;
-                        gap: var(--space-md);
+                        gap: ${SPACING.MD};
                     }
 
                     .footer-left,
@@ -111,7 +108,7 @@ function Footer() {
                             rel="noopener noreferrer"
                             className="inline-block"
                         >
-                            <LemGendaLogo className="footer-logo" />
+                            <LemGendaLogoElement className="footer-logo" />
                         </a>
                     </div>
                 </div>
@@ -120,4 +117,4 @@ function Footer() {
     );
 }
 
-export default Footer;
+export default FooterSection;

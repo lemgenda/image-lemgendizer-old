@@ -1,11 +1,6 @@
-// src/processors/imageProcessor.js
 import UTIF from 'utif';
 import {
-    MEMORY_CLEANUP_INTERVAL,
-    UPSCALER_IDLE_TIMEOUT,
     MIME_TYPE_MAP,
-    INVALID_FILENAME_CHARS,
-    CROP_POSITIONS,
     OPERATION_NAMES,
     MAX_TEXTURE_SIZE,
     MAX_SAFE_DIMENSION,
@@ -31,30 +26,29 @@ import {
     CROP_MARGIN,
     MAX_SCALE_FACTOR,
     MAX_PIXELS_FOR_SMART_SHARPENING,
-    SVG_DEFAULT_WIDTH,
-    SVG_DEFAULT_HEIGHT,
-    SVG_MIN_SIZE,
-    SVG_MAX_SIZE,
-    PLACEHOLDER_BACKGROUND,
-    PLACEHOLDER_BORDER,
-    PLACEHOLDER_TEXT,
-    SUCCESS_COLOR,
-    INFO_COLOR,
-    ERROR_BACKGROUND_COLOR,
-    ERROR_BORDER_COLOR,
-    ERROR_TEXT_COLOR,
-    WARNING_TEXT_COLOR,
-    DEFAULT_FONT_FAMILY,
-    ERROR_MESSAGES
-} from '../constants/sharedConstants';
+    SVG_CONSTANTS,
+    IMAGE_COLORS,
+    FONT_CONSTANTS,
+    ERROR_MESSAGES,
+    SAMPLING_CONSTANTS,
+    TEMP_FILE_NAMES,
+    FILE_TYPE_NAMES,
+    FILE_EXTENSIONS,
+    SVG_XML_TEMPLATE,
+    PROCESSING_THRESHOLDS,
+    COLOR_DETECTION,
+    AI_MODEL_WEIGHTS,
+    PROCESSING_ERRORS
+} from '../constants';
+
+import { APP_TEMPLATE_CONFIG, DEFAULT_PLACEHOLDER_DIMENSIONS } from '../configs/templateConfigs';
 
 import {
     cleanupGPUMemory,
     initializeGPUMemoryMonitor,
     ensureFileObject,
     createTIFFPlaceholderFile,
-    checkAVIFSupport,
-    getTemplateById
+    checkAVIFSupport
 } from '../utils';
 
 if (!window.UTIF) {
@@ -73,9 +67,7 @@ let textureManagerFailures = 0;
 let cleanupInProgress = false;
 
 /**
- * Loads UTIF library from CDN if not already available.
- * @async
- * @returns {Promise<boolean>} Whether UTIF library was successfully loaded
+ * Loads UTIF library from CDN if not already available
  */
 export const loadUTIFLibrary = () => {
     return new Promise((resolve) => {
@@ -101,12 +93,9 @@ export const loadUTIFLibrary = () => {
 };
 
 /**
- * Converts TIFF file using UTIF library.
- * @async
- * @param {File} tiffFile - TIFF file to convert
- * @returns {Promise<File>} Converted PNG file
+ * Converts TIFF file using UTIF library
  */
-const convertTIFFWithUTIF = (tiffFile) => {
+export const convertTIFFWithUTIF = (tiffFile) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
 
@@ -144,8 +133,8 @@ const convertTIFFWithUTIF = (tiffFile) => {
                         firstIFD.width = imageWidth.value || imageWidth;
                         firstIFD.height = imageLength.value || imageLength;
                     } else {
-                        firstIFD.width = 800;
-                        firstIFD.height = 600;
+                        firstIFD.width = DEFAULT_PLACEHOLDER_DIMENSIONS.WIDTH;
+                        firstIFD.height = DEFAULT_PLACEHOLDER_DIMENSIONS.HEIGHT;
                     }
                 }
 
@@ -177,18 +166,18 @@ const convertTIFFWithUTIF = (tiffFile) => {
                     canvas.height = firstIFD.height;
                     const ctx = canvas.getContext('2d');
 
-                    ctx.fillStyle = PLACEHOLDER_BACKGROUND;
+                    ctx.fillStyle = IMAGE_COLORS.PLACEHOLDER_BACKGROUND;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                    ctx.fillStyle = PLACEHOLDER_TEXT;
-                    ctx.font = `bold ${HEADLINE_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
+                    ctx.fillStyle = IMAGE_COLORS.PLACEHOLDER_TEXT;
+                    ctx.font = `bold ${FONT_CONSTANTS.HEADLINE_FONT_SIZE}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText('TIFF', canvas.width / 2, canvas.height / 2);
+                    ctx.fillText(FILE_TYPE_NAMES.TIFF, canvas.width / 2, canvas.height / 2);
 
                     canvas.toBlob((blob) => {
                         if (!blob) {
-                            reject(new Error('Failed to create PNG placeholder'));
+                            reject(new Error(PROCESSING_ERRORS.PLACEHOLDER_FAILED));
                             return;
                         }
 
@@ -212,11 +201,11 @@ const convertTIFFWithUTIF = (tiffFile) => {
 
                 canvas.toBlob((blob) => {
                     if (!blob) {
-                        reject(new Error('Failed to create PNG'));
+                        reject(new Error(PROCESSING_ERRORS.BLOB_CREATION_FAILED));
                         return;
                     }
 
-                    const originalName = tiffFile.name || 'converted-tiff';
+                    const originalName = tiffFile.name || TEMP_FILE_NAMES.CONVERTED_TIFF;
                     const baseName = originalName.replace(/\.[^/.]+$/, '');
                     const newFileName = `${baseName}.png`;
 
@@ -235,12 +224,7 @@ const convertTIFFWithUTIF = (tiffFile) => {
 };
 
 /**
- * Processes image resize operation.
- * @async
- * @param {Array<Object>} images - Array of image objects to resize
- * @param {number} dimension - Target dimension
- * @param {Object} options - Processing options
- * @returns {Promise<Array<Object>>} Array of resize results
+ * Processes image resize operation
  */
 export const processLemGendaryResize = async (images, dimension, options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const results = [];
@@ -252,9 +236,9 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
             const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
             const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
-            const isSVG = mimeType === 'image/svg+xml' || fileName.endsWith('.svg');
-            const isTIFF = mimeType === 'image/tiff' || mimeType === 'image/tif' ||
-                fileName.endsWith('.tiff') || fileName.endsWith('.tif');
+            const isSVG = mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext));
+            const isTIFF = TIFF_FORMATS.includes(mimeType) ||
+                FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
 
             if (isSVG) {
                 try {
@@ -269,8 +253,8 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
                     const svgElement = svgDoc.documentElement;
 
-                    let originalWidth = SVG_DEFAULT_WIDTH;
-                    let originalHeight = SVG_DEFAULT_HEIGHT;
+                    let originalWidth = SVG_CONSTANTS.DEFAULT_WIDTH;
+                    let originalHeight = SVG_CONSTANTS.DEFAULT_HEIGHT;
 
                     const widthAttr = svgElement.getAttribute('width');
                     const heightAttr = svgElement.getAttribute('height');
@@ -302,8 +286,8 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                         newWidth = Math.round(dimension * aspectRatio);
                     }
 
-                    newWidth = Math.max(SVG_MIN_SIZE, newWidth);
-                    newHeight = Math.max(SVG_MIN_SIZE, newHeight);
+                    newWidth = Math.max(SVG_CONSTANTS.MIN_SIZE, newWidth);
+                    newHeight = Math.max(SVG_CONSTANTS.MIN_SIZE, newHeight);
 
                     const resizedSVG = await processSVGResize(imageFile, newWidth, newHeight);
 
@@ -316,35 +300,35 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                         canvas.height = newHeight;
                         const ctx = canvas.getContext('2d');
 
-                        const bgColor = PLACEHOLDER_BACKGROUND;
+                        const bgColor = IMAGE_COLORS.PLACEHOLDER_BACKGROUND;
                         ctx.fillStyle = bgColor;
                         ctx.fillRect(0, 0, newWidth, newHeight);
 
-                        ctx.strokeStyle = PLACEHOLDER_BORDER;
+                        ctx.strokeStyle = IMAGE_COLORS.PLACEHOLDER_BORDER;
                         ctx.lineWidth = 2;
-                        ctx.strokeRect(10, 10, newWidth - 20, newHeight - 20);
+                        ctx.strokeRect(CROP_MARGIN, CROP_MARGIN, newWidth - CROP_MARGIN * 2, newHeight - CROP_MARGIN * 2);
 
                         const centerX = newWidth / 2;
                         const centerY = newHeight / 2;
 
-                        ctx.fillStyle = INFO_COLOR;
+                        ctx.fillStyle = IMAGE_COLORS.INFO;
                         const iconSize = Math.min(32, newHeight / 8);
-                        ctx.font = `bold ${iconSize}px ${DEFAULT_FONT_FAMILY}`;
+                        ctx.font = `bold ${iconSize}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        ctx.fillText('SVG', centerX, centerY);
+                        ctx.fillText(FILE_TYPE_NAMES.SVG, centerX, centerY);
 
-                        ctx.fillStyle = PLACEHOLDER_TEXT;
+                        ctx.fillStyle = IMAGE_COLORS.PLACEHOLDER_TEXT;
                         const titleSize = Math.min(18, newHeight / 12);
-                        ctx.font = `bold ${titleSize}px ${DEFAULT_FONT_FAMILY}`;
+                        ctx.font = `bold ${titleSize}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
                         ctx.fillText('Image', centerX, centerY + iconSize);
 
-                        ctx.fillStyle = PLACEHOLDER_TEXT;
+                        ctx.fillStyle = IMAGE_COLORS.PLACEHOLDER_TEXT;
                         const infoSize = Math.min(14, newHeight / 16);
-                        ctx.font = `${infoSize}px ${DEFAULT_FONT_FAMILY}`;
+                        ctx.font = `${infoSize}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
                         ctx.fillText(`${newWidth}×${newHeight}`, centerX, centerY + iconSize * 2);
 
-                        ctx.fillStyle = SUCCESS_COLOR;
+                        ctx.fillStyle = IMAGE_COLORS.SUCCESS;
                         const ratio = Math.round((originalWidth / originalHeight) * 100) / 100;
                         ctx.fillText(`${ratio}:1`, centerX, centerY + iconSize * 3);
 
@@ -379,16 +363,16 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     canvas.height = dimension;
                     const ctx = canvas.getContext('2d');
 
-                    ctx.fillStyle = ERROR_BACKGROUND_COLOR;
+                    ctx.fillStyle = IMAGE_COLORS.ERROR_BACKGROUND;
                     ctx.fillRect(0, 0, dimension, dimension);
 
-                    ctx.strokeStyle = ERROR_BORDER_COLOR;
+                    ctx.strokeStyle = IMAGE_COLORS.ERROR_BORDER;
                     ctx.lineWidth = 3;
-                    ctx.strokeRect(10, 10, dimension - 20, dimension - 20);
+                    ctx.strokeRect(CROP_MARGIN, CROP_MARGIN, dimension - CROP_MARGIN * 2, dimension - CROP_MARGIN * 2);
 
-                    ctx.fillStyle = ERROR_TEXT_COLOR;
+                    ctx.fillStyle = IMAGE_COLORS.ERROR_TEXT;
                     const fontSize = Math.min(16, dimension / 10);
-                    ctx.font = `bold ${fontSize}px ${DEFAULT_FONT_FAMILY}`;
+                    ctx.font = `bold ${fontSize}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
 
@@ -400,8 +384,8 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                     const displayName = image.name.length > 20 ? image.name.substring(0, 17) + '...' : image.name;
                     ctx.fillText(displayName, centerX, centerY);
 
-                    ctx.fillStyle = WARNING_TEXT_COLOR;
-                    ctx.font = `${Math.min(12, dimension / 15)}px ${DEFAULT_FONT_FAMILY}`;
+                    ctx.fillStyle = IMAGE_COLORS.WARNING_TEXT;
+                    ctx.font = `${Math.min(12, dimension / 15)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
                     ctx.fillText(svgError.message.substring(0, 30) + '...', centerX, centerY + fontSize);
 
                     const blob = await new Promise(resolve => {
@@ -596,11 +580,11 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
             canvas.height = dimension;
             const ctx = canvas.getContext('2d');
 
-            ctx.fillStyle = ERROR_BACKGROUND_COLOR;
+            ctx.fillStyle = IMAGE_COLORS.ERROR_BACKGROUND;
             ctx.fillRect(0, 0, dimension, dimension);
 
-            ctx.fillStyle = ERROR_TEXT_COLOR;
-            ctx.font = `bold ${BODY_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillStyle = IMAGE_COLORS.ERROR_TEXT;
+            ctx.font = `bold ${FONT_CONSTANTS.BODY_FONT_SIZE}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
@@ -611,8 +595,8 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
             ctx.fillText('Error', centerX, centerY - 20);
             ctx.fillText(displayName, centerX, centerY);
 
-            ctx.fillStyle = WARNING_TEXT_COLOR;
-            ctx.font = `${CAPTION_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillStyle = IMAGE_COLORS.WARNING_TEXT;
+            ctx.font = `${FONT_CONSTANTS.CAPTION_FONT_SIZE}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
             const errorMsg = error.message.length > 30 ? error.message.substring(0, 27) + '...' : error.message;
             ctx.fillText(errorMsg, centerX, centerY + 25);
 
@@ -639,14 +623,7 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
 };
 
 /**
- * Processes image crop operation.
- * @async
- * @param {Array<Object>} images - Array of image objects to crop
- * @param {number} width - Target width
- * @param {number} height - Target height
- * @param {string} cropPosition - Crop position
- * @param {Object} options - Processing options
- * @returns {Promise<Array<Object>>} Array of crop results
+ * Processes image crop operation
  */
 export const processLemGendaryCrop = async (images, width, height, cropPosition = 'center', options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const results = [];
@@ -658,9 +635,9 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
             const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
             const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
-            const isTIFF = mimeType === 'image/tiff' || mimeType === 'image/tif' ||
-                fileName.endsWith('.tiff') || fileName.endsWith('.tif');
-            const isSVG = mimeType === 'image/svg+xml' || fileName.endsWith('.svg');
+            const isTIFF = TIFF_FORMATS.includes(mimeType) ||
+                FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
+            const isSVG = mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext));
 
             let croppedFile;
 
@@ -718,7 +695,7 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
                     try {
                         sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, image.name);
                     } catch (upscaleError) {
-                        // Continue with original file if upscaling fails
+                        // Continue with original file
                     }
                 }
 
@@ -743,11 +720,11 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
             canvas.height = height;
             const ctx = canvas.getContext('2d');
 
-            ctx.fillStyle = ERROR_BACKGROUND_COLOR;
+            ctx.fillStyle = IMAGE_COLORS.ERROR_BACKGROUND;
             ctx.fillRect(0, 0, width, height);
 
-            ctx.fillStyle = ERROR_TEXT_COLOR;
-            ctx.font = `bold ${BODY_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillStyle = IMAGE_COLORS.ERROR_TEXT;
+            ctx.font = `bold ${FONT_CONSTANTS.BODY_FONT_SIZE}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
@@ -758,8 +735,8 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
             ctx.fillText('Crop Error', centerX, centerY - 20);
             ctx.fillText(displayName, centerX, centerY);
 
-            ctx.fillStyle = WARNING_TEXT_COLOR;
-            ctx.font = `${CAPTION_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillStyle = IMAGE_COLORS.WARNING_TEXT;
+            ctx.font = `${FONT_CONSTANTS.CAPTION_FONT_SIZE}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
             const errorMsg = error.message.length > 30 ? error.message.substring(0, 27) + '...' : error.message;
             ctx.fillText(errorMsg, centerX, centerY + 25);
 
@@ -787,9 +764,7 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
 };
 
 /**
- * Loads AI model for object detection.
- * @async
- * @returns {Promise<Object>} Loaded AI model
+ * Loads AI model for object detection
  */
 export const loadAIModel = async () => {
     if (aiModel) return aiModel;
@@ -820,9 +795,7 @@ export const loadAIModel = async () => {
 };
 
 /**
- * Loads TensorFlow.js from CDN.
- * @async
- * @returns {Promise<void>}
+ * Loads TensorFlow.js from CDN
  */
 const loadTensorFlowFromCDN = () => {
     return new Promise((resolve) => {
@@ -840,9 +813,7 @@ const loadTensorFlowFromCDN = () => {
 };
 
 /**
- * Loads COCO-SSD model from CDN.
- * @async
- * @returns {Promise<void>}
+ * Loads COCO-SSD model from CDN
  */
 const loadCocoSsdFromCDN = () => {
     return new Promise((resolve) => {
@@ -860,8 +831,7 @@ const loadCocoSsdFromCDN = () => {
 };
 
 /**
- * Creates a simple fallback AI model.
- * @returns {Object} Simple AI model object
+ * Creates a simple fallback AI model
  */
 const createSimpleAIModel = () => {
     return {
@@ -879,19 +849,13 @@ const createSimpleAIModel = () => {
 };
 
 /**
- * Processes smart crop using AI detection.
- * @async
- * @param {File} imageFile - Image file to crop
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
- * @param {Object} options - Processing options
- * @returns {Promise<File>} Cropped image file
+ * Processes smart crop using AI detection
  */
 export const processSmartCrop = async (imageFile, targetWidth, targetHeight, options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
-    const isSVG = mimeType === 'image/svg+xml' || fileName.endsWith('.svg');
+    const isSVG = mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext));
 
     if (isSVG) {
         try {
@@ -901,8 +865,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
         }
     }
 
-    const isTIFF = mimeType === 'image/tiff' || mimeType === 'image/tif' ||
-        fileName.endsWith('.tiff') || fileName.endsWith('.tif');
+    const isTIFF = TIFF_FORMATS.includes(mimeType) || FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
 
     try {
         let processableFile = imageFile;
@@ -936,7 +899,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
             };
             img.src = objectUrl;
 
-            if (processableFile.size > 1000000 && img.decode) {
+            if (processableFile.size > PROCESSING_THRESHOLDS.LARGE_FILE_SIZE && img.decode) {
                 img.decode().then(() => {
                     clearTimeout(timeout);
                     URL.revokeObjectURL(objectUrl);
@@ -944,7 +907,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
                 }).catch(() => {
                     clearTimeout(timeout);
                     URL.revokeObjectURL(objectUrl);
-                    reject(new Error('Failed to decode image'));
+                    reject(new Error(PROCESSING_ERRORS.DECODE_FAILED));
                 });
             }
         });
@@ -971,7 +934,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
                 try {
                     sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
                 } catch (upscaleError) {
-                    // Continue without upscaling
+                    // Continue with original file
                 }
             }
         }
@@ -1022,20 +985,13 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
 };
 
 /**
- * Processes simple smart crop without AI.
- * @async
- * @param {File} imageFile - Image file to crop
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
- * @param {string} cropPosition - Crop position
- * @param {Object} options - Processing options
- * @returns {Promise<File>} Cropped image file
+ * Processes simple smart crop without AI
  */
 export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeight, cropPosition = 'center', options = { quality: DEFAULT_QUALITY, format: 'webp' }) => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
-    const isSVG = mimeType === 'image/svg+xml' || fileName.endsWith('.svg');
+    const isSVG = mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext));
 
     if (isSVG) {
         try {
@@ -1052,8 +1008,7 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
         }
     }
 
-    const isTIFF = mimeType === 'image/tiff' || mimeType === 'image/tif' ||
-        fileName.endsWith('.tiff') || fileName.endsWith('.tif');
+    const isTIFF = TIFF_FORMATS.includes(mimeType) || FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
 
     try {
         let processableFile = imageFile;
@@ -1113,7 +1068,7 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
                         sourceFile = await upscaleImageEnhancedFallback(processableFile, upscaleFactor, imageFile.name);
                     }
                 } catch (upscaleError) {
-                    // Continue without upscaling
+                    // Continue with original file
                 }
             }
         }
@@ -1146,11 +1101,11 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             canvas.height = targetHeight;
             const ctx = canvas.getContext('2d');
 
-            ctx.fillStyle = ERROR_BACKGROUND_COLOR;
+            ctx.fillStyle = IMAGE_COLORS.ERROR_BACKGROUND;
             ctx.fillRect(0, 0, targetWidth, targetHeight);
 
-            ctx.fillStyle = ERROR_TEXT_COLOR;
-            ctx.font = `bold ${BODY_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillStyle = IMAGE_COLORS.ERROR_TEXT;
+            ctx.font = `bold ${FONT_CONSTANTS.BODY_FONT_SIZE}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
@@ -1162,8 +1117,8 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             ctx.fillText('Crop Error', centerX, centerY - 20);
             ctx.fillText(displayName, centerX, centerY);
 
-            ctx.fillStyle = WARNING_TEXT_COLOR;
-            ctx.font = `${CAPTION_FONT_SIZE}px ${DEFAULT_FONT_FAMILY}`;
+            ctx.fillStyle = IMAGE_COLORS.WARNING_TEXT;
+            ctx.font = `${FONT_CONSTANTS.CAPTION_FONT_SIZE}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
             const errorMsg = error.message.length > 30 ?
                 error.message.substring(0, 27) + '...' : error.message;
             ctx.fillText(errorMsg, centerX, centerY + 25);
@@ -1180,12 +1135,93 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
 };
 
 /**
- * Processes SVG resize operation.
- * @async
- * @param {File} svgFile - SVG file to resize
- * @param {number} width - Target width
- * @param {number} height - Target height
- * @returns {Promise<File>} Resized SVG file
+ * Smart crop that protects the main subject (for logos)
+ */
+export const processSmartCropForLogo = async (imageFile, targetWidth, targetHeight, options = {}) => {
+    try {
+        const model = await loadAIModel();
+        const img = await loadImageWithPerformance(imageFile);
+        const predictions = await model.detect(img.element);
+
+        const mainSubject = findMainSubject(predictions, img.width, img.height);
+
+        if (!mainSubject) {
+            // No subject detected, use regular smart crop
+            return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
+        }
+
+        // Get subject bounding box
+        const [subjectX, subjectY, subjectWidth, subjectHeight] = mainSubject.bbox;
+
+        // Calculate required padding to keep subject fully visible
+        const padding = Math.max(
+            Math.min(subjectWidth * PROCESSING_THRESHOLDS.MAX_PADDING_PERCENT,
+                subjectHeight * PROCESSING_THRESHOLDS.MAX_PADDING_PERCENT),
+            Math.min(targetWidth * PROCESSING_THRESHOLDS.MIN_PADDING_PERCENT,
+                targetHeight * PROCESSING_THRESHOLDS.MIN_PADDING_PERCENT)
+        );
+
+        // Calculate crop area that includes subject with padding
+        const cropX = Math.max(0, subjectX - padding);
+        const cropY = Math.max(0, subjectY - padding);
+        const cropWidth = Math.min(
+            img.width - cropX,
+            subjectWidth + padding * 2
+        );
+        const cropHeight = Math.min(
+            img.height - cropY,
+            subjectHeight + padding * 2
+        );
+
+        // Calculate aspect ratio of crop area
+        const cropAspectRatio = cropWidth / cropHeight;
+        const targetAspectRatio = targetWidth / targetHeight;
+
+        let finalWidth, finalHeight;
+
+        if (cropAspectRatio > targetAspectRatio) {
+            // Crop area is wider than target - adjust height
+            finalWidth = targetWidth;
+            finalHeight = Math.round(targetWidth / cropAspectRatio);
+        } else {
+            // Crop area is taller than target - adjust width
+            finalHeight = targetHeight;
+            finalWidth = Math.round(targetHeight * cropAspectRatio);
+        }
+
+        // Ensure minimum dimensions
+        finalWidth = Math.max(finalWidth, subjectWidth);
+        finalHeight = Math.max(finalHeight, subjectHeight);
+
+        // Create canvas with adjusted dimensions
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = finalWidth;
+        canvas.height = finalHeight;
+
+        // Draw the subject-centered area
+        ctx.drawImage(
+            img.element,
+            cropX, cropY, cropWidth, cropHeight, // Source
+            0, 0, finalWidth, finalHeight        // Destination
+        );
+
+        const blob = await new Promise(resolve => {
+            canvas.toBlob(resolve, 'image/webp', options.quality || DEFAULT_WEBP_QUALITY);
+        });
+
+        return new File([blob], `${imageFile.name}-logo-protected.webp`, {
+            type: 'image/webp'
+        });
+
+    } catch (error) {
+        // Fallback to regular smart crop
+        return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
+    }
+};
+
+/**
+ * Processes SVG resize operation
  */
 export const processSVGResize = async (svgFile, width, height) => {
     return new Promise((resolve, reject) => {
@@ -1220,8 +1256,8 @@ export const processSVGResize = async (svgFile, width, height) => {
                     }
                 }
 
-                if (!originalWidth) originalWidth = SVG_DEFAULT_WIDTH;
-                if (!originalHeight) originalHeight = SVG_DEFAULT_HEIGHT;
+                if (!originalWidth) originalWidth = SVG_CONSTANTS.DEFAULT_WIDTH;
+                if (!originalHeight) originalHeight = SVG_CONSTANTS.DEFAULT_HEIGHT;
 
                 const aspectRatio = originalWidth / originalHeight;
                 let finalWidth = width;
@@ -1269,13 +1305,7 @@ export const processSVGResize = async (svgFile, width, height) => {
 };
 
 /**
- * Converts SVG to raster format.
- * @async
- * @param {File} svgFile - SVG file to convert
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
- * @param {string} format - Output format
- * @returns {Promise<File>} Converted raster file
+ * Converts SVG to raster format
  */
 export const convertSVGToRaster = async (svgFile, targetWidth, targetHeight, format = 'png') => {
     try {
@@ -1286,13 +1316,7 @@ export const convertSVGToRaster = async (svgFile, targetWidth, targetHeight, for
 };
 
 /**
- * Converts SVG to raster with aspect ratio preservation.
- * @async
- * @param {File} svgFile - SVG file to convert
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
- * @param {string} format - Output format
- * @returns {Promise<File>} Converted raster file
+ * Converts SVG to raster with aspect ratio preservation
  */
 const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHeight, format) => {
     return new Promise((resolve, reject) => {
@@ -1305,28 +1329,25 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                 const svgText = e.target.result;
 
                 if (!svgText || typeof svgText !== 'string') {
-                    throw new Error('Empty or invalid SVG content');
+                    throw new Error(PROCESSING_ERRORS.INVALID_SVG_CONTENT);
                 }
 
                 const trimmedText = svgText.trim();
                 if (trimmedText.length === 0) {
-                    throw new Error('Empty SVG content');
+                    throw new Error(PROCESSING_ERRORS.INVALID_SVG_CONTENT);
                 }
 
                 let finalSvgText = trimmedText;
                 if (!trimmedText.startsWith('<')) {
-                    finalSvgText = `<?xml version="1.0" encoding="UTF-8"?>
-                    <svg xmlns="http://www.w3.org/2000/svg"
-                         width="${targetWidth || SVG_DEFAULT_WIDTH}"
-                         height="${targetHeight || SVG_DEFAULT_HEIGHT}"
-                         viewBox="0 0 ${targetWidth || SVG_DEFAULT_WIDTH} ${targetHeight || SVG_DEFAULT_HEIGHT}">
-                        ${trimmedText}
-                    </svg>`;
+                    finalSvgText = SVG_XML_TEMPLATE
+                        .replace(/{width}/g, targetWidth || SVG_CONSTANTS.DEFAULT_WIDTH)
+                        .replace(/{height}/g, targetHeight || SVG_CONSTANTS.DEFAULT_HEIGHT)
+                        .replace(/{content}/g, trimmedText);
                 }
 
                 let svgElement;
-                let originalWidth = targetWidth || SVG_DEFAULT_WIDTH;
-                let originalHeight = targetHeight || SVG_DEFAULT_HEIGHT;
+                let originalWidth = targetWidth || SVG_CONSTANTS.DEFAULT_WIDTH;
+                let originalHeight = targetHeight || SVG_CONSTANTS.DEFAULT_HEIGHT;
 
                 try {
                     const parser = new DOMParser();
@@ -1355,22 +1376,20 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                             }
                         }
                     } catch (dimError) {
-                        // Continue with default dimensions
+                        // Use default values
                     }
 
                 } catch (parseError) {
-                    finalSvgText = `<?xml version="1.0" encoding="UTF-8"?>
-                    <svg xmlns="http://www.w3.org/2000/svg"
-                         width="${originalWidth}"
-                         height="${originalHeight}"
-                         viewBox="0 0 ${originalWidth} ${originalHeight}">
-                        <rect width="100%" height="100%" fill="${PLACEHOLDER_BACKGROUND}"/>
-                        <text x="50%" y="50%" text-anchor="middle" dy=".3em"
-                              font-family="${DEFAULT_FONT_FAMILY}" font-size="${Math.min(HEADLINE_FONT_SIZE, originalHeight / 10)}"
-                              fill="${PLACEHOLDER_TEXT}" font-weight="bold">
-                            SVG
-                        </text>
-                    </svg>`;
+                    finalSvgText = SVG_XML_TEMPLATE
+                        .replace(/{width}/g, originalWidth)
+                        .replace(/{height}/g, originalHeight)
+                        .replace(/{content}/g,
+                            `<rect width="100%" height="100%" fill="${IMAGE_COLORS.PLACEHOLDER_BACKGROUND}"/>
+                             <text x="50%" y="50%" text-anchor="middle" dy=".3em"
+                                   font-family="${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}" font-size="${Math.min(FONT_CONSTANTS.HEADLINE_FONT_SIZE, originalHeight / 10)}"
+                                   fill="${IMAGE_COLORS.PLACEHOLDER_TEXT}" font-weight="bold">
+                               ${FILE_TYPE_NAMES.SVG}
+                             </text>`);
                 }
 
                 let finalWidth, finalHeight;
@@ -1397,8 +1416,8 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                     finalHeight = originalHeight;
                 }
 
-                finalWidth = Math.max(SVG_MIN_SIZE, Math.round(finalWidth));
-                finalHeight = Math.max(SVG_MIN_SIZE, Math.round(finalHeight));
+                finalWidth = Math.min(SVG_CONSTANTS.MAX_SIZE, Math.max(SVG_CONSTANTS.MIN_SIZE, Math.round(finalWidth)));
+                finalHeight = Math.min(SVG_CONSTANTS.MAX_SIZE, Math.max(SVG_CONSTANTS.MIN_SIZE, Math.round(finalHeight)));
 
                 const svgBlob = new Blob([finalSvgText], { type: 'image/svg+xml' });
                 svgUrl = URL.createObjectURL(svgBlob);
@@ -1409,7 +1428,7 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                 const ctx = canvas.getContext('2d');
 
                 if (format === 'jpg' || format === 'jpeg') {
-                    ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
+                    ctx.fillStyle = APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_BACKGROUND_COLOR;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
 
@@ -1459,7 +1478,7 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
                 canvas.toBlob(
                     (blob) => {
                         if (!blob) {
-                            reject(new Error('Failed to create blob'));
+                            reject(new Error(PROCESSING_ERRORS.BLOB_CREATION_FAILED));
                             return;
                         }
 
@@ -1483,13 +1502,7 @@ const convertSVGToRasterWithAspectRatio = async (svgFile, targetWidth, targetHei
 };
 
 /**
- * Creates SVG placeholder with aspect ratio.
- * @async
- * @param {File} svgFile - Original SVG file
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
- * @param {string} format - Output format
- * @returns {Promise<File>} Placeholder image file
+ * Creates SVG placeholder with aspect ratio
  */
 const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetHeight, format) => {
     return new Promise((resolve) => {
@@ -1524,8 +1537,8 @@ const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetH
             finalHeight = targetHeight;
             finalWidth = targetHeight * aspectRatio;
         } else {
-            finalWidth = 400;
-            finalHeight = 400 / aspectRatio;
+            finalWidth = DEFAULT_PLACEHOLDER_DIMENSIONS.WIDTH;
+            finalHeight = DEFAULT_PLACEHOLDER_DIMENSIONS.WIDTH / aspectRatio;
         }
 
         finalWidth = Math.round(finalWidth);
@@ -1536,32 +1549,37 @@ const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetH
         canvas.height = finalHeight;
         const ctx = canvas.getContext('2d');
 
-        ctx.fillStyle = PLACEHOLDER_BACKGROUND;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (format === 'jpg' || format === 'jpeg') {
+            ctx.fillStyle = APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_BACKGROUND_COLOR;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } else {
+            ctx.fillStyle = IMAGE_COLORS.PLACEHOLDER_BACKGROUND;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
 
-        ctx.strokeStyle = PLACEHOLDER_BORDER;
+        ctx.strokeStyle = IMAGE_COLORS.PLACEHOLDER_BORDER;
         ctx.lineWidth = 2;
-        ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+        ctx.strokeRect(CROP_MARGIN, CROP_MARGIN, canvas.width - CROP_MARGIN * 2, canvas.height - CROP_MARGIN * 2);
 
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
 
-        ctx.fillStyle = INFO_COLOR;
-        ctx.font = `bold ${Math.min(32, canvas.height / 8)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillStyle = IMAGE_COLORS.INFO;
+        ctx.font = `bold ${Math.min(32, canvas.height / 8)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('SVG', centerX, centerY - 30);
+        ctx.fillText(FILE_TYPE_NAMES.SVG, centerX, centerY - 30);
 
-        ctx.fillStyle = PLACEHOLDER_TEXT;
-        ctx.font = `bold ${Math.min(18, canvas.height / 12)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillStyle = IMAGE_COLORS.PLACEHOLDER_TEXT;
+        ctx.font = `bold ${Math.min(18, canvas.height / 12)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
         ctx.fillText('Image', centerX, centerY);
 
-        ctx.fillStyle = PLACEHOLDER_TEXT;
-        ctx.font = `${Math.min(14, canvas.height / 16)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillStyle = IMAGE_COLORS.PLACEHOLDER_TEXT;
+        ctx.font = `${Math.min(14, canvas.height / 16)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
         ctx.fillText(`${Math.round(aspectRatio * 100) / 100}:1`, centerX, centerY + 30);
 
-        ctx.fillStyle = SUCCESS_COLOR;
-        ctx.font = `${Math.min(12, canvas.height / 20)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillStyle = IMAGE_COLORS.SUCCESS;
+        ctx.font = `${Math.min(12, canvas.height / 20)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
         ctx.fillText(`${finalWidth}×${finalHeight}`, centerX, centerY + 60);
 
         let mimeType, extension;
@@ -1585,7 +1603,7 @@ const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetH
         }
 
         canvas.toBlob((blob) => {
-            const baseName = svgFile.name.replace(/\.svg$/i, '') || 'svg-converted';
+            const baseName = svgFile.name.replace(/\.svg$/i, '') || TEMP_FILE_NAMES.CONVERTED_SVG;
             const fileName = `${baseName}-${finalWidth}x${finalHeight}.${extension}`;
             resolve(new File([blob], fileName, { type: mimeType }));
         }, mimeType, DEFAULT_QUALITY);
@@ -1593,17 +1611,14 @@ const createSVGPlaceholderWithAspectRatio = async (svgFile, targetWidth, targetH
 };
 
 /**
- * Converts legacy image formats to PNG.
- * @async
- * @param {File} imageFile - Legacy format image file
- * @returns {Promise<File>} Converted PNG file
+ * Converts legacy image formats to PNG
  */
 const convertLegacyFormat = async (imageFile) => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
     const isTIFF = TIFF_FORMATS.includes(mimeType) ||
-        fileName.endsWith('.tiff') || fileName.endsWith('.tif');
+        FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
 
     if (!LEGACY_FORMATS.includes(mimeType) && !isTIFF) {
         return imageFile;
@@ -1639,7 +1654,7 @@ const convertLegacyFormat = async (imageFile) => {
                 canvas.toBlob((blob) => {
                     URL.revokeObjectURL(objectUrl);
                     if (!blob) {
-                        reject(new Error('Failed to convert legacy format'));
+                        reject(new Error(PROCESSING_ERRORS.CONVERSION_FAILED));
                         return;
                     }
 
@@ -1654,7 +1669,7 @@ const convertLegacyFormat = async (imageFile) => {
 
             } catch (error) {
                 URL.revokeObjectURL(objectUrl);
-                reject(new Error(`Failed to convert ${mimeType}: ${error.message}`));
+                reject(new Error(`${ERROR_MESSAGES.TIFF_CONVERSION_FAILED}: ${error.message}`));
             }
         };
 
@@ -1662,7 +1677,8 @@ const convertLegacyFormat = async (imageFile) => {
             clearTimeout(timeout);
             URL.revokeObjectURL(objectUrl);
 
-            if (fileName.endsWith('.bmp') || fileName.endsWith('.ico')) {
+            if (FILE_EXTENSIONS.BMP.some(ext => fileName.endsWith(ext)) ||
+                FILE_EXTENSIONS.ICO.some(ext => fileName.endsWith(ext))) {
                 createSimpleLegacyConversion(imageFile)
                     .then(resolve)
                     .catch(() => reject(new Error(`Failed to load ${mimeType} image`)));
@@ -1676,10 +1692,7 @@ const convertLegacyFormat = async (imageFile) => {
 };
 
 /**
- * Converts TIFF using browser capabilities.
- * @async
- * @param {File} tiffFile - TIFF file to convert
- * @returns {Promise<File>} Converted PNG file
+ * Converts TIFF using browser capabilities
  */
 const convertTIFFWithBrowser = (tiffFile) => {
     return new Promise((resolve, reject) => {
@@ -1704,11 +1717,11 @@ const convertTIFFWithBrowser = (tiffFile) => {
                 canvas.toBlob((blob) => {
                     URL.revokeObjectURL(objectUrl);
                     if (!blob) {
-                        reject(new Error('Failed to create PNG'));
+                        reject(new Error(PROCESSING_ERRORS.BLOB_CREATION_FAILED));
                         return;
                     }
 
-                    const originalName = tiffFile.name || 'converted-tiff';
+                    const originalName = tiffFile.name || TEMP_FILE_NAMES.CONVERTED_TIFF;
                     const baseName = originalName.replace(/\.[^/.]+$/, '');
                     const newFileName = `${baseName}.png`;
 
@@ -1733,12 +1746,7 @@ const convertTIFFWithBrowser = (tiffFile) => {
 };
 
 /**
- * Optimizes image for web delivery.
- * @async
- * @param {File} imageFile - Image file to optimize
- * @param {number} quality - Compression quality (0-1)
- * @param {string} format - Output format
- * @returns {Promise<File>} Optimized image file
+ * Optimizes image for web delivery
  */
 export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, format = 'webp') => {
     if (!imageFile || typeof imageFile !== 'object') {
@@ -1749,19 +1757,26 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
     const isTIFF = TIFF_FORMATS.includes(mimeType) ||
-        fileName.endsWith('.tiff') || fileName.endsWith('.tif');
+        FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
 
-    if (mimeType === 'image/svg+xml' || fileName.endsWith('.svg')) {
+    if (mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext))) {
         try {
-            return await convertSVGToRaster(imageFile, 1000, 1000, format);
+            return await convertSVGToRaster(imageFile,
+                DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
+                DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
+                format);
         } catch (svgError) {
-            return await createSVGPlaceholderWithAspectRatio(imageFile, 1000, 1000, format);
+            return await createSVGPlaceholderWithAspectRatio(imageFile,
+                DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
+                DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
+                format);
         }
     }
 
     const isLegacyFormat = LEGACY_FORMATS.includes(mimeType) ||
-        fileName.endsWith('.tiff') || fileName.endsWith('.tif') ||
-        fileName.endsWith('.bmp') || fileName.endsWith('.ico');
+        FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext)) ||
+        FILE_EXTENSIONS.BMP.some(ext => fileName.endsWith(ext)) ||
+        FILE_EXTENSIONS.ICO.some(ext => fileName.endsWith(ext));
 
     let processedFile = imageFile;
 
@@ -1800,7 +1815,7 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
         try {
             objectUrl = URL.createObjectURL(processedFile);
         } catch (error) {
-            reject(new Error('Failed to create object URL for image'));
+            reject(new Error(PROCESSING_ERRORS.OBJECT_URL_FAILED));
             return;
         }
 
@@ -1815,7 +1830,7 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
             try {
                 if (img.naturalWidth === 0 || img.naturalHeight === 0) {
                     URL.revokeObjectURL(objectUrl);
-                    reject(new Error('Image has invalid dimensions'));
+                    reject(new Error(PROCESSING_ERRORS.INVALID_IMAGE_DIMENSIONS));
                     return;
                 }
 
@@ -1825,7 +1840,7 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
                 if (needsWhiteBackground) {
-                    ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
+                    ctx.fillStyle = APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_BACKGROUND_COLOR;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
 
@@ -1839,6 +1854,7 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
                     case 'jpeg':
                         mimeType = MIME_TYPE_MAP.jpg;
                         extension = 'jpg';
+                        targetQuality = DEFAULT_JPG_QUALITY;
                         break;
                     case 'png':
                         mimeType = MIME_TYPE_MAP.png;
@@ -1866,7 +1882,7 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
                 canvas.toBlob((blob) => {
                     URL.revokeObjectURL(objectUrl);
                     if (!blob) {
-                        reject(new Error('Failed to create blob'));
+                        reject(new Error(PROCESSING_ERRORS.BLOB_CREATION_FAILED));
                         return;
                     }
                     const originalName = imageFile.name || 'image';
@@ -1907,20 +1923,13 @@ export const optimizeForWeb = async (imageFile, quality = DEFAULT_QUALITY, forma
 };
 
 /**
- * Converts SVG to raster and crops it.
- * @async
- * @param {File} svgFile - SVG file to convert and crop
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
- * @param {string} format - Output format
- * @param {string} cropPosition - Crop position
- * @returns {Promise<File>} Cropped raster file
+ * Converts SVG to raster and crops it
  */
 export const convertSVGToRasterAndCrop = async (svgFile, targetWidth, targetHeight, format = 'webp', cropPosition = 'center') => {
     try {
-        const scaleFactor = 2;
-        const conversionWidth = Math.max(targetWidth, 500) * scaleFactor;
-        const conversionHeight = Math.max(targetHeight, 500) * scaleFactor;
+        const scaleFactor = PROCESSING_THRESHOLDS.DEFAULT_SCALE_FACTOR;
+        const conversionWidth = Math.max(targetWidth, DEFAULT_PLACEHOLDER_DIMENSIONS.WIDTH) * scaleFactor;
+        const conversionHeight = Math.max(targetHeight, DEFAULT_PLACEHOLDER_DIMENSIONS.HEIGHT) * scaleFactor;
 
         const rasterFile = await convertSVGToRaster(svgFile, conversionWidth, conversionHeight, 'png');
 
@@ -1944,18 +1953,15 @@ export const convertSVGToRasterAndCrop = async (svgFile, targetWidth, targetHeig
 };
 
 /**
- * Creates simple legacy format conversion placeholder.
- * @async
- * @param {File} imageFile - Legacy format image file
- * @returns {Promise<File>} Placeholder PNG file
+ * Creates simple legacy format conversion placeholder
  */
 const createSimpleLegacyConversion = async (imageFile) => {
     return new Promise((resolve) => {
         const canvas = document.createElement('canvas');
         const fileName = imageFile.name.toLowerCase();
 
-        let width = 800;
-        let height = 600;
+        let width = DEFAULT_PLACEHOLDER_DIMENSIONS.WIDTH;
+        let height = DEFAULT_PLACEHOLDER_DIMENSIONS.HEIGHT;
 
         const dimensionMatch = fileName.match(/(\d+)x(\d+)/);
         if (dimensionMatch) {
@@ -1963,7 +1969,7 @@ const createSimpleLegacyConversion = async (imageFile) => {
             height = parseInt(dimensionMatch[2]);
         }
 
-        const maxSize = 1200;
+        const maxSize = DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE;
         if (width > maxSize || height > maxSize) {
             const scale = Math.min(maxSize / width, maxSize / height);
             width = Math.round(width * scale);
@@ -1974,37 +1980,37 @@ const createSimpleLegacyConversion = async (imageFile) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
 
-        ctx.fillStyle = PLACEHOLDER_BACKGROUND;
+        ctx.fillStyle = APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_BACKGROUND_COLOR;
         ctx.fillRect(0, 0, width, height);
 
-        ctx.strokeStyle = PLACEHOLDER_BORDER;
+        ctx.strokeStyle = IMAGE_COLORS.PLACEHOLDER_BORDER;
         ctx.lineWidth = 2;
-        ctx.strokeRect(10, 10, width - 20, height - 20);
+        ctx.strokeRect(CROP_MARGIN, CROP_MARGIN, width - CROP_MARGIN * 2, height - CROP_MARGIN * 2);
 
-        let fileType = 'File';
-        if (fileName.endsWith('.tiff') || fileName.endsWith('.tif')) fileType = 'TIFF';
-        else if (fileName.endsWith('.bmp')) fileType = 'BMP';
-        else if (fileName.endsWith('.ico')) fileType = 'ICO';
+        let fileType = FILE_TYPE_NAMES.TIFF;
+        if (FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext))) fileType = FILE_TYPE_NAMES.TIFF;
+        else if (FILE_EXTENSIONS.BMP.some(ext => fileName.endsWith(ext))) fileType = FILE_TYPE_NAMES.BMP;
+        else if (FILE_EXTENSIONS.ICO.some(ext => fileName.endsWith(ext))) fileType = FILE_TYPE_NAMES.ICO;
 
         const centerX = width / 2;
         const centerY = height / 2;
 
-        ctx.fillStyle = PLACEHOLDER_TEXT;
-        ctx.font = `bold ${Math.min(48, height / 8)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillStyle = IMAGE_COLORS.PLACEHOLDER_TEXT;
+        ctx.font = `bold ${Math.min(48, height / 8)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(fileType, centerX, centerY - 50);
 
-        ctx.fillStyle = PLACEHOLDER_TEXT;
-        ctx.font = `bold ${Math.min(24, height / 12)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillStyle = IMAGE_COLORS.PLACEHOLDER_TEXT;
+        ctx.font = `bold ${Math.min(24, height / 12)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
         ctx.fillText('Legacy Format', centerX, centerY);
 
-        ctx.fillStyle = SUCCESS_COLOR;
-        ctx.font = `${Math.min(16, height / 16)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillStyle = IMAGE_COLORS.SUCCESS;
+        ctx.font = `${Math.min(16, height / 16)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
         ctx.fillText(`${width} × ${height}`, centerX, centerY + 40);
 
-        ctx.fillStyle = PLACEHOLDER_TEXT;
-        ctx.font = `${Math.min(14, height / 20)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillStyle = IMAGE_COLORS.PLACEHOLDER_TEXT;
+        ctx.font = `${Math.min(14, height / 20)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
         const displayName = imageFile.name.length > 30 ?
             imageFile.name.substring(0, 27) + '...' : imageFile.name;
         ctx.fillText(displayName, centerX, centerY + 80);
@@ -2018,10 +2024,7 @@ const createSimpleLegacyConversion = async (imageFile) => {
 };
 
 /**
- * Creates image objects from file list.
- * @async
- * @param {Array<File>} files - Array of files
- * @returns {Promise<Array<Object>>} Array of image objects
+ * Creates image objects from file list
  */
 export const createImageObjects = (files) => {
     return Promise.all(Array.from(files).map(async (file) => {
@@ -2031,12 +2034,12 @@ export const createImageObjects = (files) => {
         const mimeType = fileObj.type ? fileObj.type.toLowerCase() : '';
 
         const isTIFF = TIFF_FORMATS.includes(mimeType) ||
-            fileName.endsWith('.tiff') || fileName.endsWith('.tif');
-        const isSVG = mimeType === 'image/svg+xml' || fileName.endsWith('.svg');
+            FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
+        const isSVG = mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext));
 
         let previewUrl = null;
 
-        if (!isTIFF && !isSVG && fileObj.size < 500000) {
+        if (!isTIFF && !isSVG && fileObj.size < PROCESSING_THRESHOLDS.MAX_FILE_SIZE_PREVIEW) {
             try {
                 previewUrl = await fileToDataURL(fileObj);
             } catch (error) {
@@ -2063,10 +2066,7 @@ export const createImageObjects = (files) => {
 };
 
 /**
- * Converts file to data URL.
- * @async
- * @param {File} file - File to convert
- * @returns {Promise<string>} Data URL
+ * Converts file to data URL
  */
 const fileToDataURL = (file) => {
     return new Promise((resolve, reject) => {
@@ -2078,10 +2078,7 @@ const fileToDataURL = (file) => {
 };
 
 /**
- * Converts TIFF file for processing.
- * @async
- * @param {File} tiffFile - TIFF file to convert
- * @returns {Promise<File>} Converted PNG file
+ * Converts TIFF file for processing
  */
 const convertTIFFForProcessing = async (tiffFile) => {
     try {
@@ -2089,7 +2086,7 @@ const convertTIFFForProcessing = async (tiffFile) => {
             const result = await convertTIFFSimple(tiffFile);
             return result;
         } catch (simpleError) {
-            // Continue to next method
+            // Continue to UTIF method
         }
 
         if (window.UTIF && typeof window.UTIF.decode === 'function') {
@@ -2097,14 +2094,14 @@ const convertTIFFForProcessing = async (tiffFile) => {
                 const result = await convertTIFFWithUTIFRobust(tiffFile);
                 return result;
             } catch (utifError) {
-                // Continue to next method
+                // Continue to placeholder method
             }
         }
 
         try {
             return await createTIFFPlaceholderFromInfo(tiffFile);
         } catch (placeholderError) {
-            // Continue to next method
+            // Use final fallback
         }
 
         return await createTIFFPlaceholderFile(tiffFile);
@@ -2115,18 +2112,15 @@ const convertTIFFForProcessing = async (tiffFile) => {
 };
 
 /**
- * Creates TIFF placeholder from file info.
- * @async
- * @param {File} tiffFile - TIFF file
- * @returns {Promise<File>} Placeholder PNG file
+ * Creates TIFF placeholder from file info
  */
 const createTIFFPlaceholderFromInfo = async (tiffFile) => {
     return new Promise((resolve) => {
         const canvas = document.createElement('canvas');
 
         const fileName = tiffFile.name || '';
-        let width = 800;
-        let height = 600;
+        let width = DEFAULT_PLACEHOLDER_DIMENSIONS.WIDTH;
+        let height = DEFAULT_PLACEHOLDER_DIMENSIONS.HEIGHT;
 
         const dimensionMatch = fileName.match(/(\d+)[x×](\d+)/i);
         if (dimensionMatch) {
@@ -2134,7 +2128,7 @@ const createTIFFPlaceholderFromInfo = async (tiffFile) => {
             height = parseInt(dimensionMatch[2]);
         }
 
-        const maxSize = 1200;
+        const maxSize = DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE;
         if (width > maxSize || height > maxSize) {
             const scale = Math.min(maxSize / width, maxSize / height);
             width = Math.round(width * scale);
@@ -2145,42 +2139,43 @@ const createTIFFPlaceholderFromInfo = async (tiffFile) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
 
+        ctx.fillStyle = APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_BACKGROUND_COLOR;
+        ctx.fillRect(0, 0, width, height);
+
         const gradient = ctx.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, INFO_COLOR);
-        gradient.addColorStop(0.5, SUCCESS_COLOR);
+        gradient.addColorStop(0, IMAGE_COLORS.INFO);
+        gradient.addColorStop(0.5, IMAGE_COLORS.SUCCESS);
         gradient.addColorStop(1, '#f0ad4e');
+
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
-        ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
-        ctx.font = `bold ${Math.min(60, width / 10)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillStyle = APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_BACKGROUND_COLOR;
+        ctx.font = `bold ${Math.min(60, width / 10)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('TIFF', width / 2, height / 2 - 40);
+        ctx.fillText(FILE_TYPE_NAMES.TIFF, width / 2, height / 2 - 40);
 
-        ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
-        ctx.font = `bold ${Math.min(24, width / 20)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.fillStyle = APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_BACKGROUND_COLOR;
+        ctx.font = `bold ${Math.min(24, width / 20)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
         ctx.fillText('TIFF Image', width / 2, height / 2 + 20);
 
-        ctx.font = `${Math.min(16, width / 30)}px ${DEFAULT_FONT_FAMILY}`;
+        ctx.font = `${Math.min(16, width / 30)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
         ctx.fillText(`${width} × ${height}`, width / 2, height / 2 + 60);
 
         canvas.toBlob((blob) => {
             const newName = fileName ?
                 fileName.replace(/\.(tiff|tif)$/i, '.png') :
-                'converted-tiff.png';
+                TEMP_FILE_NAMES.CONVERTED_TIFF;
             resolve(new File([blob], newName, { type: 'image/png' }));
         }, 'image/png', DEFAULT_PNG_QUALITY);
     });
 };
 
 /**
- * Converts TIFF using UTIF with robust error handling.
- * @async
- * @param {File} tiffFile - TIFF file to convert
- * @returns {Promise<File>} Converted PNG file
+ * Converts TIFF using UTIF with robust error handling
  */
-const convertTIFFWithUTIFRobust = (tiffFile) => {
+export const convertTIFFWithUTIFRobust = (tiffFile) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
 
@@ -2192,7 +2187,7 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                 try {
                     ifds = window.UTIF.decode(arrayBuffer);
                     if (!ifds || ifds.length === 0) {
-                        throw new Error('No TIFF data found');
+                        throw new Error(PROCESSING_ERRORS.TIFF_NO_DATA);
                     }
                 } catch (decodeError) {
                     reject(new Error(`${ERROR_MESSAGES.TIFF_CONVERSION_FAILED}: ${decodeError.message}`));
@@ -2211,11 +2206,11 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                         decodeSuccess = true;
                     }
                 } catch (imageDecodeError) {
-                    // Continue without decode
+                    // Continue with placeholder
                 }
 
-                let width = 800;
-                let height = 600;
+                let width = DEFAULT_PLACEHOLDER_DIMENSIONS.WIDTH;
+                let height = DEFAULT_PLACEHOLDER_DIMENSIONS.HEIGHT;
 
                 const widthSources = [
                     firstIFD.width,
@@ -2261,7 +2256,7 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                             rgbaSuccess = true;
                         }
                     } catch (rgbaError) {
-                        // Continue without RGBA
+                        // Continue with placeholder
                     }
                 }
 
@@ -2292,11 +2287,11 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
 
                     canvas.toBlob((blob) => {
                         if (!blob) {
-                            reject(new Error('Failed to create PNG'));
+                            reject(new Error(PROCESSING_ERRORS.BLOB_CREATION_FAILED));
                             return;
                         }
 
-                        const originalName = tiffFile.name || 'converted-tiff';
+                        const originalName = tiffFile.name || TEMP_FILE_NAMES.CONVERTED_TIFF;
                         const baseName = originalName.replace(/\.[^/.]+$/, '');
                         const newFileName = `${baseName}.png`;
 
@@ -2306,7 +2301,7 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                 } else {
                     const canvas = document.createElement('canvas');
 
-                    const maxSize = 1200;
+                    const maxSize = DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE;
                     if (width > maxSize || height > maxSize) {
                         const scale = Math.min(maxSize / width, maxSize / height);
                         width = Math.round(width * scale);
@@ -2317,47 +2312,50 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
 
+                    ctx.fillStyle = APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_BACKGROUND_COLOR;
+                    ctx.fillRect(0, 0, width, height);
+
                     const gradient = ctx.createLinearGradient(0, 0, width, height);
-                    gradient.addColorStop(0, INFO_COLOR);
-                    gradient.addColorStop(0.5, SUCCESS_COLOR);
+                    gradient.addColorStop(0, IMAGE_COLORS.INFO);
+                    gradient.addColorStop(0.5, IMAGE_COLORS.SUCCESS);
                     gradient.addColorStop(1, '#f0ad4e');
                     ctx.fillStyle = gradient;
                     ctx.fillRect(0, 0, width, height);
 
                     ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
                     ctx.lineWidth = 4;
-                    ctx.strokeRect(20, 20, width - 40, height - 40);
+                    ctx.strokeRect(CROP_MARGIN * 2, CROP_MARGIN * 2, width - CROP_MARGIN * 4, height - CROP_MARGIN * 4);
 
                     const centerX = width / 2;
                     const centerY = height / 2;
 
-                    ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
+                    ctx.fillStyle = APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_BACKGROUND_COLOR;
                     const iconSize = Math.min(60, width / 8);
-                    ctx.font = `bold ${iconSize}px ${DEFAULT_FONT_FAMILY}`;
+                    ctx.font = `bold ${iconSize}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText('TIFF', centerX, centerY - 50);
+                    ctx.fillText(FILE_TYPE_NAMES.TIFF, centerX, centerY - 50);
 
-                    ctx.fillStyle = DEFAULT_BACKGROUND_COLOR;
+                    ctx.fillStyle = APP_TEMPLATE_CONFIG.FAVICON.DEFAULT_BACKGROUND_COLOR;
                     const titleSize = Math.min(28, width / 15);
-                    ctx.font = `bold ${titleSize}px ${DEFAULT_FONT_FAMILY}`;
+                    ctx.font = `bold ${titleSize}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
                     ctx.fillText('TIFF Image', centerX, centerY);
 
                     const infoSize = Math.min(18, width / 25);
-                    ctx.font = `${infoSize}px ${DEFAULT_FONT_FAMILY}`;
+                    ctx.font = `${infoSize}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
                     ctx.fillText(`${width} × ${height}`, centerX, centerY + 40);
 
-                    ctx.fillStyle = ERROR_TEXT_COLOR;
-                    ctx.font = `${Math.min(14, width / 30)}px ${DEFAULT_FONT_FAMILY}`;
+                    ctx.fillStyle = IMAGE_COLORS.ERROR_TEXT;
+                    ctx.font = `${Math.min(14, width / 30)}px ${FONT_CONSTANTS.DEFAULT_FONT_FAMILY}`;
                     ctx.fillText('Preview Not Available', centerX, centerY + 80);
 
                     canvas.toBlob((blob) => {
                         if (!blob) {
-                            reject(new Error('Failed to create placeholder'));
+                            reject(new Error(PROCESSING_ERRORS.PLACEHOLDER_FAILED));
                             return;
                         }
 
-                        const originalName = tiffFile.name || 'converted-tiff';
+                        const originalName = tiffFile.name || TEMP_FILE_NAMES.CONVERTED_TIFF;
                         const baseName = originalName.replace(/\.[^/.]+$/, '');
                         const newFileName = `${baseName}.png`;
                         resolve(new File([blob], newFileName, { type: 'image/png' }));
@@ -2375,10 +2373,7 @@ const convertTIFFWithUTIFRobust = (tiffFile) => {
 };
 
 /**
- * Converts TIFF using simple browser method.
- * @async
- * @param {File} tiffFile - TIFF file to convert
- * @returns {Promise<File>} Converted PNG file
+ * Converts TIFF using simple browser method
  */
 const convertTIFFSimple = (tiffFile) => {
     return new Promise((resolve, reject) => {
@@ -2405,11 +2400,11 @@ const convertTIFFSimple = (tiffFile) => {
                     URL.revokeObjectURL(objectUrl);
 
                     if (!blob) {
-                        reject(new Error('Failed to create PNG'));
+                        reject(new Error(PROCESSING_ERRORS.BLOB_CREATION_FAILED));
                         return;
                     }
 
-                    const originalName = tiffFile.name || 'converted-tiff';
+                    const originalName = tiffFile.name || TEMP_FILE_NAMES.CONVERTED_TIFF;
                     const baseName = originalName.replace(/\.[^/.]+$/, '');
                     const newFileName = `${baseName}.png`;
 
@@ -2434,8 +2429,7 @@ const convertTIFFSimple = (tiffFile) => {
 };
 
 /**
- * Cleans up blob URLs from image objects.
- * @param {Array<Object>} imageObjects - Array of image objects
+ * Cleans up blob URLs from image objects
  */
 export const cleanupBlobUrls = (imageObjects) => {
     if (!imageObjects || !Array.isArray(imageObjects)) return;
@@ -2446,7 +2440,7 @@ export const cleanupBlobUrls = (imageObjects) => {
                 URL.revokeObjectURL(image.url);
                 image.url = null;
             } catch (e) {
-                // Ignore errors if URL was already revoked
+                // Ignore errors
             }
         }
 
@@ -2471,10 +2465,7 @@ export const cleanupBlobUrls = (imageObjects) => {
 };
 
 /**
- * Checks if image has transparency.
- * @async
- * @param {File} file - Image file to check
- * @returns {Promise<boolean>} Whether image has transparency
+ * Checks if image has transparency
  */
 export const checkImageTransparency = async (file) => {
     return new Promise((resolve) => {
@@ -2492,9 +2483,10 @@ export const checkImageTransparency = async (file) => {
             'image/vnd.microsoft.icon', 'image/heic', 'image/heif'
         ];
 
-        if (fileName.endsWith('.jpeg') || fileName.endsWith('.jpg') ||
-            fileName.endsWith('.bmp') || fileName.endsWith('.tiff') ||
-            fileName.endsWith('.tif') || fileName.endsWith('.ico') ||
+        if (FILE_EXTENSIONS.JPEG.some(ext => fileName.endsWith(ext)) ||
+            FILE_EXTENSIONS.BMP.some(ext => fileName.endsWith(ext)) ||
+            FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext)) ||
+            FILE_EXTENSIONS.ICO.some(ext => fileName.endsWith(ext)) ||
             fileName.endsWith('.heic') || fileName.endsWith('.heif')) {
             resolve(false);
             return;
@@ -2505,7 +2497,7 @@ export const checkImageTransparency = async (file) => {
             return;
         }
 
-        if (mimeType === 'image/svg+xml' || fileName.endsWith('.svg')) {
+        if (mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext))) {
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
@@ -2539,7 +2531,7 @@ export const checkImageTransparency = async (file) => {
             return;
         }
 
-        if (mimeType === 'image/gif' || fileName.endsWith('.gif')) {
+        if (mimeType === 'image/gif' || FILE_EXTENSIONS.GIF.some(ext => fileName.endsWith(ext))) {
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
@@ -2582,10 +2574,10 @@ export const checkImageTransparency = async (file) => {
         ];
 
         const isTransparentFormat = transparentFormats.includes(mimeType) ||
-            fileName.endsWith('.png') ||
-            fileName.endsWith('.webp') ||
-            fileName.endsWith('.avif') ||
-            fileName.endsWith('.apng');
+            FILE_EXTENSIONS.PNG.some(ext => fileName.endsWith(ext)) ||
+            FILE_EXTENSIONS.WEBP.some(ext => fileName.endsWith(ext)) ||
+            FILE_EXTENSIONS.AVIF.some(ext => fileName.endsWith(ext)) ||
+            FILE_EXTENSIONS.APNG.some(ext => fileName.endsWith(ext));
 
         if (!isTransparentFormat) {
             resolve(false);
@@ -2615,11 +2607,11 @@ export const checkImageTransparency = async (file) => {
 
                 const totalPixels = canvas.width * canvas.height;
 
-                if (totalPixels > 1000000) {
+                if (totalPixels > SAMPLING_CONSTANTS.CHECK_PIXELS_COUNT) {
                     const sampleCanvas = document.createElement('canvas');
                     const sampleCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
 
-                    const maxSampleSize = 1000;
+                    const maxSampleSize = SAMPLING_CONSTANTS.MAX_SAMPLE_SIZE;
                     let sampleWidth, sampleHeight;
 
                     if (canvas.width > canvas.height) {
@@ -2667,7 +2659,7 @@ export const checkImageTransparency = async (file) => {
                                 return;
                             }
                         } catch (error) {
-                            // Continue to next area
+                            // Ignore area errors
                         }
                     }
 
@@ -2678,9 +2670,9 @@ export const checkImageTransparency = async (file) => {
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const data = imageData.data;
 
-                        let stride = 1;
-                        if (totalPixels > 250000) stride = 4;
-                        else if (totalPixels > 100000) stride = 2;
+                        let stride = SAMPLING_CONSTANTS.STRIDE_SMALL;
+                        if (totalPixels > PROCESSING_THRESHOLDS.TRANSPARENCY_CHECK_PIXELS) stride = SAMPLING_CONSTANTS.STRIDE_LARGE;
+                        else if (totalPixels > 100000) stride = SAMPLING_CONSTANTS.STRIDE_MEDIUM;
 
                         for (let i = 3; i < data.length; i += 4 * stride) {
                             if (data[i] < 255) {
@@ -2690,7 +2682,7 @@ export const checkImageTransparency = async (file) => {
                             }
                         }
 
-                        if (stride > 1) {
+                        if (stride > SAMPLING_CONSTANTS.STRIDE_SMALL) {
                             const checkPixels = [
                                 { x: 0, y: 0 },
                                 { x: canvas.width - 1, y: 0 },
@@ -2739,16 +2731,12 @@ export const checkImageTransparency = async (file) => {
 };
 
 /**
- * Checks transparency by sampling image data.
- * @param {CanvasRenderingContext2D} ctx - Canvas context
- * @param {number} width - Image width
- * @param {number} height - Image height
- * @returns {boolean} Whether image has transparency
+ * Checks transparency by sampling image data
  */
 const checkTransparencyBySampling = (ctx, width, height) => {
     try {
-        const sampleWidth = Math.min(100, width);
-        const sampleHeight = Math.min(100, height);
+        const sampleWidth = Math.min(SAMPLING_CONSTANTS.SAMPLING_WIDTH, width);
+        const sampleHeight = Math.min(SAMPLING_CONSTANTS.SAMPLING_HEIGHT, height);
         const sampleCanvas = document.createElement('canvas');
         sampleCanvas.width = sampleWidth;
         sampleCanvas.height = sampleHeight;
@@ -2771,10 +2759,7 @@ const checkTransparencyBySampling = (ctx, width, height) => {
 };
 
 /**
- * Checks image transparency with detailed information.
- * @async
- * @param {File} file - Image file to check
- * @returns {Promise<Object>} Detailed transparency information
+ * Checks image transparency with detailed information
  */
 export const checkImageTransparencyDetailed = async (file) => {
     return new Promise((resolve) => {
@@ -2788,9 +2773,10 @@ export const checkImageTransparencyDetailed = async (file) => {
         const mimeType = file.type.toLowerCase();
 
         if (nonTransparentFormats.includes(mimeType) ||
-            fileName.endsWith('.jpeg') || fileName.endsWith('.jpg') ||
-            fileName.endsWith('.bmp') || fileName.endsWith('.tiff') ||
-            fileName.endsWith('.tif') || fileName.endsWith('.ico') ||
+            FILE_EXTENSIONS.JPEG.some(ext => fileName.endsWith(ext)) ||
+            FILE_EXTENSIONS.BMP.some(ext => fileName.endsWith(ext)) ||
+            FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext)) ||
+            FILE_EXTENSIONS.ICO.some(ext => fileName.endsWith(ext)) ||
             fileName.endsWith('.heic') || fileName.endsWith('.heif')) {
             resolve({
                 hasTransparency: false,
@@ -2801,7 +2787,7 @@ export const checkImageTransparencyDetailed = async (file) => {
             return;
         }
 
-        if (mimeType === 'image/svg+xml' || fileName.endsWith('.svg')) {
+        if (mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext))) {
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
@@ -2816,10 +2802,7 @@ export const checkImageTransparencyDetailed = async (file) => {
                         svgText.includes('fill="none"') ||
                         svgText.includes('stroke="none"') ||
                         svgText.includes('fill: none') ||
-                        svgText.includes('stroke: none') ||
-                        svgText.includes('fill:#00000000') ||
-                        svgText.includes('fill: transparent') ||
-                        svgText.includes('stroke: transparent');
+                        svgText.includes('stroke: none');
 
                     resolve({
                         hasTransparency,
@@ -2846,7 +2829,7 @@ export const checkImageTransparencyDetailed = async (file) => {
             return;
         }
 
-        if (mimeType === 'image/gif' || fileName.endsWith('.gif')) {
+        if (mimeType === 'image/gif' || FILE_EXTENSIONS.GIF.some(ext => fileName.endsWith(ext))) {
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
@@ -2899,10 +2882,10 @@ export const checkImageTransparencyDetailed = async (file) => {
             else if (mimeType.includes('webp')) format = 'webp';
             else if (mimeType.includes('avif')) format = 'avif';
             else if (mimeType.includes('apng')) format = 'apng';
-            else if (fileName.endsWith('.png')) format = 'png';
-            else if (fileName.endsWith('.webp')) format = 'webp';
-            else if (fileName.endsWith('.avif')) format = 'avif';
-            else if (fileName.endsWith('.apng')) format = 'apng';
+            else if (FILE_EXTENSIONS.PNG.some(ext => fileName.endsWith(ext))) format = 'png';
+            else if (FILE_EXTENSIONS.WEBP.some(ext => fileName.endsWith(ext))) format = 'webp';
+            else if (FILE_EXTENSIONS.AVIF.some(ext => fileName.endsWith(ext))) format = 'avif';
+            else if (FILE_EXTENSIONS.APNG.some(ext => fileName.endsWith(ext))) format = 'apng';
 
             let type = 'opaque';
             let alphaChannel = false;
@@ -2938,10 +2921,7 @@ export const checkImageTransparencyDetailed = async (file) => {
 };
 
 /**
- * Quickly checks image transparency.
- * @async
- * @param {File} file - Image file to check
- * @returns {Promise<boolean>} Whether image has transparency
+ * Quickly checks image transparency
  */
 export const checkImageTransparencyQuick = async (file) => {
     const nonTransparentFormats = [
@@ -2953,9 +2933,10 @@ export const checkImageTransparencyQuick = async (file) => {
     const fileName = file.name.toLowerCase();
     const mimeType = file.type.toLowerCase();
 
-    if (fileName.endsWith('.jpeg') || fileName.endsWith('.jpg') ||
-        fileName.endsWith('.bmp') || fileName.endsWith('.tiff') ||
-        fileName.endsWith('.tif') || fileName.endsWith('.ico') ||
+    if (FILE_EXTENSIONS.JPEG.some(ext => fileName.endsWith(ext)) ||
+        FILE_EXTENSIONS.BMP.some(ext => fileName.endsWith(ext)) ||
+        FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext)) ||
+        FILE_EXTENSIONS.ICO.some(ext => fileName.endsWith(ext)) ||
         fileName.endsWith('.heic') || fileName.endsWith('.heif')) {
         return false;
     }
@@ -2964,7 +2945,7 @@ export const checkImageTransparencyQuick = async (file) => {
         return false;
     }
 
-    if (mimeType === 'image/svg+xml' || fileName.endsWith('.svg')) {
+    if (mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext))) {
         return new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -2984,7 +2965,7 @@ export const checkImageTransparencyQuick = async (file) => {
         });
     }
 
-    if (mimeType === 'image/gif' || fileName.endsWith('.gif')) {
+    if (mimeType === 'image/gif' || FILE_EXTENSIONS.GIF.some(ext => fileName.endsWith(ext))) {
         return new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -3020,10 +3001,7 @@ export const checkImageTransparencyQuick = async (file) => {
 };
 
 /**
- * Generates processing summary.
- * @param {Object} summaryData - Summary data
- * @param {Function} t - Translation function
- * @returns {Object} Processing summary
+ * Generates processing summary
  */
 export const generateProcessingSummary = (summaryData, t) => {
     const summary = {
@@ -3070,9 +3048,7 @@ export const generateProcessingSummary = (summaryData, t) => {
 };
 
 /**
- * Validates image files.
- * @param {Array<File>} files - Array of files to validate
- * @returns {Array<File>} Validated image files
+ * Validates image files
  */
 export const validateImageFiles = (files) => {
     return Array.from(files).filter(file => {
@@ -3084,9 +3060,7 @@ export const validateImageFiles = (files) => {
 };
 
 /**
- * Gets processing configuration from options.
- * @param {Object} processingOptions - Processing options
- * @returns {Object} Processing configuration
+ * Gets processing configuration from options
  */
 export const getProcessingConfiguration = (processingOptions) => {
     const config = {
@@ -3123,8 +3097,7 @@ export const getProcessingConfiguration = (processingOptions) => {
 };
 
 /**
- * Gets available output formats.
- * @returns {Array<string>} Available formats
+ * Gets available output formats
  */
 export const getAvailableFormats = () => {
     return OUTPUT_FORMATS;
@@ -3307,7 +3280,7 @@ const calculateUpscaleFactor = (originalWidth, originalHeight, targetWidth, targ
         }
     }
 
-    if (requiredScale > 1) return Math.min(requiredScale, 2);
+    if (requiredScale > 1) return Math.min(requiredScale, PROCESSING_THRESHOLDS.DEFAULT_SCALE_FACTOR);
     return 1;
 };
 
@@ -3384,7 +3357,7 @@ const upscaleImageWithAI = async (imageFile, scale, originalName) => {
         if (!availableScales.includes(scale) || scale > maxScaleFactor) {
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
-            return upscaleImageEnhancedFallback(imageFile, Math.min(scale, 2), originalName);
+            return upscaleImageEnhancedFallback(imageFile, Math.min(scale, PROCESSING_THRESHOLDS.DEFAULT_SCALE_FACTOR), originalName);
         }
 
         let upscaler;
@@ -3670,7 +3643,7 @@ const createEnhancedFallbackUpscaler = (scale) => {
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
 
-            if (safeDimensions.scale >= 2) {
+            if (safeDimensions.scale >= PROCESSING_THRESHOLDS.DEFAULT_SCALE_FACTOR) {
                 applySmartSharpening(canvas, ctx, safeDimensions.scale);
             }
 
@@ -3761,7 +3734,7 @@ const upscaleImageEnhancedFallback = async (imageFile, scale, originalName) => {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
-    if (scale >= 2) applySmartSharpening(canvas, ctx, scale);
+    if (scale >= PROCESSING_THRESHOLDS.DEFAULT_SCALE_FACTOR) applySmartSharpening(canvas, ctx, scale);
 
     URL.revokeObjectURL(objectUrl);
 
@@ -3932,7 +3905,7 @@ const resizeImageForCrop = async (imageFile, targetWidth, targetHeight) => {
                     }
 
                     resolve({
-                        file: new File([blob], 'resized-temp.webp', { type: 'image/webp' }),
+                        file: new File([blob], TEMP_FILE_NAMES.RESIZED, { type: 'image/webp' }),
                         width: scaledWidth,
                         height: scaledHeight,
                         scale
@@ -4035,7 +4008,7 @@ const loadImageWithPerformance = (file) => {
         img.onerror = onError;
         img.src = url;
 
-        if (file.size > 2000000 && img.decode) {
+        if (file.size > PROCESSING_THRESHOLDS.HUGE_FILE_SIZE && img.decode) {
             img.decode().then(onLoad).catch(onError);
         }
     });
@@ -4127,7 +4100,7 @@ const cropFromResized = async (resized, targetWidth, targetHeight, position, ori
         offsetX = subjectCenterX - targetWidth / 2;
         offsetY = subjectCenterY - targetHeight / 2;
 
-        const margin = Math.min(CROP_MARGIN, width * 0.1, height * 0.1);
+        const margin = Math.min(CROP_MARGIN, width * PROCESSING_THRESHOLDS.MIN_PADDING_PERCENT, height * PROCESSING_THRESHOLDS.MIN_PADDING_PERCENT);
 
         if (x < margin) offsetX = Math.max(0, offsetX - (margin - x));
         if (x + width > resized.width - margin) offsetX = Math.min(offsetX, resized.width - targetWidth);
@@ -4187,7 +4160,9 @@ const cropFromResized = async (resized, targetWidth, targetHeight, position, ori
  */
 const getLuminance = (data, idx) => {
     if (idx < 0 || idx >= data.length) return 0;
-    return 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+    return COLOR_DETECTION.LUMINANCE_RED * data[idx] +
+        COLOR_DETECTION.LUMINANCE_GREEN * data[idx + 1] +
+        COLOR_DETECTION.LUMINANCE_BLUE * data[idx + 2];
 };
 
 /**
@@ -4223,12 +4198,14 @@ const findMainSubject = (predictions, imgWidth, imgHeight) => {
         const maxDistance = Math.sqrt(Math.pow(imgWidth / 2, 2) + Math.pow(imgHeight / 2, 2));
         const centralityScore = 1 - (distanceFromCenter / maxDistance);
 
-        let classWeight = 1.0;
-        if (['person', 'man', 'woman', 'boy', 'girl'].includes(pred.class)) classWeight = 1.5;
-        if (pred.class.includes('face')) classWeight = 1.3;
-        if (['dog', 'cat', 'bird'].includes(pred.class)) classWeight = 1.2;
+        let classWeight = AI_MODEL_WEIGHTS.DEFAULT_CLASS_WEIGHT;
+        if (['person', 'man', 'woman', 'boy', 'girl'].includes(pred.class)) classWeight = AI_MODEL_WEIGHTS.PERSON_CLASS_WEIGHT;
+        if (pred.class.includes('face')) classWeight = AI_MODEL_WEIGHTS.FACE_CLASS_WEIGHT;
+        if (['dog', 'cat', 'bird'].includes(pred.class)) classWeight = AI_MODEL_WEIGHTS.ANIMAL_CLASS_WEIGHT;
 
-        const score = (sizeScore * 0.4 + confidenceScore * 0.4 + centralityScore * 0.2) * classWeight;
+        const score = (sizeScore * AI_MODEL_WEIGHTS.SIZE_WEIGHT +
+            confidenceScore * AI_MODEL_WEIGHTS.CONFIDENCE_WEIGHT +
+            centralityScore * AI_MODEL_WEIGHTS.CENTRALITY_WEIGHT) * classWeight;
 
         return {
             ...pred,
@@ -4263,7 +4240,7 @@ const detectFocalPointSimple = async (imgElement, width, height) => {
     const data = imageData.data;
 
     let totalX = 0, totalY = 0, count = 0;
-    const edgeThreshold = 30;
+    const edgeThreshold = PROCESSING_THRESHOLDS.EDGE_DETECTION_THRESHOLD;
 
     for (let y = 1; y < height - 1; y++) {
         for (let x = 1; x < width - 1; x++) {
@@ -4305,7 +4282,7 @@ const detectFocalPointSimple = async (imgElement, width, height) => {
  * @returns {string} Adjusted crop position
  */
 const adjustCropPositionForFocalPoint = (position, focalPoint, width, height) => {
-    const THRESHOLD = 0.3;
+    const THRESHOLD = PROCESSING_THRESHOLDS.FOCAL_POINT_THRESHOLD;
 
     const centerX = width / 2;
     const centerY = height / 2;
@@ -4408,29 +4385,6 @@ export const cleanupAllResources = () => {
 
     aiUpscalingDisabled = false;
     textureManagerFailures = 0;
-};
-
-/**
- * Orchestrates custom image processing workflow.
- * @async
- * @param {Array<Object>} images - Array of image objects to process
- * @param {Object} processingConfig - Processing configuration
- * @param {boolean} aiModelLoaded - Whether AI model is loaded
- * @returns {Promise<Array<Object>>} Array of processed images
- */
-export const orchestrateCustomProcessing = async (images, processingConfig, aiModelLoaded) => {
-    try {
-        const processedImages = [];
-
-        for (const image of images) {
-            const processedImage = await processSingleImage(image, processingConfig, aiModelLoaded);
-            processedImages.push(processedImage);
-        }
-
-        return processedImages;
-    } catch (error) {
-        throw error;
-    }
 };
 
 if (typeof window !== 'undefined') {

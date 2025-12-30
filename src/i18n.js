@@ -2,37 +2,27 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
-// Translation resources
 const resources = {
     en: {
         translation: {
-            // App Titles
             'app.title': 'Image LemGendizer',
             'app.subtitle': 'Batch Image Processing & Optimization Tool',
-            'app.version': 'Image LemGendizer v2.5.0',
+            'app.version': 'Image LemGendizer v2.6.0',
             'app.processClientSide': 'All processing is done client-side',
             'app.imagesNeverLeave': 'Your images never leave your browser',
-
-            // Upload Section
             'upload.dropZone.title': 'Drop images here or click to upload',
             'upload.dropZone.supported': 'Supports JPG, PNG, GIF, WebP, SVG, AVIF, TIFF, BMP, ICO',
             'upload.dropZone.processing': 'All processing happens in your browser',
             'upload.selectImages': 'Select Images',
-
-            // Processing Mode
             'mode.title': 'Processing Mode',
             'mode.custom': 'Custom Processing',
             'mode.templates': 'Templates',
             'mode.customInfo': 'Custom Mode: Select MULTIPLE images for batch processing',
             'mode.templatesInfo': 'Templates Mode: Select ONE image to apply templates',
-
-            // Compression Settings
             'compression.title': 'Compression',
             'compression.quality': 'Quality (1-100)',
             'compression.targetSize': 'Target File Size (KB, optional)',
             'compression.auto': 'Leave empty for auto',
-
-            // Output Settings
             'output.title': 'Output Settings',
             'output.format': 'Output Format',
             'output.format.webp': 'WebP',
@@ -46,15 +36,16 @@ const resources = {
             'output.rename': 'Batch Rename',
             'output.newFileName': 'New File Name',
             'output.newFileName.placeholder': 'e.g., product-image',
-
-            // Resize
+            'output.format.description.webp': 'Modern format with excellent compression',
+            'output.format.description.avif': 'Next-gen format with superior compression',
+            'output.format.description.jpg': 'Standard format with good compression',
+            'output.format.description.png': 'Lossless format with transparency support',
+            'output.format.description.original': 'Keep original format',
             'resize.title': 'Resize',
             'resize.switchToCrop': 'Crop Mode',
             'resize.switchToResize': 'Resize Mode',
             'resize.dimension': 'Resize Dimension (px)',
             'resize.helper': 'For portrait: sets height. For landscape: sets width. Aspect ratio maintained.',
-
-            // Crop
             'crop.title': 'Crop',
             'crop.switchToStandard': 'Standard Crop',
             'crop.switchToSmart': 'Smart Crop',
@@ -74,8 +65,6 @@ const resources = {
             'crop.position.bottomRight': 'Bottom Right',
             'crop.helper': 'Image will be resized to fit dimensions, then cropped from selected position',
             'crop.smartBest': 'Smart crop works best with images containing clear subjects (people, objects, etc.)',
-
-            // Operations (for summary)
             'operations.resized': 'Resized to {{dimension}}px',
             'operations.aiCrop': 'AI Smart Crop',
             'operations.standardCrop': 'Crop',
@@ -85,8 +74,6 @@ const resources = {
             'operations.aiSmartCropping': 'AI Smart Cropping',
             'operations.templatesApplied_one': '{{count}} template applied',
             'operations.templatesApplied_other': '{{count}} templates applied',
-
-            // Templates
             'templates.title': 'Template Selection',
             'templates.note': 'Templates use center crop (not smart crop) for consistent sizing',
             'templates.selectAll': 'Select All Templates',
@@ -101,8 +88,6 @@ const resources = {
             'templates.download': 'Download Template Images',
             'templates.eachGenerates': 'Web templates generate WebP + JPG/PNG, logo templates generate JPG/PNG based on transparency, and social media templates generate JPG only',
             'templates.selectImage': 'Please select an image from the gallery above to apply templates',
-
-            // Favicon & Screenshot Options
             'templates.faviconOptions': 'Favicon Options',
             'templates.screenshotOptions': 'Screenshot Options',
             'templates.siteName': 'Website Name',
@@ -115,16 +100,12 @@ const resources = {
             'templates.colorPlaceholder': '#ffffff',
             'templates.faviconIncludes': 'Includes: favicon.ico, site.webmanifest, all sizes (16x16 to 512x512)',
             'templates.screenshotIncludes': 'Includes: Desktop (1280x720) and Mobile (720x1280) screenshots',
-
-            // Image Gallery
             'gallery.title': 'Uploaded Images',
             'gallery.templatesMode': '(Templates mode: Click ONE image to select)',
             'gallery.selectAll': 'Select All',
             'gallery.deselectAll': 'Deselect All',
             'gallery.removeSelected': 'Remove Selected',
             'gallery.templateImage': 'TEMPLATE IMAGE',
-
-            // Buttons & Actions
             'button.process': 'Process Images',
             'button.processing': 'Processing...',
             'button.loadingAI': 'Loading AI Model...',
@@ -145,8 +126,6 @@ const resources = {
             'button.capturing': 'Capturing...',
             'button.downloadAll': 'Download All Screenshots',
             'button.download': 'Download',
-
-            // Messages
             'message.success': 'Success',
             'message.error': 'Error',
             'message.info': 'Info',
@@ -166,9 +145,14 @@ const resources = {
             'message.errorSelectTemplate': 'Please select at least one template',
             'message.errorSelectFormat': 'Please select at least one output format',
             'message.errorProcessing': 'Error processing images',
+            'message.tiffConversionFailed': 'TIFF conversion failed',
+            'message.svgConversionFailed': 'SVG conversion failed',
+            'message.memoryError': 'Memory limit exceeded',
+            'message.timeoutError': 'Processing timed out',
+            'message.aiFailed': 'AI processing failed',
             'message.errorApplying': 'Error applying templates',
             'message.successDownload': 'ZIP file downloaded successfully! Check your downloads folder.',
-            'message.aiFailed': 'AI model could not be loaded. Using standard crop instead.',
+            'message.aiModelFailed': 'AI model could not be loaded. Using standard crop instead.',
             'message.aiTemplateFallback': 'AI model not available, using standard cropping for templates',
             'message.cleanupMemory': 'Clean up GPU memory? This may improve performance.',
             'message.memoryCleaned': 'GPU memory has been cleaned up.',
@@ -187,8 +171,18 @@ const resources = {
             'message.screenshotsCaptured': 'Successfully captured {{count}} screenshots',
             'message.screenshotReady': 'Screenshot ready for download',
             'message.urlValidated': 'Valid URL - ready for screenshot capture',
-
-            // Loading States
+            'message.screenshotDownload': 'Successfully downloaded {{count}} screenshots',
+            'message.screenshotDownload_one': 'Successfully downloaded {{count}} screenshot',
+            'message.screenshotDownload_other': 'Successfully downloaded {{count}} screenshots',
+            'message.processing': 'Processing',
+            'message.processingImages': 'Processing {{count}} images...',
+            'message.processingTemplates': 'Processing {{count}} templates...',
+            'suggestion.tryStandardCrop': 'Try using standard crop mode instead of smart crop.',
+            'suggestion.convertTiffFirst': 'Try converting TIFF files to PNG before uploading.',
+            'suggestion.checkSVG': 'Check if the SVG file is valid and try again.',
+            'suggestion.reduceBatchSize': 'Try processing fewer images at once.',
+            'suggestion.trySmaller': 'Try with smaller images or reduce processing options.',
+            'suggestion.tryAgain': 'Please try again.',
             'loading.preparing': 'Preparing your ZIP file...',
             'loading.aiModel': 'Loading AI model for smart cropping...',
             'loading.oncePerSession': 'This only happens once per session',
@@ -201,8 +195,6 @@ const resources = {
             'loading.capturingScreenshots': 'Capturing website screenshots...',
             'loading.screenshotProcess': 'This may take a moment depending on the website',
             'loading.processingTemplates': 'Processing templates...',
-
-            // Summary Modal
             'summary.title': 'Processing Complete',
             'summary.processingComplete': 'Image Processing Complete',
             'summary.mode': 'Processing Mode',
@@ -229,8 +221,41 @@ const resources = {
             'summary.faviconFiles': '15+ favicon files',
             'summary.screenshotFiles': 'Desktop & mobile screenshots',
             'summary.screenshotCount': 'Screenshots captured',
-
-            // Common words for pluralization
+            'export.folders.original': 'Original Images',
+            'export.folders.optimized': 'Optimized Images',
+            'export.folders.web': 'Web Images',
+            'export.folders.logo': 'Logo Images',
+            'export.folders.social': 'Social Media Images',
+            'export.summary.title': 'Image Processing Export Summary',
+            'export.summary.exportDate': 'Export Date',
+            'export.summary.processingMode': 'Processing Mode',
+            'export.summary.exportSettings': 'Export Settings',
+            'export.summary.statistics': 'STATISTICS',
+            'export.summary.originalImages': 'Original Images',
+            'export.summary.processedImages': 'Processed Images',
+            'export.summary.templatesApplied': 'Templates Applied',
+            'export.summary.categoriesApplied': 'Categories Applied',
+            'export.summary.formatsExported': 'Formats Exported',
+            'export.summary.totalFiles': 'Total Files in Export',
+            'export.summary.foldersStructure': 'FOLDERS STRUCTURE',
+            'export.summary.includedContent': 'INCLUDED CONTENT',
+            'export.summary.notes': 'NOTES',
+            'export.summary.generatedBy': 'GENERATED BY',
+            'export.summary.appName': 'Image Processing Tool',
+            'export.summary.supportNote': 'Need help? Contact support or check the documentation.',
+            'export.notes.custom': '- Images are organized by format in subfolders\n- Original files are preserved in the OriginalImages folder\n- Processed files include any applied optimizations',
+            'export.notes.templates': '- Social media images are organized by platform\n- Favicon set includes all required sizes and documentation\n- Screenshots are captured at standard responsive sizes\n- Web and logo images are optimized for their specific use cases',
+            'export.summary.originalImages_one': 'Original Image',
+            'export.summary.originalImages_other': 'Original Images',
+            'export.summary.optimizedImages_one': 'Optimized image',
+            'export.summary.optimizedImages_other': 'Optimized images',
+            'export.summary.webImages_one': 'Web image',
+            'export.summary.webImages_other': 'Web images',
+            'export.summary.logoVariations_one': 'Logo variation',
+            'export.summary.logoVariations_other': 'Logo variations',
+            'export.summary.socialMediaTemplates': 'Social media templates ({{count}} files across {{platforms}} platforms)',
+            'export.summary.faviconSet': 'Favicon set ({{count}} files with manifest and documentation)',
+            'export.summary.screenshots': 'Website screenshots ({{count}} images from: {{url}})',
             'common.image_one': 'image',
             'common.image_other': 'images',
             'common.format_one': 'format',
@@ -241,23 +266,7 @@ const resources = {
             'common.favicon_other': 'favicons',
             'common.screenshot_one': 'screenshot',
             'common.screenshot_other': 'screenshots',
-            'common.device_one': 'device',
-            'common.device_other': 'devices',
-
-            // Footer
-            'footer.createdBy': 'Created by',
-            'footer.aiEnabled': 'AI Smart Crop enabled',
-
-            // Modal Accessibility
-            'modal.close': 'Close',
-            'modal.clickOutside': 'Click outside to close',
-            'modal.escKey': 'Press ESC to close',
-
-            // Accessibility
-            'accessibility.modal': 'Modal dialog',
-            'accessibility.closeModal': 'Close modal dialog',
-
-            // Template Categories
+            'category.all': 'All Templates',
             'category.web': 'Web',
             'category.logo': 'Logo',
             'category.instagram': 'Instagram',
@@ -269,8 +278,17 @@ const resources = {
             'category.tiktok': 'TikTok',
             'category.favicon': 'Favicon',
             'category.screenshots': 'Screenshots',
-
-            // Template Names
+            'platform.web': 'Web',
+            'platform.instagram': 'Instagram',
+            'platform.facebook': 'Facebook',
+            'platform.twitter': 'Twitter',
+            'platform.linkedin': 'LinkedIn',
+            'platform.youtube': 'YouTube',
+            'platform.pinterest': 'Pinterest',
+            'platform.tiktok': 'TikTok',
+            'platform.logo': 'Logo',
+            'platform.screenshots': 'Screenshots',
+            'platform.favicon': 'Favicon',
             'template.WebHero': 'Hero',
             'template.WebBlog': 'Blog Featured',
             'template.WebContent': 'Content',
@@ -315,14 +333,10 @@ const resources = {
             'template.ScreenshotsTabletFull': 'Tablet Full Page',
             'template.ScreenshotsDesktopFull': 'Desktop Full Page',
             'template.ScreenshotsDesktopHdFull': 'Desktop HD Full Page',
-
-            // Device Names
             'device.mobile': 'Mobile',
             'device.tablet': 'Tablet',
             'device.desktop': 'Desktop',
             'device.desktopHd': 'Desktop HD',
-
-            // Color Labels
             'color.white': 'White',
             'color.black': 'Black',
             'color.blue': 'Blue',
@@ -332,18 +346,21 @@ const resources = {
             'color.purple': 'Purple',
             'color.orange': 'Orange',
             'color.gray': 'Gray',
-
-            // Screenshots translations
             'screenshots.title': 'Website Screenshots',
+            'screenshots.websiteUrl': 'Website URL',
+            'screenshots.urlPlaceholder': 'https://example.com',
+            'screenshots.selectDevices': 'Select Screenshot Templates',
+            'screenshots.selectAll': 'All',
+            'screenshots.deselectAll': 'None',
+            'screenshots.captureButton': 'Download Screenshots',
+            'screenshots.capturing': 'Capturing...',
             'screenshots.warning': 'Note: Some websites block screenshot capture due to security settings.',
-            'screenshots.selectDevices': 'Select Devices:',
             'screenshots.capturesFullPage': 'Captures full-page screenshots',
             'screenshots.crossOrigin': 'Cross-origin compatible',
             'screenshots.noIframe': 'No iframe restrictions',
             'screenshots.fastProcessing': 'Fast serverless processing',
             'screenshots.productionBackend': 'Uses production backend API',
             'screenshots.realBrowser': 'Real browser screenshots',
-            'screenshots.urlPlaceholder': 'https://example.com or example.com',
             'screenshots.enterUrl': 'Enter website URL',
             'screenshots.captureResults': 'Capture Results',
             'screenshots.successful': 'successful',
@@ -354,38 +371,44 @@ const resources = {
             'screenshots.template': 'Template:',
             'screenshots.screenshotInfo': 'Note about screenshot capture:',
             'screenshots.securityWarning': 'Some websites use security headers that prevent automated screenshot capture. If screenshots fail, try entering the full URL (including https://) or check if the website allows access.',
-            'screenshots.availableTemplates': 'Available Screenshot Templates:'
+            'screenshots.availableTemplates': 'Available Screenshot Templates:',
+            'quality': 'Quality',
+            'timeout': 'Timeout',
+            'dimensions': 'Dimensions',
+            'fullPage': 'Full Page',
+            'standard': 'Standard',
+            'processing.initializing': 'Initializing...',
+            'processing.preparing': 'Preparing images...',
+            'processing.preparingTemplates': 'Preparing templates...',
+            'processing.setup': 'Setting up processing...',
+            'processing.processingImages': 'Processing images...',
+            'processing.processingTemplates': 'Processing templates...',
+            'processing.creatingZip': 'Creating ZIP archive...',
+            'processing.downloading': 'Downloading files...',
+            'processing.complete': 'Processing complete!',
+            'processing.pleaseWait': 'Please wait while processing completes...'
         }
     },
     hr: {
         translation: {
-            // App Titles
             'app.title': 'Image LemGendizer',
             'app.subtitle': 'Alat za obradu i optimizaciju slika',
-            'app.version': 'Image LemGendizer v2.5.0',
+            'app.version': 'Image LemGendizer v2.6.0',
             'app.processClientSide': 'Sva obrada se vrši na klijentu',
             'app.imagesNeverLeave': 'Vaše slike nikada ne napuštaju preglednik',
-
-            // Upload Section
             'upload.dropZone.title': 'Povucite slike ovdje ili kliknite za učitavanje',
             'upload.dropZone.supported': 'Podržava JPG, PNG, GIF, WebP, SVG, AVIF, TIFF, BMP, ICO',
             'upload.dropZone.processing': 'Sva obrada se odvija u vašem pregledniku',
             'upload.selectImages': 'Odaberi slike',
-
-            // Processing Mode
             'mode.title': 'Način obrade',
             'mode.custom': 'Prilagođena obrada',
             'mode.templates': 'Predlošci',
             'mode.customInfo': 'Prilagođeni način: Odaberite VIŠE slika za grupnu obradu',
             'mode.templatesInfo': 'Način predložaka: Odaberite JEDNU sliku za primjenu predložaka',
-
-            // Compression Settings
             'compression.title': 'Kompresija',
             'compression.quality': 'Kvaliteta (1-100)',
             'compression.targetSize': 'Ciljana veličina datoteke (KB, opcionalno)',
             'compression.auto': 'Ostavite prazno za automatsko',
-
-            // Output Settings
             'output.title': 'Postavke izlaza',
             'output.format': 'Izlazni format',
             'output.format.webp': 'WebP',
@@ -399,15 +422,16 @@ const resources = {
             'output.rename': 'Grupno preimenovanje',
             'output.newFileName': 'Novi naziv datoteke',
             'output.newFileName.placeholder': 'npr., slika-proizvoda',
-
-            // Resize
+            'output.format.description.webp': 'Moderan format s izvrsnom kompresijom',
+            'output.format.description.avif': 'Sljedeća generacija formata s superiornom kompresijom',
+            'output.format.description.jpg': 'Standardni format s dobrom kompresijom',
+            'output.format.description.png': 'Format bez gubitaka s podrškom za transparentnost',
+            'output.format.description.original': 'Zadrži originalni format',
             'resize.title': 'Promjena veličine',
             'resize.switchToCrop': 'Obrezivanje',
             'resize.switchToResize': 'Promjena veličine',
             'resize.dimension': 'Dimenzija promjene veličine (px)',
             'resize.helper': 'Za portret: postavlja visinu. Za pejzaž: postavlja širinu. Omjer slike se održava.',
-
-            // Crop
             'crop.title': 'Obrezivanje',
             'crop.switchToStandard': 'Standardno obrezivanje',
             'crop.switchToSmart': 'Pametno obrezivanje',
@@ -425,10 +449,8 @@ const resources = {
             'crop.position.bottomLeft': 'Dolje lijevo',
             'crop.position.bottom': 'Dolje',
             'crop.position.bottomRight': 'Dolje desno',
-            'crop.helper': 'Slika će se promijeniti veličinu da stane u dimenzije, zatim obrezati od odabrane pozicije',
+            'crop.helper': 'Slika će se promijeniti veličine da stane u dimenzije, zatim obrezati od odabrane pozicije',
             'crop.smartBest': 'Pametno obrezivanje najbolje funkcionira sa slikama koje imaju jasne subjekte (ljudi, objekti, itd.)',
-
-            // Operations (for summary)
             'operations.resized': 'Promijenjena veličina na {{dimension}}px',
             'operations.aiCrop': 'Pametno AI obrezivanje',
             'operations.standardCrop': 'Obrezivanje',
@@ -439,8 +461,6 @@ const resources = {
             'operations.templatesApplied_one': 'Primijenjen {{count}} predložak',
             'operations.templatesApplied_few': 'Primijenjena {{count}} predloška',
             'operations.templatesApplied_other': 'Primijenjeno {{count}} predložaka',
-
-            // Templates
             'templates.title': 'Odabir predložaka',
             'templates.note': 'Predlošci koriste središnje obrezivanje (ne pametno) za konzistentne dimenzije',
             'templates.selectAll': 'Odaberi sve predloške',
@@ -455,8 +475,6 @@ const resources = {
             'templates.download': 'Preuzmi slike predložaka',
             'templates.eachGenerates': 'Web predlošci generiraju WebP + JPG/PNG, logo predlošci generiraju JPG/PNG ovisno o transparentnosti, a predlošci za društvene mreže generiraju samo JPG.',
             'templates.selectImage': 'Molimo odaberite sliku iz galerije iznad za primjenu predložaka',
-
-            // Favicon & Screenshot Options
             'templates.faviconOptions': 'Opcije za favicon',
             'templates.screenshotOptions': 'Opcije za screenshotove',
             'templates.siteName': 'Naziv web stranice',
@@ -469,16 +487,12 @@ const resources = {
             'templates.colorPlaceholder': '#ffffff',
             'templates.faviconIncludes': 'Uključuje: favicon.ico, site.webmanifest, sve veličine (16x16 do 512x512)',
             'templates.screenshotIncludes': 'Uključuje: Desktop (1280x720) i Mobile (720x1280) screenshotove',
-
-            // Image Gallery
             'gallery.title': 'Učitane slike',
             'gallery.templatesMode': '(Način predložaka: Kliknite JEDNU sliku za odabir)',
             'gallery.selectAll': 'Odaberi sve',
             'gallery.deselectAll': 'Poništi odabir',
             'gallery.removeSelected': 'Ukloni odabrane',
             'gallery.templateImage': 'SLIKA ZA PREDLOŠKE',
-
-            // Buttons & Actions
             'button.process': 'Obradi slike',
             'button.processing': 'Obrada...',
             'button.loadingAI': 'Učitavam AI model...',
@@ -502,8 +516,6 @@ const resources = {
             'button.capturing': 'Snimanje...',
             'button.downloadAll': 'Preuzmi sve screenshotove',
             'button.download': 'Preuzmi',
-
-            // Messages
             'message.success': 'Uspjeh',
             'message.error': 'Greška',
             'message.info': 'Info',
@@ -525,9 +537,14 @@ const resources = {
             'message.errorSelectTemplate': 'Molimo odaberite barem jedan predložak',
             'message.errorSelectFormat': 'Molimo odaberite barem jedan izlazni format',
             'message.errorProcessing': 'Greška pri obradi slika',
+            'message.tiffConversionFailed': 'Konverzija TIFF datoteka nije uspjela',
+            'message.svgConversionFailed': 'Konverzija SVG datoteke nije uspjela',
+            'message.memoryError': 'Prekoračeno ograničenje memorije',
+            'message.timeoutError': 'Vrijeme obrade je isteklo',
+            'message.aiFailed': 'AI obrada nije uspjela',
             'message.errorApplying': 'Greška pri primjeni predložaka',
             'message.successDownload': 'ZIP datoteka uspješno preuzeta! Provjerite vašu mapu s preuzimanjima.',
-            'message.aiFailed': 'AI model se nije mogao učitati. Koristim standardno obrezivanje umjesto toga.',
+            'message.aiModelFailed': 'AI model se nije mogao učitati. Koristim standardno obrezivanje umjesto toga.',
             'message.aiTemplateFallback': 'AI model nije dostupan, koristim standardno obrezivanje za predloške',
             'message.cleanupMemory': 'Očistiti GPU memoriju? Ovo može poboljšati performanse.',
             'message.memoryCleaned': 'GPU memorija je očišćena.',
@@ -546,8 +563,19 @@ const resources = {
             'message.screenshotsCaptured': 'Uspješno snimljeno {{count}} screenshotova',
             'message.screenshotReady': 'Screenshot spreman za preuzimanje',
             'message.urlValidated': 'Valjani URL - spreman za snimanje screenshotova',
-
-            // Loading States
+            'message.screenshotDownload': 'Uspješno preuzeto {{count}} screenshotova',
+            'message.screenshotDownload_one': 'Uspješno preuzeto {{count}} screenshot',
+            'message.screenshotDownload_few': 'Uspješno preuzeto {{count}} screenshota',
+            'message.screenshotDownload_other': 'Uspješno preuzeto {{count}} screenshotova',
+            'message.processing': 'Obrada',
+            'message.processingImages': 'Obrađujem {{count}} slika...',
+            'message.processingTemplates': 'Obrađujem {{count}} predložaka...',
+            'suggestion.tryStandardCrop': 'Pokušajte koristiti standardni način obrezivanja umjesto pametnog obrezivanja.',
+            'suggestion.convertTiffFirst': 'Pokušajte konvertirati TIFF datoteke u PNG prije učitavanja.',
+            'suggestion.checkSVG': 'Provjerite je li SVG datoteka valjana i pokušajte ponovno.',
+            'suggestion.reduceBatchSize': 'Pokušajte obraditi manje slika odjednom.',
+            'suggestion.trySmaller': 'Pokušajte s manjim slikama ili smanjite opcije obrade.',
+            'suggestion.tryAgain': 'Molimo pokušajte ponovno.',
             'loading.preparing': 'Pripremam vašu ZIP datoteku...',
             'loading.aiModel': 'Učitavam AI model za pametno obrezivanje...',
             'loading.oncePerSession': 'Ovo se događa samo jednom po sesiji',
@@ -560,8 +588,6 @@ const resources = {
             'loading.capturingScreenshots': 'Snimam screenshotove web stranice...',
             'loading.screenshotProcess': 'Ovo može potrajati nekoliko trenutaka ovisno o web stranici',
             'loading.processingTemplates': 'Obrađujem predloške...',
-
-            // Summary Modal
             'summary.title': 'Obrada Završena',
             'summary.processingComplete': 'Obrada slika završena',
             'summary.mode': 'Način obrade',
@@ -591,8 +617,45 @@ const resources = {
             'summary.faviconFiles': '15+ favicon datoteka',
             'summary.screenshotFiles': 'Desktop i mobilni screenshotovi',
             'summary.screenshotCount': 'Snimljenih Screenshots',
-
-            // Common words for pluralization
+            'export.folders.original': 'Originalne slike',
+            'export.folders.optimized': 'Optimizirane slike',
+            'export.folders.web': 'Web slike',
+            'export.folders.logo': 'Logo slike',
+            'export.folders.social': 'Društveni mediji slike',
+            'export.summary.title': 'Sažetak izvoza obrade slika',
+            'export.summary.exportDate': 'Datum izvoza',
+            'export.summary.processingMode': 'Način obrade',
+            'export.summary.exportSettings': 'Postavke izvoza',
+            'export.summary.statistics': 'STATISTIKA',
+            'export.summary.originalImages': 'Originalne slike',
+            'export.summary.processedImages': 'Obradene slike',
+            'export.summary.templatesApplied': 'Primijenjeni predlošci',
+            'export.summary.categoriesApplied': 'Primijenjene kategorije',
+            'export.summary.formatsExported': 'Izvezeni formati',
+            'export.summary.totalFiles': 'Ukupno datoteka u izvozu',
+            'export.summary.foldersStructure': 'STRUKTURA MAPA',
+            'export.summary.includedContent': 'UKLJUČEN SADRŽAJ',
+            'export.summary.notes': 'NAPOMENE',
+            'export.summary.generatedBy': 'GENERIRANO OD',
+            'export.summary.appName': 'Alat za obradu slika',
+            'export.summary.supportNote': 'Trebate pomoć? Kontaktirajte podršku ili provjerite dokumentaciju.',
+            'export.notes.custom': '- Slike su organizirane po formatima u podmapama\n- Originalne datoteke su sačuvane u mapi OriginalImages\n- Obradene datoteke uključuju sve primijenjene optimizacije',
+            'export.notes.templates': '- Slike za društvene mreže su organizirane po platformama\n- Favicon set uključuje sve potrebne veličine i dokumentaciju\n- Screenshotovi su snimljeni u standardnim responzivnim veličinama\n- Web i logo slike su optimizirane za njihove specifične upotrebe',
+            'export.summary.originalImages_one': 'Originalna slika',
+            'export.summary.originalImages_few': 'Originalne slike',
+            'export.summary.originalImages_other': 'Originalnih slika',
+            'export.summary.optimizedImages_one': 'Optimizirana slika',
+            'export.summary.optimizedImages_few': 'Optimizirane slike',
+            'export.summary.optimizedImages_other': 'Optimiziranih slika',
+            'export.summary.webImages_one': 'Web slika',
+            'export.summary.webImages_few': 'Web slike',
+            'export.summary.webImages_other': 'Web slika',
+            'export.summary.logoVariations_one': 'Logo varijacija',
+            'export.summary.logoVariations_few': 'Logo varijacije',
+            'export.summary.logoVariations_other': 'Logo varijacija',
+            'export.summary.socialMediaTemplates': 'Predlošci za društvene mreže ({{count}} datoteka preko {{platforms}} platformi)',
+            'export.summary.faviconSet': 'Favicon set ({{count}} datoteka s manifestom i dokumentacijom)',
+            'export.summary.screenshots': 'Screenshotovi web stranice ({{count}} slika sa: {{url}})',
             'common.image_one': 'slika',
             'common.image_few': 'slike',
             'common.image_other': 'slika',
@@ -607,22 +670,8 @@ const resources = {
             'common.favicon_other': 'favicona',
             'common.screenshot_one': 'screenshot',
             'common.screenshot_few': 'screenshota',
-            'common.screenshot_other': 'screenshota',
-
-            // Footer
-            'footer.createdBy': 'Kreirao',
-            'footer.aiEnabled': 'Pametno obrezivanje AI-om omogućeno',
-
-            // Modal Accessibility
-            'modal.close': 'Zatvori',
-            'modal.clickOutside': 'Kliknite izvan da zatvorite',
-            'modal.escKey': 'Pritisnite ESC da zatvorite',
-
-            // Accessibility
-            'accessibility.modal': 'Modalni dijalog',
-            'accessibility.closeModal': 'Zatvori modalni dijalog',
-
-            // Template Categories
+            'common.screenshot_other': 'screenshotova',
+            'category.all': 'Svi Predlošci',
             'category.web': 'Web',
             'category.logo': 'Logo',
             'category.instagram': 'Instagram',
@@ -634,8 +683,17 @@ const resources = {
             'category.tiktok': 'TikTok',
             'category.favicon': 'Favicon',
             'category.screenshots': 'Screenshotovi',
-
-            // Template Names
+            'platform.web': 'Web',
+            'platform.instagram': 'Instagram',
+            'platform.facebook': 'Facebook',
+            'platform.twitter': 'Twitter',
+            'platform.linkedin': 'LinkedIn',
+            'platform.youtube': 'YouTube',
+            'platform.pinterest': 'Pinterest',
+            'platform.tiktok': 'TikTok',
+            'platform.logo': 'Logo',
+            'platform.screenshots': 'Screenshotovi',
+            'platform.favicon': 'Favicon',
             'template.WebHero': 'Hero slika',
             'template.WebBlog': 'Istaknuti blog',
             'template.WebContent': 'Sadržajna slika',
@@ -674,8 +732,12 @@ const resources = {
             'template.FaviconSet': 'Favicon Set',
             'template.ScreenshotsDesktop': 'Desktop Screenshot',
             'template.ScreenshotsMobile': 'Mobile Screenshot',
-
-            // Color Labels
+            'template.ScreenshotsTablet': 'Tablet Screenshot',
+            'template.ScreenshotsDesktopHd': 'Desktop HD Screenshot',
+            'template.ScreenshotsMobileFull': 'Mobile Full Page',
+            'template.ScreenshotsTabletFull': 'Tablet Full Page',
+            'template.ScreenshotsDesktopFull': 'Desktop Full Page',
+            'template.ScreenshotsDesktopHdFull': 'Desktop HD Full Page',
             'color.white': 'Bijela',
             'color.black': 'Crna',
             'color.blue': 'Plava',
@@ -685,10 +747,47 @@ const resources = {
             'color.purple': 'Ljubičasta',
             'color.orange': 'Narančasta',
             'color.gray': 'Siva',
-
-            // Screenshots translations
-            'screenshots.title': 'Generiraj Screenshotove',
-            'screenshots.warning': 'Napomena: Neke web stranice blokiraju snimanje screenshotova zbog sigurnosnih postavki.'
+            'screenshots.title': 'Screenshotovi web stranice',
+            'screenshots.websiteUrl': 'URL web stranice',
+            'screenshots.urlPlaceholder': 'https://primjer.com',
+            'screenshots.selectDevices': 'Odaberite predloške screenshotova',
+            'screenshots.selectAll': 'Sve',
+            'screenshots.deselectAll': 'Ništa',
+            'screenshots.captureButton': 'Preuzmi Screenshotove',
+            'screenshots.capturing': 'Snimanje...',
+            'screenshots.warning': 'Napomena: Neke web stranice blokiraju snimanje screenshotova zbog sigurnosnih postavki.',
+            'screenshots.capturesFullPage': 'Snima full-page screenshotove',
+            'screenshots.crossOrigin': 'Cross-origin kompatibilno',
+            'screenshots.noIframe': 'Bez iframe restrikcija',
+            'screenshots.fastProcessing': 'Brzo serverless procesiranje',
+            'screenshots.productionBackend': 'Koristi production backend API',
+            'screenshots.realBrowser': 'Pravi browser screenshotovi',
+            'screenshots.enterUrl': 'Unesite URL web stranice',
+            'screenshots.captureResults': 'Rezultati snimanja',
+            'screenshots.successful': 'uspješno',
+            'screenshots.method': 'Metoda:',
+            'screenshots.placeholder': 'Placeholder',
+            'screenshots.dimensions': 'Dimenzije:',
+            'screenshots.device': 'Uređaj:',
+            'screenshots.template': 'Predložak:',
+            'screenshots.screenshotInfo': 'Napomena o snimanju screenshotova:',
+            'screenshots.securityWarning': 'Neke web stranice koriste sigurnosne headere koji sprječavaju automatsko snimanje screenshotova. Ako screenshotovi ne uspiju, pokušajte unijeti puni URL (uključujući https://) ili provjerite dopušta li web stranica pristup.',
+            'screenshots.availableTemplates': 'Dostupni predlošci screenshotova:',
+            'quality': 'Kvaliteta',
+            'timeout': 'Timeout',
+            'dimensions': 'Dimenzije',
+            'fullPage': 'Full Page',
+            'standard': 'Standard',
+            'processing.initializing': 'Inicijalizacija...',
+            'processing.preparing': 'Pripremam slike...',
+            'processing.preparingTemplates': 'Pripremam predloške...',
+            'processing.setup': 'Podešavam obradu...',
+            'processing.processingImages': 'Obrađujem slike...',
+            'processing.processingTemplates': 'Obrađujem predloške...',
+            'processing.creatingZip': 'Stvaram ZIP arhivu...',
+            'processing.downloading': 'Preuzimam datoteke...',
+            'processing.complete': 'Obrada završena!',
+            'processing.pleaseWait': 'Molimo pričekajte dok se obrada završi...'
         }
     }
 };

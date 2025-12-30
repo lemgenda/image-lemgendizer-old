@@ -3,7 +3,7 @@ import {
     INVALID_FILENAME_CHARS,
     MIME_TYPE_MAP,
     MAX_SCREENSHOT_SIZE
-} from '../constants/sharedConstants.js';
+} from '../constants';
 
 /**
  * Formats file size for display.

@@ -1,13 +1,8 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SUPPORTED_INPUT_FORMATS, ERROR_MESSAGES } from '../constants/sharedConstants';
+import { SUPPORTED_INPUT_FORMATS, ERROR_MESSAGES, SPACING, BORDER_RADIUS, TRANSITIONS } from '../constants';
 
-/**
- * Handles the drop event for drag-and-drop file upload
- * @param {DragEvent} e - Drag event
- * @param {Function} onUpload - Upload callback function
- */
-export const handleImageDrop = (e, onUpload) => {
+const handleImageDrop = (e, onUpload) => {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files);
     const imageFiles = files.filter(file =>
@@ -24,12 +19,7 @@ export const handleImageDrop = (e, onUpload) => {
     }
 };
 
-/**
- * Handles file selection from input
- * @param {Event} e - Change event
- * @param {Function} onUpload - Upload callback function
- */
-export const handleFileSelect = (e, onUpload) => {
+const handleFileSelect = (e, onUpload) => {
     const files = Array.from(e.target.files);
     const imageFiles = files.filter(file =>
         SUPPORTED_INPUT_FORMATS.some(format =>
@@ -46,33 +36,17 @@ export const handleFileSelect = (e, onUpload) => {
     }
 };
 
-/**
- * A drag-and-drop and file selection component for uploading images.
- * @param {Object} props - Component props
- * @param {Function} props.onUpload - Upload callback function
- * @param {Object} props.fileInputRef - Reference to file input element
- * @returns {JSX.Element} ImageUploader component
- */
-function ImageUploader({ onUpload, fileInputRef }) {
+function UploadSection({ onUpload, fileInputRef }) {
     const { t } = useTranslation();
 
-    /**
-     * Handles drop event
-     */
     const handleDrop = useCallback((e) => {
         handleImageDrop(e, onUpload);
     }, [onUpload]);
 
-    /**
-     * Handles drag over event
-     */
     const handleDragOver = useCallback((e) => {
         e.preventDefault();
     }, []);
 
-    /**
-     * Handles file input change event
-     */
     const handleFileChange = (e) => {
         handleFileSelect(e, onUpload);
     };
@@ -81,17 +55,17 @@ function ImageUploader({ onUpload, fileInputRef }) {
         <>
             <style>{`
                 .upload-section {
-                    margin-bottom: var(--space-xl);
+                    margin-bottom: ${SPACING.XL};
                 }
 
                 .drop-zone {
                     border: 2px dashed var(--border-color);
-                    border-radius: var(--radius-md);
-                    padding: var(--space-xxl) var(--space-xl);
+                    border-radius: ${BORDER_RADIUS.MD};
+                    padding: ${SPACING.XXL} ${SPACING.XL};
                     text-align: center;
                     cursor: pointer;
                     background-color: var(--color-bg-secondary);
-                    transition: all var(--transition-normal);
+                    transition: all ${TRANSITIONS.NORMAL};
                 }
 
                 .drop-zone:hover {
@@ -102,24 +76,24 @@ function ImageUploader({ onUpload, fileInputRef }) {
                 .drop-zone-content i {
                     color: var(--color-primary);
                     font-size: 3rem;
-                    margin-bottom: var(--space-lg);
+                    margin-bottom: ${SPACING.LG};
                 }
 
                 .drop-zone-content h3 {
                     color: var(--color-text-primary);
-                    margin-bottom: var(--space-sm);
+                    margin-bottom: ${SPACING.SM};
                     font-size: 1.3rem;
                 }
 
                 .drop-zone-content p {
                     color: var(--color-text-muted);
-                    margin-bottom: var(--space-xs);
+                    margin-bottom: ${SPACING.XS};
                     font-size: 0.875rem;
                 }
 
                 .upload-limits {
-                    margin-top: var(--space-md);
-                    padding-top: var(--space-sm);
+                    margin-top: ${SPACING.MD};
+                    padding-top: ${SPACING.SM};
                     border-top: 1px solid var(--border-color);
                 }
 
@@ -128,7 +102,11 @@ function ImageUploader({ onUpload, fileInputRef }) {
                 }
 
                 .mt-md {
-                    margin-top: var(--space-md);
+                    margin-top: ${SPACING.MD};
+                }
+
+                p.text-muted > i {
+                    font-size: 1rem;
                 }
             `}</style>
 
@@ -171,4 +149,4 @@ function ImageUploader({ onUpload, fileInputRef }) {
     )
 }
 
-export default ImageUploader;
+export default UploadSection;

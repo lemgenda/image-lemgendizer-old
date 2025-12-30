@@ -1,33 +1,35 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  orchestrateCustomProcessing,
-  orchestrateTemplateProcessing,
   createImageObjects,
   loadAIModel,
   getProcessingConfiguration,
   createProcessingSummary,
   cleanupBlobUrls,
   createExportZip,
+  createScreenshotZip,
   downloadZip,
   generateExportSettings,
-  loadUTIFLibrary
+  loadUTIFLibrary,
+  getTranslatedTemplateName,
+  checkImageTransparencyQuick
 } from './processors';
 import {
+  captureMultipleScreenshots,
+  convertScreenshotResultsToImages,
+  validateScreenshotUrlInput,
+  orchestrateCustomProcessing,
+  orchestrateTemplateProcessing,
   validateProcessingOptions,
-  calculateTotalTemplateFiles,
-  formatFileSize
+  formatFileSize,
+  safeCleanupGPUMemory
 } from './utils';
-
-import { captureScreenshotsForTemplates } from './utils/screenshotUtils';
 import {
   getTemplateCategories,
   SOCIAL_MEDIA_TEMPLATES,
   SCREENSHOT_TEMPLATES,
   DEFAULT_FAVICON_BACKGROUND_COLOR,
   DEFAULT_FAVICON_SITE_NAME,
-  SCREENSHOT_TEMPLATE_ID,
-  FAVICON_TEMPLATE_ID,
   DEFAULT_FAVICON_THEME_COLOR
 } from './configs/templateConfigs';
 import {
@@ -38,36 +40,54 @@ import {
   DEFAULT_PROCESSING_CONFIG,
   MODAL_TYPES,
   EXPORT_SETTINGS,
-  URL_CONSTANTS,
   NUMBER_INPUT_CONSTANTS,
   IMAGE_FORMATS,
   CROP_POSITIONS,
   RESIZE_DIMENSION_RANGE,
-  CROP_DIMENSION_RANGE
+  CROP_DIMENSION_RANGE,
+  ANIMATION_DURATIONS,
+  PROCESSING_DELAYS
 } from './constants/sharedConstants';
 import {
-  ImageUploader,
-  Header,
-  Footer,
-  Modal,
-  RangeSlider,
-  SiteScreenshots
+  UploadSection,
+  HeaderSection,
+  FooterSection,
+  ModalElement,
+  RangeSliderElement,
+  ScreenShotsCard,
+  UploadGallerySection,
+  TemplateImageSection
 } from './components';
 import './styles/App.css';
 
 function App() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const [isScreenshotMode, setIsScreenshotMode] = useState(false);
   const [isFaviconSelected, setIsFaviconSelected] = useState(false);
   const [isScreenshotSelected, setIsScreenshotSelected] = useState(false);
   const [screenshotUrl, setScreenshotUrl] = useState('');
-  const [screenshotValidation, setScreenshotValidation] = useState(null);
+  const [screenshotResults, setScreenshotResults] = useState(null);
+  const [isCapturingScreenshots, setIsCapturingScreenshots] = useState(false);
+  const [captureProgress, setCaptureProgress] = useState(0);
+  const [screenshotValidation, setScreenshotValidation] = useState({
+    isValid: false,
+    message: ''
+  });
+  const [selectedScreenshotTemplates, setSelectedScreenshotTemplates] = useState([
+    'screenshots-mobile',
+    'screenshots-desktop'
+  ]);
+  const [processedImages, setProcessedImages] = useState([]);
   const [images, setImages] = useState([]);
   const [selectedImages, setSelectedImages] = useState([]);
   const [modal, setModal] = useState({
     isOpen: false,
     title: '',
     message: '',
-    type: MODAL_TYPES.INFO
+    type: MODAL_TYPES.INFO,
+    showProgress: false,
+    progress: 0,
+    progressStep: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [aiModelLoaded, setAiModelLoaded] = useState(false);
@@ -84,16 +104,29 @@ function App() {
       formats: [IMAGE_FORMATS.WEBP]
     }
   });
+  const [userInteractedWithModal, setUserInteractedWithModal] = useState(false);
+  const autoCloseTimeoutRef = useRef(null);
 
   const fileInputRef = useRef(null);
+
+  let autoCloseTimeout = null;
+
+  useEffect(() => {
+    return () => {
+      if (autoCloseTimeoutRef.current) {
+        clearTimeout(autoCloseTimeoutRef.current);
+        autoCloseTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const preloadLibraries = async () => {
       try {
         await loadUTIFLibrary();
-      } catch { }
+      } catch (error) {
+      }
     };
-
     preloadLibraries();
   }, [processingOptions.processingMode, screenshotUrl, t]);
 
@@ -111,7 +144,6 @@ function App() {
         } catch (error) {
           setAiLoading(false);
           showModal(t('message.error'), t('message.aiFailed'), MODAL_TYPES.ERROR);
-
           if (processingOptions.cropMode === CROP_MODES.SMART) {
             setProcessingOptions(prev => ({ ...prev, cropMode: CROP_MODES.STANDARD }));
           }
@@ -123,7 +155,6 @@ function App() {
 
   useEffect(() => {
     const blobUrls = [];
-
     images.forEach(image => {
       if (image.url && image.url.startsWith('blob:')) {
         blobUrls.push(image.url);
@@ -134,55 +165,402 @@ function App() {
       blobUrls.forEach(url => {
         try {
           URL.revokeObjectURL(url);
-        } catch { }
+        } catch (error) {
+        }
       });
-
       cleanupBlobUrls(images);
     };
   }, [images]);
 
-  /**
-   * Handles image upload
-   */
-  const handleImageUpload = async (files) => {
-    try {
-      setIsLoading(true);
-      const newImages = await createImageObjects(files);
-
-      setImages(prev => {
-        cleanupBlobUrls(prev);
-        return [...prev, ...newImages];
-      });
-
-      if (processingOptions.processingMode === PROCESSING_MODES.CUSTOM) {
-        if (selectedImages.length === 0) {
-          setSelectedImages(newImages.map(img => img.id));
-        } else {
-          setSelectedImages(prev => [...prev, ...newImages.map(img => img.id)]);
+  useEffect(() => {
+    return () => {
+      // Clean up any remaining preview URLs
+      images.forEach(image => {
+        if (image.url && image.url.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(image.url);
+          } catch (e) {
+            // Ignore errors
+          }
         }
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (autoCloseTimeout) {
+        clearTimeout(autoCloseTimeout);
+        autoCloseTimeout = null;
       }
+    };
+  }, []);
 
-      if ((processingOptions.processingMode === PROCESSING_MODES.TEMPLATES || processingOptions.showTemplates) &&
-        !processingOptions.templateSelectedImage &&
-        newImages.length > 0) {
-        setProcessingOptions(prev => ({
-          ...prev,
-          templateSelectedImage: newImages[0].id
-        }));
-      }
-
-      showModal(t('message.success'), t('message.successUpload', { count: files.length }), MODAL_TYPES.SUCCESS);
-
-    } catch {
-      showModal(t('message.error'), t('message.errorUpload'), MODAL_TYPES.ERROR);
-    } finally {
-      setIsLoading(false);
-    }
+  /**
+   * Updates processing modal progress
+   */
+  const updateProcessingModal = (progress, step, title = t('message.processing')) => {
+    setModal({
+      isOpen: true,
+      title,
+      message: step,
+      type: MODAL_TYPES.INFO,
+      showProgress: true,
+      progress,
+      progressStep: step
+    });
   };
 
   /**
-   * Handles image selection
+   * Starts processing with initial modal
    */
+  const startProcessingModal = (message, count = 1) => {
+    setModal({
+      isOpen: true,
+      title: t('message.processing'),
+      message: message,
+      type: MODAL_TYPES.INFO,
+      showProgress: true,
+      progress: 0,
+      progressStep: t('processing.initializing')
+    });
+  };
+
+  const handleScreenshotUrlChange = (url) => {
+    setScreenshotUrl(url);
+    const validation = validateScreenshotUrlInput(url);
+    setScreenshotValidation(validation);
+  };
+
+  const handleImageUpload = async (files) => {
+    try {
+      setIsLoading(true);
+
+      // Validate files before processing
+      const validFiles = Array.from(files).filter(file => {
+        if (!file || !file.type) return false;
+
+        const mimeType = file.type.toLowerCase();
+        const fileName = file.name.toLowerCase();
+
+        // Check for supported image formats
+        const supportedTypes = [
+          'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+          'image/gif', 'image/bmp', 'image/tiff', 'image/tif',
+          'image/svg+xml', 'image/x-icon', 'image/vnd.microsoft.icon',
+          'image/avif', 'image/apng'
+        ];
+
+        const supportedExtensions = [
+          '.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp',
+          '.tiff', '.tif', '.svg', '.ico', '.avif', '.apng'
+        ];
+
+        return supportedTypes.includes(mimeType) ||
+          supportedExtensions.some(ext => fileName.endsWith(ext));
+      });
+
+      if (validFiles.length === 0) {
+        showModal(
+          t('message.error'),
+          t('message.noValidImages'),
+          MODAL_TYPES.ERROR
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      if (validFiles.length < files.length) {
+        showModal(
+          t('message.warning'),
+          t('message.someFilesSkipped', {
+            valid: validFiles.length,
+            total: files.length
+          }),
+          MODAL_TYPES.WARNING
+        );
+      }
+
+      // Create image objects with proper preview handling
+      const newImages = await createImageObjects(validFiles);
+
+      // Generate additional preview data for each image
+      const enhancedImages = await Promise.all(
+        newImages.map(async (img) => {
+          try {
+            // Generate a reliable preview URL
+            let previewUrl = img.url;
+
+            // For TIFF and SVG, generate canvas preview to ensure display
+            if (img.isTIFF || img.isSVG) {
+              try {
+                const canvasPreview = await generateSpecialFormatPreview(img);
+                previewUrl = canvasPreview;
+              } catch (previewError) {
+                // Fallback to blob URL
+                console.warn(`Failed to generate preview for ${img.name}:`, previewError);
+              }
+            }
+
+            // Ensure the URL is valid and accessible
+            if (!previewUrl || !previewUrl.startsWith('blob:') && !previewUrl.startsWith('data:')) {
+              // Create a new blob URL if needed
+              previewUrl = URL.createObjectURL(img.file);
+            }
+
+            return {
+              ...img,
+              url: previewUrl,
+              previewGenerated: true,
+              previewType: img.isTIFF ? 'tiff' : img.isSVG ? 'svg' : 'regular',
+              uploadTime: Date.now(),
+              // Add metadata for better display
+              metadata: {
+                dimensions: await getImageDimensions(img.file, img.isTIFF, img.isSVG),
+                hasTransparency: await checkImageTransparencyQuick(img.file)
+              }
+            };
+          } catch (error) {
+            console.error(`Error enhancing image ${img.name}:`, error);
+            // Return the basic image object if enhancement fails
+            return {
+              ...img,
+              previewGenerated: false,
+              error: error.message
+            };
+          }
+        })
+      );
+
+      // Clean up old images' blob URLs
+      cleanupBlobUrls(images);
+
+      // Update images state
+      setImages(prev => [...prev, ...enhancedImages]);
+
+      // Update selected images based on processing mode
+      if (processingOptions.processingMode === PROCESSING_MODES.CUSTOM) {
+        if (selectedImages.length === 0) {
+          // Select all new images in custom mode
+          setSelectedImages(enhancedImages.map(img => img.id));
+        } else {
+          // Add new images to existing selection
+          setSelectedImages(prev => [...prev, ...enhancedImages.map(img => img.id)]);
+        }
+      }
+
+      // In template mode, auto-select first image if none selected
+      if ((processingOptions.processingMode === PROCESSING_MODES.TEMPLATES || processingOptions.showTemplates) &&
+        !processingOptions.templateSelectedImage &&
+        enhancedImages.length > 0) {
+        setProcessingOptions(prev => ({
+          ...prev,
+          templateSelectedImage: enhancedImages[0].id
+        }));
+        setSelectedImages([enhancedImages[0].id]);
+      }
+
+      // Show success message
+      showModal(
+        t('message.success'),
+        t('message.successUpload', {
+          count: enhancedImages.length,
+          skipped: files.length - enhancedImages.length
+        }),
+        MODAL_TYPES.SUCCESS
+      );
+
+      // Scroll to gallery if many images were added
+      if (enhancedImages.length > 3) {
+        setTimeout(() => {
+          const galleryElement = document.querySelector('.gallery-card');
+          if (galleryElement) {
+            galleryElement.scrollIntoView({
+              behavior: 'smooth',
+              block: 'nearest'
+            });
+          }
+        }, 100);
+      }
+
+    } catch (error) {
+      console.error('Error in handleImageUpload:', error);
+      showModal(
+        t('message.error'),
+        t('message.errorUpload') + ': ' + error.message,
+        MODAL_TYPES.ERROR
+      );
+    } finally {
+      setIsLoading(false);
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Helper function to generate preview for special formats
+  const generateSpecialFormatPreview = async (image) => {
+    return new Promise((resolve, reject) => {
+      if (image.isTIFF) {
+        generateTiffPreview(image.file)
+          .then(resolve)
+          .catch(reject);
+      } else if (image.isSVG) {
+        generateSvgPreview(image.file)
+          .then(resolve)
+          .catch(reject);
+      } else {
+        // For regular images, create a blob URL
+        resolve(URL.createObjectURL(image.file));
+      }
+    });
+  };
+
+  // Helper function to generate TIFF preview
+  const generateTiffPreview = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 200;
+          canvas.height = 150;
+          const ctx = canvas.getContext('2d');
+
+          // Draw TIFF placeholder
+          ctx.fillStyle = '#f0f8ff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Draw border
+          ctx.strokeStyle = '#007bff';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+
+          // Draw TIFF icon
+          ctx.fillStyle = '#007bff';
+          ctx.font = 'bold 32px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('📄', canvas.width / 2, canvas.height / 2 - 15);
+
+          // Draw text
+          ctx.fillStyle = '#333';
+          ctx.font = '12px Arial';
+          ctx.fillText('TIFF IMAGE', canvas.width / 2, canvas.height / 2 + 15);
+
+          resolve(canvas.toDataURL('image/png'));
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  // Helper function to generate SVG preview
+  const generateSvgPreview = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        try {
+          const svgText = e.target.result;
+          const svgBlob = new Blob([svgText], { type: 'image/svg+xml' });
+          const svgUrl = URL.createObjectURL(svgBlob);
+
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.min(img.width, 200);
+            canvas.height = Math.min(img.height, 150);
+            const ctx = canvas.getContext('2d');
+
+            // White background for SVG
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(svgUrl);
+            resolve(canvas.toDataURL('image/png'));
+          };
+
+          img.onerror = () => {
+            URL.revokeObjectURL(svgUrl);
+            reject(new Error('Failed to load SVG'));
+          };
+
+          img.src = svgUrl;
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  };
+
+  // Helper function to get image dimensions
+  const getImageDimensions = (file, isTIFF, isSVG) => {
+    return new Promise((resolve) => {
+      if (isSVG) {
+        // Parse SVG dimensions
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(e.target.result, 'image/svg+xml');
+            const svgElement = svgDoc.documentElement;
+
+            let width = parseInt(svgElement.getAttribute('width')) || 100;
+            let height = parseInt(svgElement.getAttribute('height')) || 100;
+
+            if (!width || !height) {
+              const viewBox = svgElement.getAttribute('viewBox');
+              if (viewBox) {
+                const parts = viewBox.split(' ').map(Number);
+                if (parts.length >= 4) {
+                  width = parts[2] || 100;
+                  height = parts[3] || 100;
+                }
+              }
+            }
+
+            resolve({ width, height });
+          } catch {
+            resolve({ width: 100, height: 100 });
+          }
+        };
+        reader.onerror = () => resolve({ width: 100, height: 100 });
+        reader.readAsText(file);
+      } else {
+        // For regular images and TIFF
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+
+        img.onload = () => {
+          resolve({
+            width: img.naturalWidth || img.width,
+            height: img.naturalHeight || img.height
+          });
+          URL.revokeObjectURL(url);
+        };
+
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve({ width: 100, height: 100 });
+        };
+
+        img.src = url;
+      }
+    });
+  };
+
   const handleImageSelect = (imageId) => {
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
       setProcessingOptions(prev => ({
@@ -199,12 +577,27 @@ function App() {
     }
   };
 
-  /**
-   * Handles select all images
-   */
+  const handleScreenshotTemplateToggle = (templateId) => {
+    setSelectedScreenshotTemplates(prev => {
+      if (prev.includes(templateId)) {
+        return prev.filter(id => id !== templateId);
+      } else {
+        return [...prev, templateId];
+      }
+    });
+  };
+
+  const handleSelectAllScreenshotTemplates = () => {
+    const allTemplateIds = Object.keys(SCREENSHOT_TEMPLATES || {});
+    setSelectedScreenshotTemplates(allTemplateIds);
+  };
+
+  const handleDeselectAllScreenshotTemplates = () => {
+    setSelectedScreenshotTemplates([]);
+  };
+
   const handleSelectAll = () => {
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) return;
-
     if (selectedImages.length === images.length) {
       setSelectedImages([]);
     } else {
@@ -212,9 +605,6 @@ function App() {
     }
   };
 
-  /**
-   * Handles removing selected images
-   */
   const handleRemoveSelected = () => {
     const imagesToRemove = processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
       ? [processingOptions.templateSelectedImage].filter(Boolean)
@@ -236,121 +626,141 @@ function App() {
     showModal(t('message.removed'), t('message.removedImages'), MODAL_TYPES.SUCCESS);
   };
 
-  /**
-   * Handles favicon toggle
-   */
   const handleFaviconToggle = (selected) => {
     setIsFaviconSelected(selected);
-
-    if (selected) {
-      if (!processingOptions.selectedTemplates.includes(FAVICON_TEMPLATE_ID)) {
-        setProcessingOptions(prev => ({
-          ...prev,
-          selectedTemplates: [...prev.selectedTemplates, FAVICON_TEMPLATE_ID],
-          includeFavicon: true
-        }));
-      }
-    } else {
-      setProcessingOptions(prev => ({
-        ...prev,
-        selectedTemplates: prev.selectedTemplates.filter(id => id !== FAVICON_TEMPLATE_ID),
-        includeFavicon: false
-      }));
-    }
   };
 
-  /**
-   * Handles screenshot toggle
-   */
   const handleScreenshotToggle = (selected) => {
     setIsScreenshotSelected(selected);
-
-    if (selected) {
-      setProcessingOptions(prev => ({
-        ...prev,
-        selectedTemplates: prev.selectedTemplates.filter(id => id !== SCREENSHOT_TEMPLATE_ID)
-      }));
-    } else {
-      setProcessingOptions(prev => ({
-        ...prev,
-        selectedTemplates: prev.selectedTemplates.filter(id => id !== SCREENSHOT_TEMPLATE_ID)
-      }));
+    if (!selected) {
       setScreenshotUrl('');
       setScreenshotValidation(null);
+      setScreenshotResults(null);
     }
   };
 
-  /**
-   * Handles screenshot URL change
-   */
-  const handleScreenshotUrlChange = (url) => {
-    setScreenshotUrl(url);
+  const setupAutoClose = (type) => {
+    // Clear any existing timeout
+    if (autoCloseTimeoutRef.current) {
+      clearTimeout(autoCloseTimeoutRef.current);
+      autoCloseTimeoutRef.current = null;
+    }
 
-    if (url.trim()) {
-      try {
-        let cleanUrl = url.trim();
-        if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-          cleanUrl = `https://${cleanUrl}`;
-        }
-        cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
-
-        new URL(cleanUrl);
-
-        const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
-
-        if (urlPattern.test(cleanUrl)) {
-          setScreenshotValidation({
-            isValid: true,
-            message: 'Valid website URL - ready for screenshots'
-          });
-        } else {
-          setScreenshotValidation({
-            isValid: false,
-            message: 'Please enter a valid website URL'
-          });
-        }
-      } catch {
-        setScreenshotValidation({
-          isValid: false,
-          message: 'Invalid URL format'
-        });
+    if (!userInteractedWithModal) {
+      let timeoutDuration;
+      switch (type) {
+        case MODAL_TYPES.SUCCESS:
+          timeoutDuration = ANIMATION_DURATIONS.MODAL_CLOSE_SUCCESS;
+          break;
+        case MODAL_TYPES.INFO:
+          timeoutDuration = ANIMATION_DURATIONS.MODAL_CLOSE_INFO;
+          break;
+        case MODAL_TYPES.ERROR:
+          timeoutDuration = ANIMATION_DURATIONS.MODAL_CLOSE_ERROR;
+          break;
+        case MODAL_TYPES.SUMMARY:
+          timeoutDuration = ANIMATION_DURATIONS.MODAL_CLOSE_SUMMARY;
+          break;
+        case MODAL_TYPES.WARNING:
+          timeoutDuration = ANIMATION_DURATIONS.MODAL_CLOSE_INFO;
+          break;
+        default:
+          timeoutDuration = 3000;
       }
+
+      console.log(`Setting auto-close for ${type} modal: ${timeoutDuration}ms`);
+
+      autoCloseTimeoutRef.current = setTimeout(() => {
+        console.log(`Auto-closing ${type} modal`);
+        closeModal();
+      }, timeoutDuration);
     } else {
-      setScreenshotValidation(null);
+      console.log(`Not auto-closing ${type} modal - user interacted`);
     }
   };
 
-  /**
-   * Shows modal
-   */
-  const showModal = (title, message, type = MODAL_TYPES.INFO) => {
-    setModal({ isOpen: true, title, message, type });
+  const showModal = (title, message, type = MODAL_TYPES.INFO, showProgress = false, progress = 0, progressStep = '') => {
+    // Clear any existing timeout
+    if (autoCloseTimeout) {
+      clearTimeout(autoCloseTimeout);
+      autoCloseTimeout = null;
+    }
+
+    setModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+      showProgress,
+      progress,
+      progressStep
+    });
+
+    // Set auto-close for non-progress modals
+    if (!showProgress) {
+      let timeoutDuration = 3000; // Default
+
+      if (type === MODAL_TYPES.SUCCESS) timeoutDuration = 3000;
+      else if (type === MODAL_TYPES.INFO) timeoutDuration = 5000;
+      else if (type === MODAL_TYPES.ERROR) timeoutDuration = 7000;
+      else if (type === MODAL_TYPES.SUMMARY) timeoutDuration = 8000;
+      else if (type === MODAL_TYPES.WARNING) timeoutDuration = 5000;
+
+      autoCloseTimeout = setTimeout(() => {
+        closeModal();
+      }, timeoutDuration);
+    }
   };
 
-  /**
-   * Shows summary modal
-   */
   const showSummaryModal = (summary) => {
+    // Clear any existing timeout
+    if (autoCloseTimeout) {
+      clearTimeout(autoCloseTimeout);
+      autoCloseTimeout = null;
+    }
+
     setProcessingSummary(summary);
     setModal({
       isOpen: true,
       title: t('summary.title'),
       message: '',
-      type: MODAL_TYPES.SUMMARY
+      type: MODAL_TYPES.SUMMARY,
+      showProgress: false,
+      progress: 0,
+      progressStep: ''
     });
+
+    // Set auto-close for summary
+    autoCloseTimeout = setTimeout(() => {
+      closeModal();
+    }, 8000);
   };
 
-  /**
-   * Closes modal
-   */
   const closeModal = () => {
-    setModal({ isOpen: false, title: '', message: '', type: MODAL_TYPES.INFO });
+    if (autoCloseTimeout) {
+      clearTimeout(autoCloseTimeout);
+      autoCloseTimeout = null;
+    }
+
+    setModal({
+      isOpen: false,
+      title: '',
+      message: '',
+      type: MODAL_TYPES.INFO,
+      showProgress: false,
+      progress: 0,
+      progressStep: ''
+    });
     setProcessingSummary(null);
   };
 
-  /**
-   * Toggles resize/crop
-   */
+  const handleModalInteraction = () => {
+    if (autoCloseTimeout) {
+      clearTimeout(autoCloseTimeout);
+      autoCloseTimeout = null;
+    }
+  };
+
   const toggleResizeCrop = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -359,9 +769,6 @@ function App() {
     }));
   };
 
-  /**
-   * Toggles crop mode
-   */
   const toggleCropMode = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -369,9 +776,6 @@ function App() {
     }));
   };
 
-  /**
-   * Handles format toggle
-   */
   const handleFormatToggle = (format) => {
     setProcessingOptions(prev => {
       const currentFormats = prev.output.formats || [];
@@ -391,9 +795,6 @@ function App() {
     });
   };
 
-  /**
-   * Handles select all formats
-   */
   const handleSelectAllFormats = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -404,9 +805,6 @@ function App() {
     }));
   };
 
-  /**
-   * Handles clear all formats
-   */
   const handleClearAllFormats = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -417,9 +815,6 @@ function App() {
     }));
   };
 
-  /**
-   * Toggles processing mode
-   */
   const toggleProcessingMode = (mode) => {
     const newMode = mode === PROCESSING_MODES.TEMPLATES ? PROCESSING_MODES.TEMPLATES : PROCESSING_MODES.CUSTOM;
 
@@ -450,9 +845,6 @@ function App() {
     }
   };
 
-  /**
-   * Handles template toggle
-   */
   const handleTemplateToggle = (templateId) => {
     setProcessingOptions(prev => {
       const newSelected = prev.selectedTemplates.includes(templateId)
@@ -463,9 +855,6 @@ function App() {
     });
   };
 
-  /**
-   * Handles select all templates
-   */
   const handleSelectAllTemplates = () => {
     const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id);
     setProcessingOptions(prev => ({
@@ -474,9 +863,6 @@ function App() {
     }));
   };
 
-  /**
-   * Handles select all in category
-   */
   const handleSelectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
@@ -488,9 +874,6 @@ function App() {
     }));
   };
 
-  /**
-   * Handles deselect all in category
-   */
   const handleDeselectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
@@ -502,9 +885,6 @@ function App() {
     }));
   };
 
-  /**
-   * Handles option change
-   */
   const handleOptionChange = (category, key, value) => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -515,9 +895,6 @@ function App() {
     }));
   };
 
-  /**
-   * Handles single option change
-   */
   const handleSingleOptionChange = (key, value) => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -525,9 +902,6 @@ function App() {
     }));
   };
 
-  /**
-   * Gets selected images for processing
-   */
   const getSelectedImagesForProcessing = () => {
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
       return processingOptions.templateSelectedImage
@@ -538,75 +912,412 @@ function App() {
     }
   };
 
-  /**
-   * Processes custom images
-   */
   const processCustomImages = async () => {
+    console.log('=== STARTING CUSTOM IMAGE PROCESSING ===');
+
     const selectedImagesForProcessing = getSelectedImagesForProcessing();
+    console.log('Selected images for processing:', selectedImagesForProcessing.length);
+
     if (selectedImagesForProcessing.length === 0) {
+      console.error('No images selected for processing');
       showModal(t('message.error'), t('message.errorSelectImages'), MODAL_TYPES.ERROR);
       return;
     }
 
+    // USE THE VALIDATION HELPER
+    console.log('Validating images before processing...');
+    const validationIssues = validateImageFilesBeforeProcessing(selectedImagesForProcessing);
+    if (validationIssues.length > 0) {
+      console.warn('Image validation issues found:', validationIssues);
+
+      // Show warning but continue processing
+      if (validationIssues.length === selectedImagesForProcessing.length) {
+        // All images have issues
+        const issuesList = validationIssues.map(issue =>
+          `${issue.image}: ${issue.issue}`
+        ).join('\n');
+
+        showModal(
+          t('message.error'),
+          `${t('message.errorProcessing')}:\n${issuesList}`,
+          MODAL_TYPES.ERROR
+        );
+        return;
+      } else {
+        // Some images have issues
+        const warningMessage = `${validationIssues.length} image(s) have issues but processing will continue with the rest.`;
+        console.warn(warningMessage);
+      }
+    }
+
     const validation = validateProcessingOptions(processingOptions);
     if (!validation.isValid) {
+      console.error('Processing options validation failed:', validation.errors);
       showModal(t('message.error'), validation.errors.join('\n'), MODAL_TYPES.ERROR);
       return;
     }
 
+    console.log('Processing options validated successfully');
+
     setIsLoading(true);
-    showModal(t('message.processingImages', { count: selectedImagesForProcessing.length }), t('message.processingImages', { count: selectedImagesForProcessing.length }), MODAL_TYPES.INFO);
+    startProcessingModal(t('message.processingImages', { count: selectedImagesForProcessing.length }));
 
     try {
+      updateProcessingModal(10, t('processing.preparing'));
+
       const processingConfig = getProcessingConfiguration(processingOptions);
-      const processedImages = await orchestrateCustomProcessing(
-        selectedImagesForProcessing,
-        processingConfig,
-        aiModelLoaded,
-      );
+
+      // USE THE LOGGING HELPER
+      logProcessingAttempt(selectedImagesForProcessing, processingConfig, aiModelLoaded);
+
+      updateProcessingModal(30, t('processing.processingImages'));
+
+      let processedImages;
+      try {
+        console.log('Calling orchestrateCustomProcessing...');
+        processedImages = await orchestrateCustomProcessing(
+          selectedImagesForProcessing,
+          processingConfig,
+          aiModelLoaded
+        );
+
+        console.log('orchestrateCustomProcessing completed:', {
+          totalResults: processedImages?.length || 0,
+          successfulResults: processedImages?.filter(img => !img.error)?.length || 0,
+          failedResults: processedImages?.filter(img => img.error)?.length || 0
+        });
+
+        if (!processedImages || processedImages.length === 0) {
+          throw new Error('No images were processed - function returned empty array');
+        }
+
+        // Check for errors in processed images
+        const failedImages = processedImages.filter(img => img.error);
+        if (failedImages.length > 0) {
+          console.warn('Some images failed to process:', failedImages);
+
+          // If all images failed
+          if (failedImages.length === processedImages.length) {
+            throw new Error(`All images failed to process: ${failedImages[0]?.error || 'Unknown error'}`);
+          }
+
+          // Show warning about failed images
+          const failedNames = failedImages.map(img => img.name).join(', ');
+          console.warn(`Failed images: ${failedNames}`);
+
+          // Show a warning modal about failed images
+          setTimeout(() => {
+            showModal(
+              t('message.warning'),
+              `${failedImages.length} image(s) failed to process: ${failedNames}`,
+              MODAL_TYPES.WARNING
+            );
+          }, 2000);
+        }
+
+      } catch (processingError) {
+        console.error('Error in orchestrateCustomProcessing:', {
+          message: processingError.message,
+          stack: processingError.stack,
+          name: processingError.name,
+          config: processingConfig,
+          aiModelLoaded: aiModelLoaded
+        });
+
+        // USE THE ERROR HANDLING HELPER
+        const errorInfo = handleProcessingError(processingError);
+        console.log('Error analysis:', errorInfo);
+
+        throw new Error(`${errorInfo.userMessage}: ${processingError.message}\n\nSuggestion: ${errorInfo.suggestion}`);
+      }
+
+      // Filter out only successful images
+      const successfulImages = processedImages.filter(img => !img.error);
+      console.log(`Successful images: ${successfulImages.length}/${processedImages.length}`);
+
+      if (successfulImages.length === 0) {
+        throw new Error('No images were successfully processed');
+      }
+
+      updateProcessingModal(70, t('processing.creatingZip'));
+      console.log('Creating export zip...');
 
       const settings = generateExportSettings(EXPORT_SETTINGS.CUSTOM);
-      const zipBlob = await createExportZip(
-        selectedImagesForProcessing,
-        processedImages,
-        settings,
-        PROCESSING_MODES.CUSTOM,
-        processingOptions.output.formats
-      );
+      console.log('Export settings:', settings);
 
-      downloadZip(zipBlob, EXPORT_SETTINGS.DEFAULT_ZIP_NAME_CUSTOM);
+      let zipBlob;
+      try {
+        zipBlob = await createExportZip(
+          selectedImagesForProcessing,
+          successfulImages,
+          settings,
+          PROCESSING_MODES.CUSTOM,
+          processingOptions.output.formats
+        );
+
+        if (!zipBlob) {
+          throw new Error('Failed to create zip file');
+        }
+
+        console.log('Zip created successfully, size:', formatFileSize(zipBlob.size));
+      } catch (zipError) {
+        console.error('Error creating zip:', zipError);
+        throw new Error(`Failed to create zip file: ${zipError.message}`);
+      }
+
+      updateProcessingModal(90, t('processing.downloading'));
+      console.log('Downloading zip...');
+
+      try {
+        downloadZip(zipBlob, EXPORT_SETTINGS.DEFAULT_ZIP_NAME_CUSTOM);
+        console.log('Zip download initiated');
+      } catch (downloadError) {
+        console.error('Error downloading zip:', downloadError);
+        // Don't throw here - we still want to show success even if auto-download fails
+        // Show a warning instead
+        setTimeout(() => {
+          showModal(
+            t('message.warning'),
+            'Files were processed but auto-download failed. You can download them manually.',
+            MODAL_TYPES.WARNING
+          );
+        }, 3000);
+      }
+
+      updateProcessingModal(100, t('processing.complete'));
+      console.log('Processing completed successfully');
 
       const summary = createProcessingSummary({
         imagesProcessed: selectedImagesForProcessing.length,
-        totalFiles: processedImages.length,
+        totalFiles: successfulImages.length,
         success: true,
         templatesApplied: processingOptions.selectedTemplates.length,
-        categoriesApplied: calculateCategoriesApplied(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES)
+        categoriesApplied: calculateCategoriesApplied(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES, false, false),
+        errors: processedImages.filter(img => img.error).map(img => ({
+          name: img.name,
+          error: img.error
+        })),
+        failedCount: processedImages.filter(img => img.error).length
       }, processingConfig, t);
 
-      closeModal();
-      showSummaryModal(summary);
+      console.log('Generated summary:', summary);
 
-    } catch {
-      showModal(t('message.error'), t('message.errorProcessing'), MODAL_TYPES.ERROR);
+      // Close progress modal and show summary
+      setTimeout(() => {
+        closeModal();
+        showSummaryModal(summary);
+        console.log('Summary modal shown');
+      }, 1000);
+
+    } catch (error) {
+      console.error('Error in processCustomImages:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+
+      // USE THE ERROR HANDLING HELPER HERE TOO
+      const errorInfo = handleProcessingError(error);
+
+      // Show error modal with helpful message
+      showModal(
+        t('message.error'),
+        `${errorInfo.userMessage}\n\n${errorInfo.suggestion}`,
+        MODAL_TYPES.ERROR
+      );
+
+      // If it's a retryable error, offer to try again
+      if (errorInfo.shouldRetry) {
+        setTimeout(() => {
+          showModal(
+            t('message.warning'),
+            'Would you like to try processing again with different settings?',
+            MODAL_TYPES.INFO
+          );
+        }, 2000);
+      }
+
     } finally {
+      console.log('=== PROCESSING COMPLETED ===');
       setIsLoading(false);
+
+      // Cleanup
+      setTimeout(() => {
+        safeCleanupGPUMemory();
+        console.log('GPU memory cleaned up');
+      }, 500);
     }
   };
 
   /**
-   * Gets all templates combined
+   * Logs detailed information about processing attempt
    */
-  const getAllTemplates = () => {
-    return [
-      ...SOCIAL_MEDIA_TEMPLATES,
-      ...(SCREENSHOT_TEMPLATES ? Object.values(SCREENSHOT_TEMPLATES) : [])
-    ];
+  const logProcessingAttempt = (images, config, aiLoaded) => {
+    console.group('Processing Attempt Details');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('Number of images:', images.length);
+    console.log('AI Model loaded:', aiLoaded);
+    console.log('Processing configuration:', config);
+
+    images.forEach((img, index) => {
+      console.log(`Image ${index + 1}:`, {
+        name: img.name,
+        type: img.type,
+        size: formatFileSize(img.size),
+        dimensions: img.metadata?.dimensions || 'Unknown',
+        hasTransparency: img.metadata?.hasTransparency || false,
+        isTIFF: img.isTIFF,
+        isSVG: img.isSVG
+      });
+    });
+
+    console.groupEnd();
   };
 
   /**
-   * Processes templates
+   * Handle specific processing errors with better categorization
    */
+  const handleProcessingError = (error) => {
+    const errorMessage = error.message.toLowerCase();
+    const errorStack = error.stack?.toLowerCase() || '';
+
+    console.log('Analyzing error:', { errorMessage, errorStack });
+
+    // AI/Model related errors
+    if (errorMessage.includes('ai') || errorMessage.includes('model') ||
+      errorMessage.includes('tensor') || errorMessage.includes('upscaler')) {
+      return {
+        userMessage: t('message.aiFailed'),
+        suggestion: t('suggestion.tryStandardCrop'),
+        shouldRetry: false,
+        type: 'ai_error'
+      };
+    }
+
+    // TIFF conversion errors
+    if (errorMessage.includes('tiff') || errorMessage.includes('utif')) {
+      return {
+        userMessage: t('message.tiffConversionFailed'),
+        suggestion: t('suggestion.convertTiffFirst'),
+        shouldRetry: false,
+        type: 'tiff_error'
+      };
+    }
+
+    // SVG conversion errors
+    if (errorMessage.includes('svg') || errorMessage.includes('vector')) {
+      return {
+        userMessage: t('message.svgConversionFailed'),
+        suggestion: t('suggestion.checkSVG'),
+        shouldRetry: false,
+        type: 'svg_error'
+      };
+    }
+
+    // Memory/GPU errors
+    if (errorMessage.includes('memory') || errorMessage.includes('gpu') ||
+      errorMessage.includes('texture') || errorMessage.includes('buffer')) {
+      return {
+        userMessage: t('message.memoryError'),
+        suggestion: t('suggestion.reduceBatchSize'),
+        shouldRetry: true,
+        type: 'memory_error'
+      };
+    }
+
+    // Timeout errors
+    if (errorMessage.includes('timeout') || errorMessage.includes('timed out') ||
+      errorMessage.includes('too long')) {
+      return {
+        userMessage: t('message.timeoutError'),
+        suggestion: t('suggestion.trySmaller'),
+        shouldRetry: true,
+        type: 'timeout_error'
+      };
+    }
+
+    // Network errors
+    if (errorMessage.includes('network') || errorMessage.includes('fetch') ||
+      errorMessage.includes('http') || errorMessage.includes('request')) {
+      return {
+        userMessage: 'Network error occurred',
+        suggestion: 'Check your internet connection and try again.',
+        shouldRetry: true,
+        type: 'network_error'
+      };
+    }
+
+    // File/IO errors
+    if (errorMessage.includes('file') || errorMessage.includes('blob') ||
+      errorMessage.includes('url') || errorMessage.includes('object')) {
+      return {
+        userMessage: 'File handling error',
+        suggestion: 'Try uploading the images again or use different files.',
+        shouldRetry: true,
+        type: 'file_error'
+      };
+    }
+
+    // Canvas/rendering errors
+    if (errorMessage.includes('canvas') || errorMessage.includes('context') ||
+      errorMessage.includes('draw') || errorMessage.includes('image')) {
+      return {
+        userMessage: 'Image rendering error',
+        suggestion: 'Try with different images or reduce image size.',
+        shouldRetry: true,
+        type: 'canvas_error'
+      };
+    }
+
+    // Default/generic error
+    return {
+      userMessage: t('message.errorProcessing'),
+      suggestion: t('suggestion.tryAgain'),
+      shouldRetry: true,
+      type: 'generic_error'
+    };
+  };
+
+  /**
+   * Validate individual image files before processing
+   */
+  const validateImageFilesBeforeProcessing = (images) => {
+    const issues = [];
+
+    images.forEach((image, index) => {
+      // Check file size (limit to 50MB per file)
+      const maxSize = 50 * 1024 * 1024; // 50MB
+      if (image.size > maxSize) {
+        issues.push({
+          image: image.name,
+          issue: `File too large (${formatFileSize(image.size)}). Maximum size is 50MB.`,
+          index
+        });
+      }
+
+      // Check if file is corrupt/empty
+      if (image.size === 0) {
+        issues.push({
+          image: image.name,
+          issue: 'File appears to be empty (0 bytes).',
+          index
+        });
+      }
+
+      // Warn about TIFF files (they can be problematic)
+      if (image.isTIFF) {
+        console.warn(`TIFF file detected: ${image.name} - may have conversion issues`);
+      }
+
+      // Warn about SVG files
+      if (image.isSVG) {
+        console.warn(`SVG file detected: ${image.name} - may require special handling`);
+      }
+    });
+
+    return issues;
+  };
+
   const processTemplates = async () => {
     const selectedImagesForProcessing = getSelectedImagesForProcessing();
     if (selectedImagesForProcessing.length === 0) {
@@ -633,7 +1344,7 @@ function App() {
         cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
         new URL(cleanUrl);
         setScreenshotUrl(cleanUrl);
-      } catch {
+      } catch (error) {
         showModal(t('message.error'), t('message.errorInvalidUrl'), MODAL_TYPES.ERROR);
         return;
       }
@@ -646,31 +1357,20 @@ function App() {
 
     setIsLoading(true);
 
-    const hasScreenshotTemplates = processingOptions.selectedTemplates.some(id => {
-      const template = getAllTemplates().find(t => t.id === id);
-      return template && template.category === 'screenshots';
-    });
+    const totalTemplatesToProcess = processingOptions.selectedTemplates.length +
+      (isFaviconSelected ? 1 : 0) +
+      (isScreenshotSelected ? selectedScreenshotTemplates.length : 0);
 
-    if (hasScreenshotTemplates && isScreenshotSelected) {
-      showModal(
-        t('message.processingImages', { count: processingOptions.selectedTemplates.length }),
-        t('message.generatingScreenshots'),
-        MODAL_TYPES.INFO
-      );
-    } else {
-      showModal(
-        t('message.processingImages', { count: processingOptions.selectedTemplates.length }),
-        t('message.processingImages', { count: processingOptions.selectedTemplates.length }),
-        MODAL_TYPES.INFO
-      );
-    }
+    startProcessingModal(t('message.processingTemplates', { count: totalTemplatesToProcess }));
 
     try {
-      const processingConfig = getProcessingConfiguration(processingOptions);
+      updateProcessingModal(10, t('processing.preparingTemplates'));
 
+      const processingConfig = getProcessingConfiguration(processingOptions);
       const screenshotTemplateIds = isScreenshotSelected && SCREENSHOT_TEMPLATES ?
         Object.keys(SCREENSHOT_TEMPLATES) : [];
 
+      updateProcessingModal(20, t('processing.setup'));
       const processingOptionsWithExtras = {
         ...processingConfig,
         useServerCapture: false,
@@ -681,14 +1381,17 @@ function App() {
         includeFavicon: isFaviconSelected,
         includeScreenshots: isScreenshotSelected,
         selectedTemplates: processingOptions.selectedTemplates,
-        selectedScreenshotTemplates: screenshotTemplateIds,
-        ...(isFaviconSelected && { faviconTemplateIds: [FAVICON_TEMPLATE_ID] })
+        selectedScreenshotTemplates: screenshotTemplateIds
       };
 
-      const allTemplates = getAllTemplates();
+      const allTemplates = SOCIAL_MEDIA_TEMPLATES;
+      const templatesToProcess = isFaviconSelected && processingOptions.selectedTemplates.length === 0 ?
+        [] : processingOptions.selectedTemplates;
+
+      updateProcessingModal(30, t('processing.processingTemplates'));
       const processedImages = await orchestrateTemplateProcessing(
         selectedImagesForProcessing[0],
-        processingOptions.selectedTemplates,
+        templatesToProcess,
         allTemplates,
         true,
         aiModelLoaded,
@@ -696,28 +1399,7 @@ function App() {
         processingOptionsWithExtras
       );
 
-      let screenshotResults = [];
-      if (isScreenshotSelected && screenshotUrl.trim()) {
-        try {
-          screenshotResults = await captureScreenshotsForTemplates(
-            screenshotUrl,
-            screenshotTemplateIds,
-            { timeout: 30000 }
-          );
-
-          screenshotResults.forEach(result => {
-            if (result.success) {
-              processedImages.push({
-                ...result,
-                template: SCREENSHOT_TEMPLATES[result.templateId],
-                category: 'screenshots',
-                processed: true
-              });
-            }
-          });
-        } catch { }
-      }
-
+      updateProcessingModal(70, t('processing.creatingZip'));
       const settings = generateExportSettings(EXPORT_SETTINGS.TEMPLATES, {
         faviconSiteName: processingOptions.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
         faviconThemeColor: processingOptions.faviconThemeColor || DEFAULT_FAVICON_THEME_COLOR,
@@ -738,10 +1420,15 @@ function App() {
         [selectedImagesForProcessing[0]],
         processedImages,
         settings,
-        PROCESSING_MODES.TEMPLATES
+        PROCESSING_MODES.TEMPLATES,
+        undefined,
+        t
       );
 
+      updateProcessingModal(90, t('processing.downloading'));
       downloadZip(zipBlob, EXPORT_SETTINGS.DEFAULT_ZIP_NAME_TEMPLATES);
+
+      updateProcessingModal(100, t('processing.complete'));
 
       const hasScreenshotPlaceholders = processedImages.some(img =>
         img.template?.category === 'screenshots' &&
@@ -749,16 +1436,32 @@ function App() {
         img.method.includes('placeholder')
       );
 
+      const totalFiles = processedImages.length +
+        (isFaviconSelected ? 9 : 0) +
+        (isScreenshotSelected ? selectedScreenshotTemplates.length : 0) +
+        1;
+
+      const categoriesApplied = calculateCategoriesApplied(
+        processingOptions.selectedTemplates,
+        SOCIAL_MEDIA_TEMPLATES,
+        isFaviconSelected,
+        isScreenshotSelected
+      );
+
       const summary = createProcessingSummary({
         imagesProcessed: 1,
-        totalFiles: processedImages.length,
+        totalFiles: totalFiles,
         success: true,
-        usedPlaceholders: hasScreenshotPlaceholders,
-        screenshotCount: screenshotResults.filter(r => r.success).length
+        templatesApplied: processingOptions.selectedTemplates.length + (isFaviconSelected ? 1 : 0) + (isScreenshotSelected ? selectedScreenshotTemplates.length : 0),
+        categoriesApplied: categoriesApplied,
+        formatsExported: ['WEBP', 'PNG', 'JPG', 'ICO'],
+        screenshotCount: screenshotResults ? screenshotResults.successful : 0
       }, processingConfig, t);
 
-      closeModal();
-      showSummaryModal(summary);
+      setTimeout(() => {
+        closeModal();
+        showSummaryModal(summary);
+      }, 1000);
 
       if (hasScreenshotPlaceholders && isScreenshotSelected) {
         setTimeout(() => {
@@ -767,9 +1470,8 @@ function App() {
             t('message.placeholderScreenshotsGenerated'),
             MODAL_TYPES.INFO
           );
-        }, 1000);
+        }, PROCESSING_DELAYS.MEMORY_CLEANUP);
       }
-
     } catch (error) {
       showModal(t('message.error'), `${t('message.errorApplying')}: ${error.message}`, MODAL_TYPES.ERROR);
     } finally {
@@ -777,52 +1479,111 @@ function App() {
     }
   };
 
-  /**
-   * Formats template name
-   */
-  const formatTemplateName = (name) => {
-    return t(`template.${name}`) || name;
-  };
-
-  /**
-   * Increments value
-   */
   const incrementValue = (key, increment = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
     const currentValue = parseInt(processingOptions[key] || '0');
     const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue + increment);
     handleSingleOptionChange(key, String(newValue));
   };
 
-  /**
-   * Decrements value
-   */
   const decrementValue = (key, decrement = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
     const currentValue = parseInt(processingOptions[key] || '1');
     const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue - decrement);
     handleSingleOptionChange(key, String(newValue));
   };
 
-  /**
-   * Calculates categories applied
-   */
-  const calculateCategoriesApplied = (selectedTemplates, SOCIAL_MEDIA_TEMPLATES) => {
-    if (!selectedTemplates || selectedTemplates.length === 0) return 0;
-
+  const calculateCategoriesApplied = (selectedTemplates, templates, isFaviconSelected = false, isScreenshotSelected = false) => {
     const categories = new Set();
-    selectedTemplates.forEach(templateId => {
-      const template = SOCIAL_MEDIA_TEMPLATES.find(t => t.id === templateId);
-      if (template && template.category) {
-        let displayCategory = template.category;
-        if (displayCategory === 'twitter') displayCategory = 'twitter/x';
-        if (displayCategory === 'favicon' || displayCategory === 'screenshots') {
-          categories.add(displayCategory);
-        } else if (displayCategory !== 'web' && displayCategory !== 'logo') {
-          categories.add(displayCategory);
+
+    if (selectedTemplates && selectedTemplates.length > 0) {
+      selectedTemplates.forEach(templateId => {
+        const template = templates.find(t => t.id === templateId);
+        if (template && template.category) {
+          let displayCategory = template.category;
+          if (displayCategory === 'web' || displayCategory === 'logo' ||
+            displayCategory === 'favicon' || displayCategory === 'screenshots') {
+            categories.add(displayCategory);
+          } else if (displayCategory === 'twitter') {
+            categories.add('twitter/x');
+          } else {
+            categories.add(displayCategory);
+          }
         }
-      }
-    });
+      });
+    }
+
+    if (isFaviconSelected) {
+      categories.add('favicon');
+    }
+
+    if (isScreenshotSelected) {
+      categories.add('screenshots');
+    }
 
     return categories.size;
+  };
+
+  const downloadScreenshotZip = async (screenshotImages, url) => {
+    try {
+      if (!screenshotImages || screenshotImages.length === 0) {
+        return;
+      }
+
+      const zipBlob = await createScreenshotZip(screenshotImages, url);
+      const timestamp = new Date().toISOString().split('T')[0];
+      const domain = url.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+      const zipName = `screenshots-${domain}-${timestamp}`;
+      downloadZip(zipBlob, zipName);
+
+      showModal(
+        t('message.success'),
+        t('message.screenshotDownload', { count: screenshotImages.length }),
+        MODAL_TYPES.SUCCESS
+      );
+    } catch (error) {
+      showModal(t('message.error'), t('message.errorDownloadScreenshot'), MODAL_TYPES.ERROR);
+    }
+  };
+
+  const handleCaptureScreenshots = async (url, selectedTemplateIds) => {
+    try {
+      if (!url || url.trim() === '') {
+        throw new Error(t('message.errorScreenshotUrl'));
+      }
+
+      if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
+        throw new Error(t('templates.selectTemplates'));
+      }
+
+      setIsCapturingScreenshots(true);
+      setCaptureProgress(10);
+
+      const screenshotTemplates = selectedTemplateIds
+        .map(id => SCREENSHOT_TEMPLATES?.[id])
+        .filter(template => template);
+
+      if (screenshotTemplates.length === 0) {
+        throw new Error(t('message.errorSelectTemplate'));
+      }
+
+      setCaptureProgress(30);
+      const results = await captureMultipleScreenshots(screenshotTemplates, url);
+      setCaptureProgress(80);
+
+      const newImages = convertScreenshotResultsToImages(results);
+      setProcessedImages(prev => [...prev, ...newImages]);
+
+      if (newImages.length > 0) {
+        await downloadScreenshotZip(newImages, url);
+      }
+
+      setCaptureProgress(100);
+      return results;
+    } catch (error) {
+      throw error;
+    } finally {
+      setIsCapturingScreenshots(false);
+      setTimeout(() => setCaptureProgress(0), PROCESSING_DELAYS.MEMORY_CLEANUP);
+    }
   };
 
   const selectedImagesForProcessing = getSelectedImagesForProcessing();
@@ -872,10 +1633,10 @@ function App() {
         </div>
       )}
 
-      <Header />
+      <HeaderSection />
 
       <main className="main-content">
-        <ImageUploader
+        <UploadSection
           onUpload={handleImageUpload}
           fileInputRef={fileInputRef}
         />
@@ -920,7 +1681,7 @@ function App() {
                       </h3>
                       <div className="form-group">
                         <div className="range-wrapper">
-                          <RangeSlider
+                          <RangeSliderElement
                             label={t('compression.quality')}
                             min={COMPRESSION_QUALITY_RANGE.MIN}
                             max={COMPRESSION_QUALITY_RANGE.MAX}
@@ -1324,22 +2085,24 @@ function App() {
                               <h4 className="card-title">
                                 <i className={`${category.icon} mr-sm`}></i> {t(`category.${category.id}`)}
                               </h4>
-                              <div className="card-actions">
-                                <button
-                                  className="btn btn-secondary btn-sm"
-                                  onClick={() => handleSelectAllInCategory(category.id)}
-                                  disabled={!processingOptions.templateSelectedImage}
-                                >
-                                  <i className="fas fa-check"></i> {t('templates.selectCategory')}
-                                </button>
-                                <button
-                                  className="btn btn-secondary btn-sm"
-                                  onClick={() => handleDeselectAllInCategory(category.id)}
-                                  disabled={!processingOptions.templateSelectedImage}
-                                >
-                                  <i className="fas fa-times"></i> {t('templates.deselectCategory')}
-                                </button>
-                              </div>
+                              {category.id !== 'screenshots' && (
+                                <div className="card-actions">
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => handleSelectAllInCategory(category.id)}
+                                    disabled={!processingOptions.templateSelectedImage}
+                                  >
+                                    <i className="fas fa-check"></i> {t('templates.selectCategory')}
+                                  </button>
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => handleDeselectAllInCategory(category.id)}
+                                    disabled={!processingOptions.templateSelectedImage}
+                                  >
+                                    <i className="fas fa-times"></i> {t('templates.deselectCategory')}
+                                  </button>
+                                </div>
+                              )}
                             </div>
                             <div className="space-y-sm">
                               {categoryTemplates.map(template => (
@@ -1354,7 +2117,7 @@ function App() {
                                   <span className="checkbox-custom"></span>
                                   <span className="flex-1">
                                     <div className="flex justify-between items-center">
-                                      <span className="font-medium">{formatTemplateName(template.name)}</span>
+                                      <span className="font-medium">{getTranslatedTemplateName(template.name, t)}</span>
                                       <span className="text-muted text-sm">
                                         {template.width}×{template.height === 'auto' ? 'auto' : template.height}
                                       </span>
@@ -1362,6 +2125,26 @@ function App() {
                                   </span>
                                 </label>
                               ))}
+
+                              {category.id === 'screenshots' && (
+                                <div className="screenshot-section">
+                                  <ScreenShotsCard
+                                    isSelected={isScreenshotSelected}
+                                    onToggle={handleScreenshotToggle}
+                                    screenshotUrl={screenshotUrl}
+                                    onUrlChange={handleScreenshotUrlChange}
+                                    validation={screenshotValidation}
+                                    isCapturing={isCapturingScreenshots}
+                                    captureProgress={captureProgress}
+                                    onCaptureClick={handleCaptureScreenshots}
+                                    selectedTemplates={selectedScreenshotTemplates}
+                                    onTemplateToggle={handleScreenshotTemplateToggle}
+                                    onSelectAllTemplates={handleSelectAllScreenshotTemplates}
+                                    onDeselectAllTemplates={handleDeselectAllScreenshotTemplates}
+                                    showTemplateActions={false}
+                                  />
+                                </div>
+                              )}
 
                               {category.id === 'favicon' && (
                                 <div className="checkbox-wrapper" onClick={() => handleFaviconToggle(!isFaviconSelected)}>
@@ -1381,241 +2164,85 @@ function App() {
                                   </span>
                                 </div>
                               )}
-                              {category.id === 'screenshots' && (
-                                <SiteScreenshots
-                                  isSelected={isScreenshotSelected}
-                                  onToggle={handleScreenshotToggle}
-                                  onUrlChange={handleScreenshotUrlChange}
-                                  screenshotUrl={screenshotUrl}
-                                  validation={screenshotValidation}
-                                  onScreenshotComplete={(results) => {
-                                    // Handle screenshot completion if needed
-                                    if (results && results.success) {
-                                      showModal(
-                                        t('message.success'),
-                                        `Captured ${results.successful}/${results.total} screenshots successfully`,
-                                        MODAL_TYPES.SUCCESS
-                                      );
-                                    }
-                                  }}
-                                />
-                              )}
                             </div>
                           </div>
                         );
                       })}
                     </div>
 
-                    <div className="card">
-                      <div className="card-header">
-                        <div className="flex justify-between items-start w-full">
-                          <div className="flex-1">
-                            <h4 className="card-title mb-xs">{t('templates.imageForTemplates')}</h4>
-                            <div className="flex items-center gap-4 text-sm text-muted">
-                              <span className="truncate max-w-xs">
-                                {templateSelectedImageObj
-                                  ? templateSelectedImageObj.name
-                                  : t('templates.noImageSelected')
-                                }
-                              </span>
-                              {templateSelectedImageObj && (
-                                <>
-                                  <span className="flex-shrink-0">&nbsp;•&nbsp;</span>
-                                  <span className="flex-shrink-0">
-                                    {formatFileSize(templateSelectedImageObj.size)}
-                                  </span>
-                                  <span className="flex-shrink-0">&nbsp;•&nbsp;</span>
-                                  <span className="flex-shrink-0">
-                                    {templateSelectedImageObj.originalFormat?.toUpperCase() || templateSelectedImageObj.type.split('/')[1].toUpperCase()}
-                                    {templateSelectedImageObj.isTIFF && <span className="ml-1 px-1 py-0.5 bg-orange-100 text-orange-800 text-xs rounded">TIFF</span>}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {templateSelectedImageObj && (
-                        <div className="relative w-full rounded-lg overflow-hidden bg-gray-100 image-preview-container-full mt-4">
-                          {templateSelectedImageObj.isTIFF ? (
-                            <div className="relative w-full h-96 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-                              <img
-                                alt={templateSelectedImageObj.name}
-                                className="w-full h-auto object-contain max-h-full"
-                                src={templateSelectedImageObj.url}
-                              />
-                              <div className="absolute bottom-4 right-4 bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
-                                <i className="fas fa-file-image mr-1"></i> TIFF
-                              </div>
-                            </div>
-                          ) : (
-                            <img
-                              alt={templateSelectedImageObj.name}
-                              className="w-full h-auto object-contain max-h-96"
-                              src={templateSelectedImageObj.url}
-                            />
-                          )}
-                          <div className="absolute inset-0 border border-gray-200 rounded-lg pointer-events-none"></div>
-                        </div>
-                      )}
-
-                      <div className="flex justify-between items-center mt-4 mb-lg">
-                        <div className="flex items-center gap-4 text-sm text-muted">
-                          <div className="flex items-center">
-                            <i className="fas fa-layer-group mr-1 text-sm"></i>
-                            <span>
-                              {t('button.templateCount', { count: processingOptions.selectedTemplates.length })} {t('templates.selected')}
-                            </span>
-                          </div>
-                          <span className="text-muted">,&nbsp;</span>
-                          <div className="flex items-center">
-                            <span>
-                              {processingOptions.selectedTemplates.length > 0
-                                ? `${calculateTotalTemplateFiles(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES)} ${t('templates.filesToGenerate')}`
-                                : t('templates.selectTemplates')}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-center mt-6">
-                        <button
-                          className="btn btn-primary btn-lg relative"
-                          disabled={!processingOptions.templateSelectedImage || processingOptions.selectedTemplates.length === 0 || isLoading}
-                          onClick={processTemplates}
-                        >
-                          {isLoading ? (
-                            <>
-                              <i className="fas fa-spinner fa-spin"></i> {t('button.processing')}
-                            </>
-                          ) : (
-                            <>
-                              <i className="fas fa-file-archive"></i> {t('templates.download')}
-                              {processingOptions.selectedTemplates.length > 0 && (
-                                <span className="absolute -top-2 -right-2 bg-danger text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                                  {calculateTotalTemplateFiles(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES)}
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
+                    <TemplateImageSection
+                      templateSelectedImageObj={templateSelectedImageObj}
+                      processingOptions={processingOptions}
+                      isFaviconSelected={isFaviconSelected}
+                      isScreenshotSelected={isScreenshotSelected}
+                      selectedScreenshotTemplates={selectedScreenshotTemplates}
+                      isLoading={isLoading}
+                      onProcessTemplates={processTemplates}
+                      formatFileSize={formatFileSize}
+                      t={t}
+                    />
                   </div>
                 </>
               )}
             </div>
 
-            <div className="card">
-              <div className="card-header">
-                <h3 className="card-title">
-                  <i className="fas fa-images"></i> {t('gallery.title')} ({images.length})
-                  {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && (
-                    <span className="text-muted font-normal ml-md">
-                      {t('gallery.templatesMode')}
-                    </span>
-                  )}
-                </h3>
-                <div className="card-actions">
-                  {processingOptions.processingMode === PROCESSING_MODES.CUSTOM && (
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={handleSelectAll}
-                    >
-                      <i className="fas fa-check-square"></i> {selectedImages.length === images.length ? t('gallery.deselectAll') : t('gallery.selectAll')}
-                    </button>
-                  )}
-                  <button
-                    className="btn btn-danger btn-sm"
-                    onClick={handleRemoveSelected}
-                    disabled={
-                      processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
-                        ? !processingOptions.templateSelectedImage
-                        : selectedImages.length === 0
-                    }
-                  >
-                    <i className="fas fa-trash"></i> {t('gallery.removeSelected')}
-                  </button>
-                </div>
-              </div>
-
-              <div className="image-grid">
-                {images.map(image => {
-                  const isSelected = processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
-                    ? image.id === processingOptions.templateSelectedImage
-                    : selectedImages.includes(image.id);
-
-                  const isTIFF = image.isTIFF;
-
-                  return (
-                    <div
-                      key={image.id}
-                      className={`image-card ${isSelected ? 'selected' : ''}`}
-                      onClick={() => handleImageSelect(image.id)}
-                    >
-                      <div className="image-checkbox">
-                        <i className={`fas fa-${isSelected ? 'check-circle' : 'circle'}`}></i>
-                      </div>
-                      {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && isSelected && (
-                        <div className="absolute top-2 left-2 bg-primary text-white text-xs font-semibold px-2 py-1 rounded">
-                          <i className="fas fa-th-large mr-1"></i> {t('gallery.templateImage')}
-                        </div>
-                      )}
-
-                      {isTIFF ? (
-                        <div className="relative">
-                          <img
-                            src={image.url}
-                            alt={image.name}
-                            className="image-preview"
-                          />
-                          <div className="tiff-badge-overlay">
-                            <span className="tiff-badge">TIFF</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <img
-                          src={image.url}
-                          alt={image.name}
-                          className="image-preview"
-                        />
-                      )}
-
-                      <div className="image-info">
-                        <span className="image-name">{image.name}</span>
-                        <span className="image-size">
-                          {formatFileSize(image.size)} • {image.originalFormat?.toUpperCase() || image.type.split('/')[1].toUpperCase()}
-                          {isTIFF && <span className="image-format-badge">TIFF</span>}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <UploadGallerySection
+              images={images}
+              selectedImages={selectedImages}
+              processingMode={processingOptions.processingMode}
+              templateSelectedImage={processingOptions.templateSelectedImage}
+              onImageSelect={handleImageSelect}
+              onSelectAll={handleSelectAll}
+              onRemoveSelected={handleRemoveSelected}
+              formatFileSize={formatFileSize}
+              processingOptions={processingOptions}
+              t={t}
+            />
           </>
         )}
       </main>
 
-      <Footer />
+      <FooterSection />
 
-      <Modal
+      <ModalElement
         isOpen={modal.isOpen && modal.type !== MODAL_TYPES.SUMMARY}
         onClose={closeModal}
         title={modal.title}
         type={modal.type}
+        onInteraction={handleModalInteraction}
+        showProgress={modal.showProgress}
+        progress={modal.progress}
+        progressStep={modal.progressStep}
       >
         <p>{modal.message}</p>
-      </Modal>
+        {modal.showProgress && modal.progress < 100 && (
+          <div className="mt-3">
+            <div className="progress-bar-container">
+              <div
+                className="progress-bar-fill"
+                style={{ width: `${modal.progress}%` }}
+              ></div>
+            </div>
+            <div className="progress-text">
+              <span>{modal.progressStep}</span>
+              <span>{modal.progress}%</span>
+            </div>
+          </div>
+        )}
+      </ModalElement>
 
-      <Modal
+      <ModalElement
         isOpen={modal.isOpen && modal.type === MODAL_TYPES.SUMMARY}
         onClose={closeModal}
         title={modal.title}
         type={MODAL_TYPES.SUMMARY}
+        onInteraction={handleModalInteraction}
         actions={
-          <button className="btn btn-primary" onClick={closeModal}>
+          <button
+            className="btn btn-primary"
+            onClick={closeModal}
+            onMouseDown={handleModalInteraction}
+          >
             {t('button.ok')}
           </button>
         }
@@ -1634,52 +2261,52 @@ function App() {
                   <div className="summary-value capitalize">{processingSummary.mode}</div>
                 </div>
 
-                <div className="summary-item">
-                  <div className="summary-label">
-                    {processingSummary.mode === 'templates'
-                      ? t('summary.templatesApplied') + ':'
-                      : t('summary.imagesProcessed') + ':'}
-                  </div>
-                  <div className="summary-value">
-                    {processingSummary.mode === 'templates'
-                      ? processingSummary.templatesApplied + ' templates applied'
-                      : processingSummary.imagesProcessed + ' images processed'}
-                  </div>
-                </div>
-
-                {processingSummary.screenshotCount > 0 && (
+                {processingSummary.mode === 'templates' && processingSummary.templatesApplied > 0 && (
                   <div className="summary-item">
-                    <div className="summary-label">Screenshots Captured:</div>
-                    <div className="summary-value text-success">
-                      <i className="fas fa-camera mr-1"></i>
-                      {processingSummary.screenshotCount} screenshots
+                    <div className="summary-label">{t('summary.templatesApplied')}:</div>
+                    <div className="summary-value">
+                      {processingSummary.templatesApplied}
                     </div>
                   </div>
                 )}
 
-                {processingSummary.mode === 'templates' && (
+                {processingSummary.mode === 'templates' && processingSummary.categoriesApplied > 0 && (
                   <div className="summary-item">
                     <div className="summary-label">{t('summary.categoriesApplied')}:</div>
                     <div className="summary-value">{processingSummary.categoriesApplied}</div>
                   </div>
                 )}
 
-                <div className="summary-item">
-                  <div className="summary-label">{t('summary.formatsExported')}:</div>
-                  <div className="summary-value">
-                    {processingSummary.formatsExported && processingSummary.formatsExported.length > 0
-                      ? processingSummary.formatsExported.map(format => (
-                        <span key={format} className="format-badge">
-                          {format.toUpperCase()}
-                        </span>
-                      ))
-                      : 'WEBP, JPG, PNG'}
+                {processingSummary.screenshotCount > 0 && (
+                  <div className="summary-item">
+                    <div className="summary-label">{t('summary.screenshotCount')}:</div>
+                    <div className="summary-value text-success">
+                      <i className="fas fa-camera mr-1"></i>
+                      {processingSummary.screenshotCount}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {processingSummary.mode === 'templates' && (
+                  <div className="summary-item">
+                    <div className="summary-label">{t('summary.formatsExported')}:</div>
+                    <div className="summary-value">
+                      {processingSummary.formatsExported && processingSummary.formatsExported.length > 0
+                        ? processingSummary.formatsExported.map(format => (
+                          <span key={format} className="format-badge">
+                            {format.toUpperCase()}
+                          </span>
+                        ))
+                        : 'WEBP, PNG, JPG, ICO'}
+                    </div>
+                  </div>
+                )}
 
                 <div className="summary-item">
                   <div className="summary-label">{t('summary.totalFiles')}:</div>
-                  <div className="summary-value">{processingSummary.totalFiles} files generated</div>
+                  <div className="summary-value">
+                    {processingSummary.totalFiles}
+                  </div>
                 </div>
 
                 <div className="summary-item">
@@ -1687,10 +2314,10 @@ function App() {
                   <div className="summary-value">
                     {processingSummary.aiUsed ? (
                       <span className="text-success">
-                        <i className="fas fa-brain mr-1"></i> Yes
+                        <i className="fas fa-brain mr-1"></i> {t('summary.yes')}
                       </span>
                     ) : (
-                      <span className="text-muted">No</span>
+                      <span className="text-muted">{t('summary.no')}</span>
                     )}
                   </div>
                 </div>
@@ -1699,7 +2326,7 @@ function App() {
                   <div className="summary-item">
                     <div className="summary-label">{t('summary.upscalingUsed')}:</div>
                     <div className="summary-value text-success">
-                      <i className="fas fa-expand-arrows-alt mr-1"></i> Yes
+                      <i className="fas fa-expand-arrows-alt mr-1"></i> {t('summary.yes')}
                     </div>
                   </div>
                 )}
@@ -1724,7 +2351,7 @@ function App() {
             )}
           </div>
         )}
-      </Modal>
+      </ModalElement>
     </div>
   );
 }

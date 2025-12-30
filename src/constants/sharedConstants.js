@@ -1,4 +1,41 @@
 // ================================
+// UI-Specific Constants
+// ================================
+export const UI_CONSTANTS = {
+    BADGE_SIZE: { width: '1.5rem', height: '1.5rem' },
+    MODAL_DELAYS: {
+        SUCCESS: 1000,
+        INFO: 5000,
+        ERROR: 5000,
+        SUMMARY: 10000
+    },
+    IMAGE_PREVIEW: {
+        MAX_HEIGHT: '24rem', // h-96 equivalent
+        TIFF_BADGE: {
+            WIDTH: '3rem',
+            HEIGHT: '2rem',
+            FONT_SIZE: '0.875rem'
+        }
+    },
+    TEXT_TRUNCATE: {
+        MAX_WIDTH: '20rem' // max-w-xs equivalent
+    },
+    SPACING: {
+        XS: 'var(--space-xs)',
+        SM: 'var(--space-sm)',
+        MD: 'var(--space-md)',
+        LG: 'var(--space-lg)',
+        XL: 'var(--space-xl)'
+    },
+    BORDER_RADIUS: {
+        SM: 'var(--radius-sm)',
+        MD: 'var(--radius-md)',
+        LG: 'var(--radius-lg)',
+        FULL: '9999px'
+    }
+};
+
+// ================================
 // Image Processing Constants
 // ================================
 
@@ -234,7 +271,9 @@ export const EXPORT_SETTINGS = {
 
 export const URL_CONSTANTS = {
     DEFAULT_PROTOCOL: 'https://',
-    MAX_URL_LENGTH: 2048
+    MAX_URL_LENGTH: 2048,
+    PLACEHOLDER: 'example.com or https://example.com',
+    VALID_PATTERN: /^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?(\/[^\s]*)?$/
 };
 
 export const NUMBER_INPUT_CONSTANTS = {
@@ -247,25 +286,9 @@ export const NUMBER_INPUT_CONSTANTS = {
 // ================================
 // Screenshot Constants
 // ================================
+export const BROWSERLESS_BASE_URL = 'https://production-lon.browserless.io';
 
-export const VERCEL_ENDPOINTS = [
-    {
-        url: 'https://image-lemgendizer-old-x2qz.vercel.app/api/screenshot',
-        priority: 1,
-        lastUsed: 0,
-        healthUrls: [
-            'https://image-lemgendizer-old-x2qz.vercel.app/api/health'
-        ]
-    },
-    {
-        url: 'http://localhost:3000/api/screenshot',
-        priority: 2,
-        lastUsed: 0,
-        healthUrls: [
-            'http://localhost:3000/api/health'
-        ]
-    }
-];
+export const API_TOKEN = '2TfpPHSu17r0zsSeb55ec0619d36b8451d9d39ca7c43a8a47';
 
 export const CACHE_CONFIG = {
     LOCALSTORAGE_TTL: 7 * 24 * 60 * 60 * 1000,
@@ -278,38 +301,20 @@ export const MAX_CONCURRENT_SCREENSHOTS = 2;
 export const MAX_SCREENSHOT_SIZE = 800;
 
 // ================================
-// Color Constants
+// Screenshot Quality & Config
 // ================================
+export const SCREENSHOT_QUALITY = {
+    JPEG_QUALITY: 80,
+    TIMEOUT: 15000,
+    PAGE_LOAD_TIMEOUT: 10000
+};
 
-export const DEFAULT_THEME_COLOR = '#ffffff';
-export const DEFAULT_BACKGROUND_COLOR = '#ffffff';
-export const ERROR_BACKGROUND_COLOR = '#f8d7da';
-export const ERROR_BORDER_COLOR = '#f5c6cb';
-export const ERROR_TEXT_COLOR = '#721c24';
-export const WARNING_TEXT_COLOR = '#856404';
-export const PLACEHOLDER_BACKGROUND = '#f8f9fa';
-export const PLACEHOLDER_BORDER = '#dee2e6';
-export const PLACEHOLDER_TEXT = '#495057';
-export const SUCCESS_COLOR = '#28a745';
-export const INFO_COLOR = '#4a90e2';
-
-// ================================
-// Font Constants
-// ================================
-
-export const DEFAULT_FONT_FAMILY = 'Arial, sans-serif';
-export const HEADLINE_FONT_SIZE = 24;
-export const BODY_FONT_SIZE = 16;
-export const CAPTION_FONT_SIZE = 12;
-
-// ================================
-// SVG Constants
-// ================================
-
-export const SVG_DEFAULT_WIDTH = 100;
-export const SVG_DEFAULT_HEIGHT = 100;
-export const SVG_MIN_SIZE = 1;
-export const SVG_MAX_SIZE = 4096;
+export const DEVICE_VIEWPORTS = {
+    MOBILE: { width: 375, height: 667 },
+    TABLET: { width: 768, height: 1024 },
+    DESKTOP: { width: 1280, height: 720 },
+    DESKTOP_HD: { width: 1920, height: 1080 }
+};
 
 // ================================
 // Operation Names
@@ -416,11 +421,216 @@ export const BROWSER_LAUNCH_ARGS = [
 ];
 
 // ================================
-// Screenshot Quality Settings
+// Animation & Transition Constants
 // ================================
 
-export const SCREENSHOT_QUALITY = {
-    JPEG_QUALITY: 80,
-    TIMEOUT: 15000,
-    PAGE_LOAD_TIMEOUT: 10000
+export const ANIMATION_DURATIONS = {
+    FAST: 150,
+    NORMAL: 300,
+    SLOW: 500,
+    MODAL_CLOSE_SUCCESS: 1000,
+    MODAL_CLOSE_INFO: 3000,
+    MODAL_CLOSE_ERROR: 3000,
+    MODAL_CLOSE_SUMMARY: 5000
+};
+
+// ================================
+// Spacing Constants
+// ================================
+
+export const SPACING = {
+    XS: 'var(--space-xs)',
+    SM: 'var(--space-sm)',
+    MD: 'var(--space-md)',
+    LG: 'var(--space-lg)',
+    XL: 'var(--space-xl)',
+    XXL: 'var(--space-xxl)'
+};
+
+// ================================
+// Border Radius Constants
+// ================================
+
+export const BORDER_RADIUS = {
+    SM: 'var(--radius-sm)',
+    MD: 'var(--radius-md)',
+    LG: 'var(--radius-lg)'
+};
+
+// ================================
+// Shadow Constants
+// ================================
+
+export const SHADOWS = {
+    SM: 'var(--shadow-sm)',
+    MD: 'var(--shadow-md)',
+    LG: 'var(--shadow-lg)'
+};
+
+// ================================
+// Transition Constants
+// ================================
+
+export const TRANSITIONS = {
+    FAST: 'var(--transition-fast)',
+    NORMAL: 'var(--transition-normal)',
+    SLOW: 'var(--transition-slow)'
+};
+
+// ================================
+// NEW CONSTANTS: Sampling constants
+// ================================
+
+export const SAMPLING_CONSTANTS = {
+    MAX_SAMPLE_SIZE: 1000,
+    SAMPLING_WIDTH: 100,
+    SAMPLING_HEIGHT: 100,
+    CHECK_PIXELS_COUNT: 1000000,
+    STRIDE_SMALL: 1,
+    STRIDE_MEDIUM: 2,
+    STRIDE_LARGE: 4
+};
+
+// ================================
+// NEW CONSTANTS: Temporary file names
+// ================================
+
+export const TEMP_FILE_NAMES = {
+    RESIZED: 'resized-temp.webp',
+    CONVERTED_TIFF: 'converted-tiff.png',
+    CONVERTED_SVG: 'svg-converted.png',
+    ERROR: 'error.webp'
+};
+
+// ================================
+// NEW CONSTANTS: File type names
+// ================================
+
+export const FILE_TYPE_NAMES = {
+    TIFF: 'TIFF',
+    BMP: 'BMP',
+    ICO: 'ICO',
+    SVG: 'SVG',
+    WEBP: 'WebP',
+    AVIF: 'AVIF',
+    PNG: 'PNG',
+    JPEG: 'JPEG',
+    GIF: 'GIF',
+    APNG: 'APNG'
+};
+
+// ================================
+// NEW CONSTANTS: File extensions
+// ================================
+
+export const FILE_EXTENSIONS = {
+    TIFF: ['.tiff', '.tif'],
+    BMP: ['.bmp'],
+    ICO: ['.ico'],
+    SVG: ['.svg'],
+    WEBP: ['.webp'],
+    AVIF: ['.avif'],
+    PNG: ['.png'],
+    JPEG: ['.jpg', '.jpeg'],
+    GIF: ['.gif'],
+    APNG: ['.apng']
+};
+
+// ================================
+// NEW CONSTANTS: SVG XML template
+// ================================
+
+export const SVG_XML_TEMPLATE = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="{width}"
+     height="{height}"
+     viewBox="0 0 {width} {height}">{content}</svg>`;
+
+// ================================
+// NEW CONSTANTS: Processing thresholds
+// ================================
+
+export const PROCESSING_THRESHOLDS = {
+    LARGE_FILE_SIZE: 1000000, // 1MB
+    HUGE_FILE_SIZE: 5000000,  // 5MB
+    MAX_FILE_SIZE_PREVIEW: 500000, // 500KB
+    EDGE_DETECTION_THRESHOLD: 30,
+    TRANSPARENCY_CHECK_PIXELS: 250000,
+    DEFAULT_SCALE_FACTOR: 2,
+    MIN_PADDING_PERCENT: 0.1, // 10%
+    MAX_PADDING_PERCENT: 0.2, // 20%
+    FOCAL_POINT_THRESHOLD: 0.3 // 30%
+};
+
+// ================================
+// NEW CONSTANTS: Color detection
+// ================================
+
+export const COLOR_DETECTION = {
+    LUMINANCE_RED: 0.299,
+    LUMINANCE_GREEN: 0.587,
+    LUMINANCE_BLUE: 0.114,
+    LIGHT_LUMINANCE_THRESHOLD: 0.5
+};
+
+// ================================
+// NEW CONSTANTS: AI Model weights
+// ================================
+
+export const AI_MODEL_WEIGHTS = {
+    SIZE_WEIGHT: 0.4,
+    CONFIDENCE_WEIGHT: 0.4,
+    CENTRALITY_WEIGHT: 0.2,
+    PERSON_CLASS_WEIGHT: 1.5,
+    FACE_CLASS_WEIGHT: 1.3,
+    ANIMAL_CLASS_WEIGHT: 1.2,
+    DEFAULT_CLASS_WEIGHT: 1.0
+};
+
+// ================================
+// NEW CONSTANTS: Processing errors
+// ================================
+
+export const PROCESSING_ERRORS = {
+    INVALID_SVG_CONTENT: 'Empty or invalid SVG content',
+    BLOB_CREATION_FAILED: 'Failed to create blob',
+    INVALID_IMAGE_DIMENSIONS: 'Image has invalid dimensions',
+    OBJECT_URL_FAILED: 'Failed to create object URL for image',
+    TIFF_NO_DATA: 'No TIFF data found',
+    DECODE_FAILED: 'Failed to decode image',
+    SVG_PARSE_FAILED: 'Failed to parse SVG',
+    CONVERSION_FAILED: 'Format conversion failed',
+    PLACEHOLDER_FAILED: 'Failed to create placeholder'
+};
+
+// ================================
+// Application Configuration (GENERAL ONLY)
+// ================================
+
+export const APP_CONFIG = {
+    // General application configuration
+    TEMPLATES: {
+        DEFAULT_TIMESTAMP: Date.now(),
+        BASE_NAME_SEPARATOR: '-',
+        FORMAT_SEPARATOR: '.'
+    },
+    ERROR_HANDLING: {
+        MAX_ERROR_LENGTH: 1000,
+        DEFAULT_ERROR_PREFIX: 'error',
+        ERROR_FILE_EXTENSION: '.txt'
+    },
+    FILE_NAMING: {
+        DEFAULT_BASE_NAME: 'image',
+        DEFAULT_ERROR_NAME: 'error',
+        DEFAULT_TEMPLATE_NAME: 'template',
+        NAME_SEPARATOR: '-'
+    },
+    IMAGE_DEFAULTS: {
+        DEFAULT_FORMAT: 'webp',
+        DEFAULT_QUALITY: 0.85,
+        DEFAULT_WIDTH: 800,
+        DEFAULT_HEIGHT: 600,
+        DEFAULT_BACKGROUND: '#ffffff',
+        DEFAULT_THEME_COLOR: '#ffffff'
+    }
 };

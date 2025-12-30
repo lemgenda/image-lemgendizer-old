@@ -1,20 +1,25 @@
+import {
+    DEVICE_VIEWPORTS,
+    SCREENSHOT_QUALITY
+} from '../constants';
+
 // ================================
 // Template Categories
 // ================================
 
 export const TEMPLATE_CATEGORIES = [
-    { id: 'all', name: 'All Templates', icon: 'fas fa-th' },
-    { id: 'web', name: 'Web', icon: 'fas fa-globe' },
-    { id: 'logo', name: 'Logo', icon: 'fas fa-copyright' },
-    { id: 'instagram', name: 'Instagram', icon: 'fab fa-instagram' },
-    { id: 'facebook', name: 'Facebook', icon: 'fab fa-facebook' },
-    { id: 'twitter', name: 'Twitter/X', icon: 'fab fa-twitter' },
-    { id: 'linkedin', name: 'LinkedIn', icon: 'fab fa-linkedin' },
-    { id: 'youtube', name: 'YouTube', icon: 'fab fa-youtube' },
-    { id: 'pinterest', name: 'Pinterest', icon: 'fab fa-pinterest' },
-    { id: 'tiktok', name: 'TikTok', icon: 'fab fa-tiktok' },
-    { id: 'favicon', name: 'Favicon', icon: 'fas fa-star' },
-    { id: 'screenshots', name: 'Screenshots', icon: 'fas fa-camera' }
+    { id: 'all', name: 'category.all', icon: 'fas fa-th' },
+    { id: 'web', name: 'category.web', icon: 'fas fa-globe' },
+    { id: 'logo', name: 'category.logo', icon: 'fas fa-copyright' },
+    { id: 'instagram', name: 'category.instagram', icon: 'fab fa-instagram' },
+    { id: 'facebook', name: 'category.facebook', icon: 'fab fa-facebook' },
+    { id: 'twitter', name: 'category.twitter', icon: 'fab fa-twitter' },
+    { id: 'linkedin', name: 'category.linkedin', icon: 'fab fa-linkedin' },
+    { id: 'youtube', name: 'category.youtube', icon: 'fab fa-youtube' },
+    { id: 'pinterest', name: 'category.pinterest', icon: 'fab fa-pinterest' },
+    { id: 'tiktok', name: 'category.tiktok', icon: 'fab fa-tiktok' },
+    { id: 'favicon', name: 'category.favicon', icon: 'fas fa-star' },
+    { id: 'screenshots', name: 'category.screenshots', icon: 'fas fa-camera' }
 ];
 
 // ================================
@@ -45,102 +50,264 @@ export const FAVICON_SIZES = [
     { name: 'favicon-48x48', width: 48, height: 48 }
 ];
 
-export const FAVICON_SIZE_LIST = [16, 32, 48, 64, 128, 256, 512];
+export const FAVICON_SIZE_LIST = [16, 32, 48, 64, 76, 120, 128, 152, 180, 256, 512];
 export const FAVICON_PREVIEW_SIZE = 512;
 
 // ================================
-// Screenshot Sizes
+// Template-Specific Application Configuration
 // ================================
 
-export const SCREENSHOT_SIZES = [
-    { name: 'screenshot-desktop-wide', width: 1280, height: 720, type: 'desktop' },
-    { name: 'screenshot-mobile-narrow', width: 720, height: 1280, type: 'mobile' }
-];
+export const APP_TEMPLATE_CONFIG = {
+    FAVICON: {
+        FILES_COUNT: 9,
+        DEFAULT_SCALE: 400,
+        DEFAULT_SITE_NAME: 'My Website',
+        DEFAULT_THEME_COLOR: '#ffffff',
+        DEFAULT_BACKGROUND_COLOR: '#ffffff',
+        FOLDER_NAME: 'Favicons'
+    },
+
+    SCREENSHOTS: {
+        FOLDER_NAME: 'Screenshots',
+        DEFAULT_FORMAT: 'jpg',
+        DEFAULT_QUALITY: 80
+    }
+};
+
+export const DEFAULT_PLACEHOLDER_DIMENSIONS = {
+    WIDTH: 800,
+    HEIGHT: 600,
+    MAX_SIZE: 1200
+};
 
 // ================================
-// Screenshot Templates
+// Screenshot Templates (Updated with Constants)
 // ================================
 
 export const SCREENSHOT_TEMPLATES = {
     'screenshots-mobile': {
         id: 'screenshots-mobile',
-        name: 'Mobile Screenshot',
+        name: 'template.ScreenshotsMobile',
         category: 'screenshots',
-        platform: 'Screenshots',
-        width: 375,
-        height: 667,
+        platform: 'platform.screenshots',
+        width: DEVICE_VIEWPORTS.MOBILE.width,
+        height: DEVICE_VIEWPORTS.MOBILE.height,
         fullPage: false,
-        icon: 'fas fa-mobile-alt'
-    },
-    'screenshots-tablet': {
-        id: 'screenshots-tablet',
-        name: 'Tablet Screenshot',
-        category: 'screenshots',
-        platform: 'Screenshots',
-        width: 768,
-        height: 1024,
-        fullPage: false,
-        icon: 'fas fa-tablet'
-    },
-    'screenshots-desktop': {
-        id: 'screenshots-desktop',
-        name: 'Desktop Screenshot',
-        category: 'screenshots',
-        platform: 'Screenshots',
-        width: 1280,
-        height: 720,
-        fullPage: false,
-        icon: 'fas fa-desktop'
-    },
-    'screenshots-desktop-hd': {
-        id: 'screenshots-desktop-hd',
-        name: 'Desktop HD Screenshot',
-        category: 'screenshots',
-        platform: 'Screenshots',
-        width: 1920,
-        height: 1080,
-        fullPage: false,
-        icon: 'fas fa-desktop-alt'
+        icon: 'fas fa-mobile-alt',
+        requestBody: {
+            bestAttempt: true,
+            blockConsentModals: true,
+            setJavaScriptEnabled: true,
+            viewport: {
+                isMobile: true,
+                hasTouch: true,
+                width: DEVICE_VIEWPORTS.MOBILE.width,
+                height: DEVICE_VIEWPORTS.MOBILE.height,
+                isLandscape: false
+            },
+            options: {
+                type: 'jpeg',
+                optimizeForSpeed: true,
+                fullPage: false,
+                quality: SCREENSHOT_QUALITY.JPEG_QUALITY
+            }
+        }
     },
     'screenshots-mobile-full': {
         id: 'screenshots-mobile-full',
-        name: 'Mobile Full Page',
+        name: 'template.ScreenshotsMobileFull',
         category: 'screenshots',
-        platform: 'Screenshots',
-        width: 375,
+        platform: 'platform.screenshots',
+        width: DEVICE_VIEWPORTS.MOBILE.width,
         height: 'auto',
         fullPage: true,
-        icon: 'fas fa-mobile-alt'
+        icon: 'fas fa-mobile-alt',
+        requestBody: {
+            bestAttempt: true,
+            blockConsentModals: true,
+            setJavaScriptEnabled: true,
+            viewport: {
+                isMobile: true,
+                hasTouch: true,
+                width: DEVICE_VIEWPORTS.MOBILE.width,
+                height: DEVICE_VIEWPORTS.MOBILE.height,
+                isLandscape: false
+            },
+            options: {
+                type: 'jpeg',
+                optimizeForSpeed: true,
+                fullPage: true,
+                quality: SCREENSHOT_QUALITY.JPEG_QUALITY
+            }
+        }
+    },
+    'screenshots-tablet': {
+        id: 'screenshots-tablet',
+        name: 'template.ScreenshotsTablet',
+        category: 'screenshots',
+        platform: 'platform.screenshots',
+        width: DEVICE_VIEWPORTS.TABLET.width,
+        height: DEVICE_VIEWPORTS.TABLET.height,
+        fullPage: false,
+        icon: 'fas fa-tablet',
+        requestBody: {
+            bestAttempt: true,
+            blockConsentModals: true,
+            setJavaScriptEnabled: true,
+            viewport: {
+                isMobile: true,
+                hasTouch: true,
+                width: DEVICE_VIEWPORTS.TABLET.width,
+                height: DEVICE_VIEWPORTS.TABLET.height,
+                isLandscape: false
+            },
+            options: {
+                type: 'jpeg',
+                optimizeForSpeed: true,
+                fullPage: false,
+                quality: SCREENSHOT_QUALITY.JPEG_QUALITY
+            }
+        }
     },
     'screenshots-tablet-full': {
         id: 'screenshots-tablet-full',
-        name: 'Tablet Full Page',
+        name: 'template.ScreenshotsTabletFull',
         category: 'screenshots',
-        platform: 'Screenshots',
-        width: 768,
+        platform: 'platform.screenshots',
+        width: DEVICE_VIEWPORTS.TABLET.width,
         height: 'auto',
         fullPage: true,
-        icon: 'fas fa-tablet'
+        icon: 'fas fa-tablet',
+        requestBody: {
+            bestAttempt: true,
+            blockConsentModals: true,
+            setJavaScriptEnabled: true,
+            viewport: {
+                isMobile: true,
+                hasTouch: true,
+                width: DEVICE_VIEWPORTS.TABLET.width,
+                height: DEVICE_VIEWPORTS.TABLET.height,
+                isLandscape: false
+            },
+            options: {
+                type: 'jpeg',
+                optimizeForSpeed: true,
+                fullPage: true,
+                quality: SCREENSHOT_QUALITY.JPEG_QUALITY
+            }
+        }
+    },
+    'screenshots-desktop': {
+        id: 'screenshots-desktop',
+        name: 'template.ScreenshotsDesktop',
+        category: 'screenshots',
+        platform: 'platform.screenshots',
+        width: DEVICE_VIEWPORTS.DESKTOP.width,
+        height: DEVICE_VIEWPORTS.DESKTOP.height,
+        fullPage: false,
+        icon: 'fas fa-desktop',
+        requestBody: {
+            bestAttempt: true,
+            blockConsentModals: true,
+            setJavaScriptEnabled: true,
+            viewport: {
+                isMobile: false,
+                hasTouch: false,
+                width: DEVICE_VIEWPORTS.DESKTOP.width,
+                height: DEVICE_VIEWPORTS.DESKTOP.height,
+                isLandscape: true
+            },
+            options: {
+                type: 'jpeg',
+                optimizeForSpeed: true,
+                fullPage: false,
+                quality: SCREENSHOT_QUALITY.JPEG_QUALITY
+            }
+        }
     },
     'screenshots-desktop-full': {
         id: 'screenshots-desktop-full',
-        name: 'Desktop Full Page',
+        name: 'template.ScreenshotsDesktopFull',
         category: 'screenshots',
-        platform: 'Screenshots',
-        width: 1280,
+        platform: 'platform.screenshots',
+        width: DEVICE_VIEWPORTS.DESKTOP.width,
         height: 'auto',
         fullPage: true,
-        icon: 'fas fa-desktop'
+        icon: 'fas fa-desktop',
+        requestBody: {
+            bestAttempt: true,
+            blockConsentModals: true,
+            setJavaScriptEnabled: true,
+            viewport: {
+                isMobile: false,
+                hasTouch: false,
+                width: DEVICE_VIEWPORTS.DESKTOP.width,
+                height: DEVICE_VIEWPORTS.DESKTOP.height,
+                isLandscape: true
+            },
+            options: {
+                type: 'jpeg',
+                optimizeForSpeed: true,
+                fullPage: true,
+                quality: SCREENSHOT_QUALITY.JPEG_QUALITY
+            }
+        }
+    },
+    'screenshots-desktop-hd': {
+        id: 'screenshots-desktop-hd',
+        name: 'template.ScreenshotsDesktopHd',
+        category: 'screenshots',
+        platform: 'platform.screenshots',
+        width: DEVICE_VIEWPORTS.DESKTOP_HD.width,
+        height: DEVICE_VIEWPORTS.DESKTOP_HD.height,
+        fullPage: false,
+        icon: 'fas fa-desktop-alt',
+        requestBody: {
+            bestAttempt: true,
+            blockConsentModals: true,
+            setJavaScriptEnabled: true,
+            viewport: {
+                isMobile: false,
+                hasTouch: false,
+                width: DEVICE_VIEWPORTS.DESKTOP_HD.width,
+                height: DEVICE_VIEWPORTS.DESKTOP_HD.height,
+                isLandscape: true
+            },
+            options: {
+                type: 'jpeg',
+                optimizeForSpeed: true,
+                fullPage: false,
+                quality: SCREENSHOT_QUALITY.JPEG_QUALITY
+            }
+        }
     },
     'screenshots-desktop-hd-full': {
         id: 'screenshots-desktop-hd-full',
-        name: 'Desktop HD Full Page',
+        name: 'template.ScreenshotsDesktopHdFull',
         category: 'screenshots',
-        platform: 'Screenshots',
-        width: 1920,
+        platform: 'platform.screenshots',
+        width: DEVICE_VIEWPORTS.DESKTOP_HD.width,
         height: 'auto',
         fullPage: true,
-        icon: 'fas fa-desktop-alt'
+        icon: 'fas fa-desktop-alt',
+        requestBody: {
+            bestAttempt: true,
+            blockConsentModals: true,
+            setJavaScriptEnabled: true,
+            viewport: {
+                isMobile: false,
+                hasTouch: false,
+                width: DEVICE_VIEWPORTS.DESKTOP_HD.width,
+                height: DEVICE_VIEWPORTS.DESKTOP_HD.height,
+                isLandscape: true
+            },
+            options: {
+                type: 'jpeg',
+                optimizeForSpeed: true,
+                fullPage: true,
+                quality: SCREENSHOT_QUALITY.JPEG_QUALITY
+            }
+        }
     }
 };
 
@@ -152,152 +319,62 @@ export const SOCIAL_MEDIA_TEMPLATES = [
     // Web Images
     {
         id: 'web-hero',
-        name: 'WebHero',
+        name: 'template.WebHero',
         width: 1920,
-        height: 1080,
-        platform: 'Web',
+        height: 1080, // 16:9
+        platform: 'platform.web',
         category: 'web',
         icon: 'fas fa-desktop',
         templateName: 'WebHero'
     },
     {
         id: 'web-blog',
-        name: 'WebBlog',
+        name: 'template.WebBlog',
         width: 1200,
-        height: 630,
-        platform: 'Web',
+        height: 630, // 1.91:1
+        platform: 'platform.web',
         category: 'web',
         icon: 'fas fa-blog',
         templateName: 'WebBlog'
     },
     {
         id: 'web-content',
-        name: 'WebContent',
+        name: 'template.WebContent',
         width: 1200,
-        height: 'auto',
-        platform: 'Web',
+        height: 675, // 16:9 normalized (replaces auto)
+        platform: 'platform.web',
         category: 'web',
         icon: 'fas fa-image',
         templateName: 'WebContent'
     },
     {
         id: 'web-thumb',
-        name: 'WebThumb',
-        width: 250,
-        height: 250,
-        platform: 'Web',
+        name: 'template.WebThumb',
+        width: 300,
+        height: 300, // 1:1
+        platform: 'platform.web',
         category: 'web',
         icon: 'fas fa-square',
         templateName: 'WebThumb'
     },
 
-    // Screenshot Templates
-    {
-        id: 'screenshots-mobile',
-        name: 'Mobile',
-        width: 375,
-        height: 667,
-        platform: 'Web',
-        category: 'screenshots',
-        icon: 'fas fa-mobile-alt',
-        description: 'Mobile viewport screenshot (375x667)',
-        templateName: 'ScreenshotsMobile'
-    },
-    {
-        id: 'screenshots-tablet',
-        name: 'Tablet',
-        width: 768,
-        height: 1024,
-        platform: 'Web',
-        category: 'screenshots',
-        icon: 'fas fa-tablet',
-        description: 'Tablet viewport screenshot (768x1024)',
-        templateName: 'ScreenshotsTablet'
-    },
-    {
-        id: 'screenshots-desktop',
-        name: 'Desktop',
-        width: 1280,
-        height: 720,
-        platform: 'Web',
-        category: 'screenshots',
-        icon: 'fas fa-desktop',
-        description: 'Desktop viewport screenshot (1280x720)',
-        templateName: 'ScreenshotsDesktop'
-    },
-    {
-        id: 'screenshots-desktop-hd',
-        name: 'Desktop HD',
-        width: 1920,
-        height: 1080,
-        platform: 'Web',
-        category: 'screenshots',
-        icon: 'fas fa-desktop-alt',
-        description: 'HD desktop viewport screenshot (1920x1080)',
-        templateName: 'ScreenshotsDesktopHD'
-    },
-    {
-        id: 'screenshots-mobile-full',
-        name: 'Mobile(all content)',
-        width: 375,
-        height: 'auto',
-        platform: 'Web',
-        category: 'screenshots',
-        icon: 'fas fa-mobile-alt',
-        description: 'Full mobile page screenshot',
-        templateName: 'ScreenshotsMobileFull'
-    },
-    {
-        id: 'screenshots-tablet-full',
-        name: 'Tablet(all content)',
-        width: 768,
-        height: 'auto',
-        platform: 'Web',
-        category: 'screenshots',
-        icon: 'fas fa-tablet',
-        description: 'Full tablet page screenshot',
-        templateName: 'ScreenshotsTabletFull'
-    },
-    {
-        id: 'screenshots-desktop-full',
-        name: 'Desktop(all content)',
-        width: 1280,
-        height: 'auto',
-        platform: 'Web',
-        category: 'screenshots',
-        icon: 'fas fa-desktop',
-        description: 'Full desktop page screenshot',
-        templateName: 'ScreenshotsDesktopFull'
-    },
-    {
-        id: 'screenshots-desktop-hd-full',
-        name: 'Desktop HD(all content)',
-        width: 1920,
-        height: 'auto',
-        platform: 'Web',
-        category: 'screenshots',
-        icon: 'fas fa-desktop-alt',
-        description: 'Full HD desktop page screenshot',
-        templateName: 'ScreenshotsDesktopHDFull'
-    },
-
     // Logo Images
     {
         id: 'logo-rect',
-        name: 'LogoRectangular',
-        width: 300,
-        height: 150,
-        platform: 'Logo',
+        name: 'template.LogoRectangular',
+        width: 600,
+        height: 300, // 2:1
+        platform: 'platform.logo',
         category: 'logo',
         icon: 'fas fa-copyright',
         templateName: 'LogoRectangular'
     },
     {
         id: 'logo-square',
-        name: 'LogoSquare',
-        width: 500,
-        height: 500,
-        platform: 'Logo',
+        name: 'template.LogoSquare',
+        width: 1024,
+        height: 1024, // 1:1
+        platform: 'platform.logo',
         category: 'logo',
         icon: 'fas fa-square',
         templateName: 'LogoSquare'
@@ -306,50 +383,50 @@ export const SOCIAL_MEDIA_TEMPLATES = [
     // Instagram
     {
         id: 'ig-profile',
-        name: 'InstagramProfile',
-        width: 320,
-        height: 320,
-        platform: 'Instagram',
+        name: 'template.InstagramProfile',
+        width: 400,
+        height: 400, // 1:1
+        platform: 'platform.instagram',
         category: 'instagram',
         icon: 'fab fa-instagram',
         templateName: 'InstagramProfile'
     },
     {
         id: 'ig-square',
-        name: 'InstagramSquare',
+        name: 'template.InstagramSquare',
         width: 1080,
-        height: 1080,
-        platform: 'Instagram',
+        height: 1080, // 1:1
+        platform: 'platform.instagram',
         category: 'instagram',
         icon: 'fas fa-square',
         templateName: 'InstagramSquare'
     },
     {
         id: 'ig-portrait',
-        name: 'InstagramPortrait',
+        name: 'template.InstagramPortrait',
         width: 1080,
-        height: 1350,
-        platform: 'Instagram',
+        height: 1350, // 4:5
+        platform: 'platform.instagram',
         category: 'instagram',
         icon: 'fas fa-image',
         templateName: 'InstagramPortrait'
     },
     {
         id: 'ig-landscape',
-        name: 'InstagramLandscape',
+        name: 'template.InstagramLandscape',
         width: 1080,
-        height: 566,
-        platform: 'Instagram',
+        height: 608, // 1.91:1
+        platform: 'platform.instagram',
         category: 'instagram',
         icon: 'fas fa-expand',
         templateName: 'InstagramLandscape'
     },
     {
         id: 'ig-stories',
-        name: 'InstagramStoriesReels',
+        name: 'template.InstagramStoriesReels',
         width: 1080,
-        height: 1920,
-        platform: 'Instagram',
+        height: 1920, // 9:16
+        platform: 'platform.instagram',
         category: 'instagram',
         icon: 'fas fa-video',
         templateName: 'InstagramStoriesReels'
@@ -358,102 +435,102 @@ export const SOCIAL_MEDIA_TEMPLATES = [
     // Facebook
     {
         id: 'fb-profile',
-        name: 'FacebookProfile',
-        width: 180,
-        height: 180,
-        platform: 'Facebook',
+        name: 'template.FacebookProfile',
+        width: 360,
+        height: 360, // 1:1
+        platform: 'platform.facebook',
         category: 'facebook',
         icon: 'fab fa-facebook',
         templateName: 'FacebookProfile'
     },
     {
         id: 'fb-cover',
-        name: 'FacebookCoverBanner',
-        width: 851,
-        height: 315,
-        platform: 'Facebook',
+        name: 'template.FacebookCoverBanner',
+        width: 820,
+        height: 360, // ~2.28:1
+        platform: 'platform.facebook',
         category: 'facebook',
         icon: 'fas fa-image',
         templateName: 'FacebookCoverBanner'
     },
     {
         id: 'fb-shared',
-        name: 'FacebookSharedImage',
+        name: 'template.FacebookSharedImage',
         width: 1200,
-        height: 630,
-        platform: 'Facebook',
+        height: 630, // 1.91:1
+        platform: 'platform.facebook',
         category: 'facebook',
         icon: 'fas fa-share-alt',
         templateName: 'FacebookSharedImage'
     },
     {
         id: 'fb-square',
-        name: 'FacebookSquarePost',
+        name: 'template.FacebookSquarePost',
         width: 1200,
-        height: 1200,
-        platform: 'Facebook',
+        height: 1200, // 1:1
+        platform: 'platform.facebook',
         category: 'facebook',
         icon: 'fas fa-square',
         templateName: 'FacebookSquarePost'
     },
     {
         id: 'fb-stories',
-        name: 'FacebookStories',
+        name: 'template.FacebookStories',
         width: 1080,
-        height: 1920,
-        platform: 'Facebook',
+        height: 1920, // 9:16
+        platform: 'platform.facebook',
         category: 'facebook',
         icon: 'fas fa-scroll',
         templateName: 'FacebookStories'
     },
 
-    // Twitter/X
+    // Twitter / X
     {
         id: 'tw-profile',
-        name: 'XProfile',
+        name: 'template.XProfile',
         width: 400,
-        height: 400,
-        platform: 'Twitter/X',
+        height: 400, // 1:1
+        platform: 'platform.twitter',
         category: 'twitter',
         icon: 'fab fa-twitter',
         templateName: 'XProfile'
     },
     {
         id: 'tw-header',
-        name: 'XHeaderBanner',
+        name: 'template.XHeaderBanner',
         width: 1500,
-        height: 500,
-        platform: 'Twitter/X',
+        height: 500, // 3:1
+        platform: 'platform.twitter',
         category: 'twitter',
         icon: 'fas fa-image',
         templateName: 'XHeaderBanner'
     },
     {
         id: 'tw-landscape',
-        name: 'XLandscapePost',
-        width: 1600,
-        height: 900,
-        platform: 'Twitter/X',
+        name: 'template.XLandscapePost',
+        width: 1200,
+        height: 675, // 16:9
+        platform: 'platform.twitter',
         category: 'twitter',
         icon: 'fas fa-expand',
         templateName: 'XLandscapePost'
     },
     {
         id: 'tw-square',
-        name: 'XSquarePost',
+        name: 'template.XSquarePost',
         width: 1080,
-        height: 1080,
-        platform: 'Twitter/X',
+        height: 1080, // 1:1
+        platform: 'platform.twitter',
         category: 'twitter',
         icon: 'fas fa-square',
         templateName: 'XSquarePost'
     },
     {
         id: 'tw-portrait',
-        name: 'XPortraitPost',
+        name: 'template.XPortraitPost',
         width: 1080,
-        height: 1350,
-        platform: 'Twitter/X',
+        height: 1350, // 4:5
+        platform: 'platform.twitter',
         category: 'twitter',
         icon: 'fas fa-image',
         templateName: 'XPortraitPost'
@@ -462,50 +539,50 @@ export const SOCIAL_MEDIA_TEMPLATES = [
     // LinkedIn
     {
         id: 'li-profile',
-        name: 'LinkedInProfile',
+        name: 'template.LinkedInProfile',
         width: 400,
-        height: 400,
-        platform: 'LinkedIn',
+        height: 400, // 1:1
+        platform: 'platform.linkedin',
         category: 'linkedin',
         icon: 'fab fa-linkedin',
         templateName: 'LinkedInProfile'
     },
     {
         id: 'li-cover',
-        name: 'LinkedInPersonalCover',
+        name: 'template.LinkedInPersonalCover',
         width: 1584,
-        height: 396,
-        platform: 'LinkedIn',
+        height: 396, // 4:1
+        platform: 'platform.linkedin',
         category: 'linkedin',
         icon: 'fas fa-image',
         templateName: 'LinkedInPersonalCover'
     },
     {
         id: 'li-landscape',
-        name: 'LinkedInLandscapePost',
+        name: 'template.LinkedInLandscapePost',
         width: 1200,
-        height: 627,
-        platform: 'LinkedIn',
+        height: 628, // 1.91:1
+        platform: 'platform.linkedin',
         category: 'linkedin',
         icon: 'fas fa-expand',
         templateName: 'LinkedInLandscapePost'
     },
     {
         id: 'li-square',
-        name: 'LinkedInSquarePost',
+        name: 'template.LinkedInSquarePost',
         width: 1200,
-        height: 1200,
-        platform: 'LinkedIn',
+        height: 1200, // 1:1
+        platform: 'platform.linkedin',
         category: 'linkedin',
         icon: 'fas fa-square',
         templateName: 'LinkedInSquarePost'
     },
     {
         id: 'li-portrait',
-        name: 'LinkedInPortraitPost',
-        width: 720,
-        height: 900,
-        platform: 'LinkedIn',
+        name: 'template.LinkedInPortraitPost',
+        width: 1080,
+        height: 1350, // 4:5
+        platform: 'platform.linkedin',
         category: 'linkedin',
         icon: 'fas fa-image',
         templateName: 'LinkedInPortraitPost'
@@ -514,30 +591,30 @@ export const SOCIAL_MEDIA_TEMPLATES = [
     // YouTube
     {
         id: 'yt-channel',
-        name: 'YouTubeChannelIcon',
-        width: 800,
-        height: 800,
-        platform: 'YouTube',
+        name: 'template.YouTubeChannelIcon',
+        width: 1024,
+        height: 1024, // 1:1
+        platform: 'platform.youtube',
         category: 'youtube',
         icon: 'fab fa-youtube',
         templateName: 'YouTubeChannelIcon'
     },
     {
         id: 'yt-banner',
-        name: 'YouTubeBanner',
-        width: 2048,
-        height: 1152,
-        platform: 'YouTube',
+        name: 'template.YouTubeBanner',
+        width: 2560,
+        height: 1440, // 16:9
+        platform: 'platform.youtube',
         category: 'youtube',
         icon: 'fas fa-image',
         templateName: 'YouTubeBanner'
     },
     {
         id: 'yt-thumb',
-        name: 'YouTubeThumbnail',
+        name: 'template.YouTubeThumbnail',
         width: 1280,
-        height: 720,
-        platform: 'YouTube',
+        height: 720, // 16:9
+        platform: 'platform.youtube',
         category: 'youtube',
         icon: 'fas fa-video',
         templateName: 'YouTubeThumbnail'
@@ -546,40 +623,40 @@ export const SOCIAL_MEDIA_TEMPLATES = [
     // Pinterest
     {
         id: 'pin-profile',
-        name: 'PinterestProfile',
-        width: 165,
-        height: 165,
-        platform: 'Pinterest',
+        name: 'template.PinterestProfile',
+        width: 400,
+        height: 400, // 1:1
+        platform: 'platform.pinterest',
         category: 'pinterest',
         icon: 'fab fa-pinterest',
         templateName: 'PinterestProfile'
     },
     {
         id: 'pin-standard',
-        name: 'PinterestStandardPin',
+        name: 'template.PinterestStandardPin',
         width: 1000,
-        height: 1500,
-        platform: 'Pinterest',
+        height: 1500, // 2:3
+        platform: 'platform.pinterest',
         category: 'pinterest',
         icon: 'fas fa-thumbtack',
         templateName: 'PinterestStandardPin'
     },
     {
         id: 'pin-square',
-        name: 'PinterestSquarePin',
+        name: 'template.PinterestSquarePin',
         width: 1000,
-        height: 1000,
-        platform: 'Pinterest',
+        height: 1000, // 1:1
+        platform: 'platform.pinterest',
         category: 'pinterest',
         icon: 'fas fa-square',
         templateName: 'PinterestSquarePin'
     },
     {
         id: 'pin-story',
-        name: 'PinterestStoryPin',
+        name: 'template.PinterestStoryPin',
         width: 1080,
-        height: 1920,
-        platform: 'Pinterest',
+        height: 1920, // 9:16
+        platform: 'platform.pinterest',
         category: 'pinterest',
         icon: 'fas fa-scroll',
         templateName: 'PinterestStoryPin'
@@ -588,20 +665,20 @@ export const SOCIAL_MEDIA_TEMPLATES = [
     // TikTok
     {
         id: 'tt-profile',
-        name: 'TikTokProfile',
-        width: 200,
-        height: 200,
-        platform: 'TikTok',
+        name: 'template.TikTokProfile',
+        width: 400,
+        height: 400, // 1:1
+        platform: 'platform.tiktok',
         category: 'tiktok',
         icon: 'fab fa-tiktok',
         templateName: 'TikTokProfile'
     },
     {
         id: 'tt-video',
-        name: 'TikTokVideoCover',
+        name: 'template.TikTokVideoCover',
         width: 1080,
-        height: 1920,
-        platform: 'TikTok',
+        height: 1920, // 9:16
+        platform: 'platform.tiktok',
         category: 'tiktok',
         icon: 'fas fa-video',
         templateName: 'TikTokVideoCover'
@@ -613,17 +690,17 @@ export const SOCIAL_MEDIA_TEMPLATES = [
 // ================================
 
 export const PLATFORM_NAMES = {
-    INSTAGRAM: 'Instagram',
-    FACEBOOK: 'Facebook',
-    TWITTER_X: 'Twitter/X',
-    LINKEDIN: 'LinkedIn',
-    YOUTUBE: 'YouTube',
-    PINTEREST: 'Pinterest',
-    TIKTOK: 'TikTok',
-    WEB: 'Web',
-    LOGO: 'Logo',
-    SCREENSHOTS: 'Screenshots',
-    FAVICON: 'Favicon'
+    INSTAGRAM: 'platform.instagram',
+    FACEBOOK: 'platform.facebook',
+    TWITTER_X: 'platform.twitter',
+    LINKEDIN: 'platform.linkedin',
+    YOUTUBE: 'platform.youtube',
+    PINTEREST: 'platform.pinterest',
+    TIKTOK: 'platform.tiktok',
+    WEB: 'platform.web',
+    LOGO: 'platform.logo',
+    SCREENSHOTS: 'platform.screenshots',
+    FAVICON: 'platform.favicon'
 };
 
 // ================================
@@ -631,71 +708,71 @@ export const PLATFORM_NAMES = {
 // ================================
 
 export const TEMPLATE_NAMES = {
-    FAVICON_SET: 'FaviconSet',
-    SCREENSHOTS_DESKTOP: 'ScreenshotsDesktop',
-    SCREENSHOTS_MOBILE: 'ScreenshotsMobile',
+    FAVICON_SET: 'template.FaviconSet',
+    SCREENSHOTS_DESKTOP: 'template.ScreenshotsDesktop',
+    SCREENSHOTS_MOBILE: 'template.ScreenshotsMobile',
     INSTAGRAM: [
-        'InstagramProfile',
-        'InstagramSquare',
-        'InstagramPortrait',
-        'InstagramLandscape',
-        'InstagramStoriesReels'
+        'template.InstagramProfile',
+        'template.InstagramSquare',
+        'template.InstagramPortrait',
+        'template.InstagramLandscape',
+        'template.InstagramStoriesReels'
     ],
     FACEBOOK: [
-        'FacebookProfile',
-        'FacebookCoverBanner',
-        'FacebookSharedImage',
-        'FacebookSquarePost',
-        'FacebookStories'
+        'template.FacebookProfile',
+        'template.FacebookCoverBanner',
+        'template.FacebookSharedImage',
+        'template.FacebookSquarePost',
+        'template.FacebookStories'
     ],
     TWITTER_X: [
-        'XProfile',
-        'XHeaderBanner',
-        'XLandscapePost',
-        'XSquarePost',
-        'XPortraitPost'
+        'template.XProfile',
+        'template.XHeaderBanner',
+        'template.XLandscapePost',
+        'template.XSquarePost',
+        'template.XPortraitPost'
     ],
     LINKEDIN: [
-        'LinkedInProfile',
-        'LinkedInPersonalCover',
-        'LinkedInLandscapePost',
-        'LinkedInSquarePost',
-        'LinkedInPortraitPost'
+        'template.LinkedInProfile',
+        'template.LinkedInPersonalCover',
+        'template.LinkedInLandscapePost',
+        'template.LinkedInSquarePost',
+        'template.LinkedInPortraitPost'
     ],
     YOUTUBE: [
-        'YouTubeChannelIcon',
-        'YouTubeBanner',
-        'YouTubeThumbnail'
+        'template.YouTubeChannelIcon',
+        'template.YouTubeBanner',
+        'template.YouTubeThumbnail'
     ],
     PINTEREST: [
-        'PinterestProfile',
-        'PinterestStandardPin',
-        'PinterestSquarePin',
-        'PinterestStoryPin'
+        'template.PinterestProfile',
+        'template.PinterestStandardPin',
+        'template.PinterestSquarePin',
+        'template.PinterestStoryPin'
     ],
     TIKTOK: [
-        'TikTokProfile',
-        'TikTokVideoCover'
+        'template.TikTokProfile',
+        'template.TikTokVideoCover'
     ],
     WEB: [
-        'WebHero',
-        'WebBlog',
-        'WebContent',
-        'WebThumb'
+        'template.WebHero',
+        'template.WebBlog',
+        'template.WebContent',
+        'template.WebThumb'
     ],
     LOGO: [
-        'LogoRectangular',
-        'LogoSquare'
+        'template.LogoRectangular',
+        'template.LogoSquare'
     ],
     SCREENSHOTS: [
-        'ScreenshotsMobile',
-        'ScreenshotsTablet',
-        'ScreenshotsDesktop',
-        'ScreenshotsDesktopHD',
-        'ScreenshotsMobileFull',
-        'ScreenshotsTabletFull',
-        'ScreenshotsDesktopFull',
-        'ScreenshotsDesktopHDFull'
+        'template.ScreenshotsMobile',
+        'template.ScreenshotsTablet',
+        'template.ScreenshotsDesktop',
+        'template.ScreenshotsDesktopHd',
+        'template.ScreenshotsMobileFull',
+        'template.ScreenshotsTabletFull',
+        'template.ScreenshotsDesktopFull',
+        'template.ScreenshotsDesktopHdFull'
     ]
 };
 
@@ -721,40 +798,6 @@ export const EXPORT_FOLDERS = {
     SOCIAL_MEDIA_IMAGES: 'SocialMediaImages',
     FAVICON_SET: 'FaviconSet',
     SCREENSHOTS: 'Screenshots'
-};
-
-// ================================
-// Viewport & User Agent Functions
-// ================================
-
-/**
- * Returns viewport dimensions for device type
- * @param {string} device - Device type identifier
- * @returns {object} Viewport dimensions
- */
-export const getViewportSize = (device) => {
-    const sizes = {
-        mobile: { width: 375, height: 667 },
-        tablet: { width: 768, height: 1024 },
-        desktop: { width: 1366, height: 768 },
-        'desktop-hd': { width: 1920, height: 1080 },
-    };
-    return sizes[device] || sizes.desktop;
-};
-
-/**
- * Returns user agent string for device type
- * @param {string} device - Device type identifier
- * @returns {string} User agent string
- */
-export const getUserAgent = (device) => {
-    const agents = {
-        mobile: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-        tablet: 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-        desktop: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'desktop-hd': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    };
-    return agents[device] || agents.desktop;
 };
 
 // ================================
@@ -787,16 +830,6 @@ export const getCategoryById = (categoryId) => {
  */
 export const getTemplateCategories = () => {
     return TEMPLATE_CATEGORIES.filter(cat => cat.id !== 'all');
-};
-
-/**
- * Gets template by ID
- * @param {string} templateId - Template ID to find
- * @returns {Object|null} Template object or null
- */
-export const getTemplateById = (templateId) => {
-    return SOCIAL_MEDIA_TEMPLATES.find(template => template.id === templateId) ||
-        SCREENSHOT_TEMPLATES[templateId] || null;
 };
 
 /**

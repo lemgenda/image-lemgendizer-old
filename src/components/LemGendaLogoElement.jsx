@@ -1,15 +1,17 @@
+import { SVG_CONSTANTS } from '../constants';
+
 /**
  * LemGenda logo SVG component
  * @param {Object} props - Component props
  * @param {string} props.className - Additional CSS class names
  * @param {Object} props.props - Additional SVG props
- * @returns {JSX.Element} LemGendaLogo component
+ * @returns {JSX.Element} LemGendaLogoElement component
  */
-const LemGendaLogo = ({ className = "", ...props }) => (
+const LemGendaLogoElement = ({ className = "", ...props }) => (
   <svg
     className={`footer-logo ${className}`}
     width="180"
-    height="34"
+    height={SVG_CONSTANTS.DEFAULT_HEIGHT * 0.34}
     viewBox="0 0 488 91"
     fill="currentColor"
     {...props}
@@ -39,4 +41,4 @@ const LemGendaLogo = ({ className = "", ...props }) => (
   </svg>
 );
 
-export default LemGendaLogo;
+export default LemGendaLogoElement;
