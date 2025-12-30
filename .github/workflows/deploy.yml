@@ -3,8 +3,6 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: ['main']
-  pull_request:
-    branches: ['main']
   workflow_dispatch:
 
 permissions:
@@ -22,6 +20,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -35,11 +35,16 @@ jobs:
       - name: Build project
         run: npm run build
         env:
-          # Add any build environment variables here
-          VITE_APP_TITLE: 'Image Processing Tool'
+          VITE_APP_TITLE: 'Image LemGendizer'
+          VITE_BASE_URL: '/image-lemgendizer-old/'
+
+      - name: Add 404.html to dist
+        run: cp 404.html dist/
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        with:
+          static_site_generator: vite
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

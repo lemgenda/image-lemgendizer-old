@@ -9,6 +9,8 @@
         "dev": "vite",
         "build": "vite build",
         "preview": "vite preview",
+        "predeploy": "npm run build",
+        "deploy": "gh-pages -d dist",
         "proxy": "node proxy-server.js",
         "dev:all": "concurrently \"npm run dev\" \"npm run proxy\""
     },
@@ -40,6 +42,7 @@
         "@types/react-dom": "^19.2.3",
         "@vitejs/plugin-react": "^5.1.2",
         "concurrently": "^8.2.2",
+        "gh-pages": "^6.3.0",
         "terser": "^5.44.1",
         "vite": "^7.3.0"
     }
