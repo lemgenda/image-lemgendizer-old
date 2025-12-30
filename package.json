@@ -8,9 +8,8 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
+        "build:gh-pages": "VITE_BASE_URL='./' vite build",
         "preview": "vite preview",
-        "predeploy": "npm run build",
-        "deploy": "gh-pages -d dist",
         "proxy": "node proxy-server.js",
         "dev:all": "concurrently \"npm run dev\" \"npm run proxy\""
     },

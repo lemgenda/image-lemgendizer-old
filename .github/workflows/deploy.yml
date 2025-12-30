@@ -12,13 +12,13 @@ permissions:
 
 concurrency:
   group: 'pages'
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -26,27 +26,122 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'  # Required for Vite compatibility
           cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci --no-audit --prefer-offline
+          npm cache clean --force
 
       - name: Build project
         run: npm run build
         env:
+          NODE_ENV: 'production'
           VITE_APP_TITLE: 'Image LemGendizer'
-          VITE_BASE_URL: '/image-lemgendizer-old/'
+          # Use relative path for GitHub Pages
+          VITE_BASE_URL: './'
 
-      - name: Add 404.html to dist
-        run: cp 404.html dist/
+      - name: Create 404.html for GitHub Pages SPA
+        run: |
+          cat > dist/404.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Image LemGendizer</title>
+              <link rel="icon" type="image/svg+xml" href="lemgenda-icon.svg">
+              <style>
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+                      margin: 0;
+                      padding: 20px;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
+                  }
 
-      - name: Setup Pages
+                  .container {
+                      text-align: center;
+                      background: white;
+                      padding: 40px;
+                      border-radius: 10px;
+                      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+                      max-width: 500px;
+                      width: 100%;
+                  }
+
+                  h1 {
+                      color: #333;
+                      margin-bottom: 20px;
+                  }
+
+                  p {
+                      color: #666;
+                      margin-bottom: 30px;
+                      line-height: 1.6;
+                  }
+
+                  .btn {
+                      display: inline-block;
+                      background: #3b82f6;
+                      color: white;
+                      padding: 12px 24px;
+                      text-decoration: none;
+                      border-radius: 5px;
+                      font-weight: 500;
+                      transition: background 0.3s;
+                      border: none;
+                      cursor: pointer;
+                      font-size: 16px;
+                  }
+
+                  .btn:hover {
+                      background: #2563eb;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>Page Not Found</h1>
+                  <p>The page you're looking for doesn't exist or has been moved.</p>
+                  <button onclick="goHome()" class="btn">Go to Home Page</button>
+              </div>
+              <script>
+                  function goHome() {
+                      window.location.href = './index.html';
+                  }
+
+                  // Auto-redirect for client-side routing
+                  if (window.location.pathname !== '/') {
+                      setTimeout(() => {
+                          window.location.href = './index.html';
+                      }, 2000);
+                  }
+              </script>
+          </body>
+          </html>
+          EOF
+
+      - name: Verify build output
+        run: |
+          echo "Build directory contents:"
+          ls -la dist/
+          echo ""
+          echo "Checking for index.html:"
+          [ -f dist/index.html ] && echo "✓ index.html exists" || echo "✗ index.html missing"
+          echo ""
+          echo "Checking for assets:"
+          ls -la dist/assets/ 2>/dev/null || echo "No assets directory"
+
+      - name: Setup GitHub Pages
         uses: actions/configure-pages@v4
-        with:
-          static_site_generator: vite
 
-      - name: Upload artifact
+      - name: Upload build artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
@@ -57,7 +152,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
