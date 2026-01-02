@@ -1492,7 +1492,7 @@ function App() {
                           </>
                         ) : (
                           <>
-                            <i className="fas fa-crop-alt"></i> {processingOptions.cropMode === CROP_MODES.SMART ? t('crop.switchToStandard') : t('crop.switchToSmart')}
+                            <i className="fas fa-crop-alt"></i> {processingOptions.cropMode === CROP_MODES.SMART ? t('crop.switchToSmart') : t('crop.switchToStandard')}
                           </>
                         )}
                       </h3>

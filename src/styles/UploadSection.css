@@ -1,0 +1,55 @@
+/* Upload Section Styles */
+.upload-section {
+    margin-bottom: 2rem;
+}
+
+.drop-zone {
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    background-color: var(--color-bg-secondary);
+    transition: all 0.3s ease;
+}
+
+.drop-zone:hover {
+    border-color: var(--color-primary);
+    background-color: rgba(59, 130, 246, 0.05);
+}
+
+.drop-zone-content i {
+    color: var(--color-primary);
+    font-size: 3rem;
+    margin-bottom: 1.5rem;
+}
+
+.drop-zone-content h3 {
+    color: var(--color-text-primary);
+    margin-bottom: 0.75rem;
+    font-size: 1.3rem;
+}
+
+.drop-zone-content p {
+    color: var(--color-text-muted);
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.upload-limits {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.hidden {
+    display: none;
+}
+
+.mt-md {
+    margin-top: 1rem;
+}
+
+p.text-muted>i {
+    font-size: 1rem;
+}
