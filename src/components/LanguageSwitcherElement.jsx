@@ -1,33 +1,38 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE, SPACING, BORDER_RADIUS, SHADOWS, TRANSITIONS } from '../constants';
+import { SPACING, BORDER_RADIUS, SHADOWS, TRANSITIONS } from '../constants';
+import {
+    getLanguagesWithFlags,
+    getCurrentLanguage,
+    changeApplicationLanguage,
+    getCurrentLanguageObject,
+    initializeLanguage
+} from '../utils';
 
+/**
+ * LanguageSwitcherElement component for switching between available languages
+ * @component
+ * @returns {JSX.Element} Language switcher component
+ */
 function LanguageSwitcherElement() {
     const { i18n } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
-    const [currentLanguage, setCurrentLanguage] = useState(DEFAULT_LANGUAGE);
+    const [currentLanguage, setCurrentLanguage] = useState(getCurrentLanguage());
 
-    // Create languages array with flags
-    const languages = AVAILABLE_LANGUAGES.map(lang => ({
-        code: lang.code,
-        name: lang.name,
-        flag: lang.code === 'en' ? '🇺🇸' : '🇭🇷' // Add flags based on language code
-    }));
+    const languages = getLanguagesWithFlags();
 
     useEffect(() => {
-        const lang = localStorage.getItem('app-language') || DEFAULT_LANGUAGE;
+        const lang = initializeLanguage(i18n);
         setCurrentLanguage(lang);
-        i18n.changeLanguage(lang);
     }, [i18n]);
 
-    const changeLanguage = (langCode) => {
+    const handleLanguageChange = (langCode) => {
         setCurrentLanguage(langCode);
-        i18n.changeLanguage(langCode);
-        localStorage.setItem('app-language', langCode);
+        changeApplicationLanguage(langCode, i18n);
         setIsOpen(false);
     };
 
-    const currentLang = languages.find(lang => lang.code === currentLanguage) || languages[0];
+    const currentLang = getCurrentLanguageObject(currentLanguage);
 
     return (
         <>
@@ -135,7 +140,6 @@ function LanguageSwitcherElement() {
                     z-index: 1000;
                 }
 
-                /* Mobile responsive */
                 @media (max-width: 768px) {
                     .language-toggle-btn {
                         min-width: 80px !important;
@@ -189,7 +193,7 @@ function LanguageSwitcherElement() {
                             <button
                                 key={lang.code}
                                 className={`language-option-btn ${lang.code === currentLanguage ? 'active' : ''}`}
-                                onClick={() => changeLanguage(lang.code)}
+                                onClick={() => handleLanguageChange(lang.code)}
                             >
                                 <span className="language-flag">{lang.flag}</span>
                                 <span className="language-name" style={{ flex: '1', textAlign: 'left' }}>

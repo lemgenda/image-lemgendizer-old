@@ -14,26 +14,32 @@ import {
 
 import {
     FAVICON_PREVIEW_SIZE,
-    TEMPLATE_CATEGORIES_CONST as TEMPLATE_CATEGORIES,
     APP_TEMPLATE_CONFIG,
     DEFAULT_FAVICON_THEME_COLOR,
     DEFAULT_FAVICON_BACKGROUND_COLOR,
-    DEFAULT_PLACEHOLDER_DIMENSIONS
+    DEFAULT_PLACEHOLDER_DIMENSIONS,
+    TEMPLATE_CATEGORIES_CONST,
+    FAVICON_SIZES,
+    FAVICON_SIZES_BASIC
 } from '../configs/templateConfigs';
 
 import {
     processLemGendaryResize,
-    processLemGendaryCrop,
+    processLengendaryOptimize
+} from './imageProcessor';
+
+import {
     processSmartCrop,
     processSimpleSmartCrop,
-    optimizeForWeb,
-    checkImageTransparency,
-    checkImageTransparencyDetailed
-} from '../processors';
+    processStandardCrop,
+    processSmartCropForLogo
+} from './cropProcessor';
 
 import {
     safeCleanupGPUMemory,
-    ensureFileObject
+    ensureFileObject,
+    checkImageTransparency,
+    checkImageTransparencyDetailed
 } from '../utils';
 
 let cleanupInProgress = false;
@@ -41,6 +47,9 @@ let aiUpscalingDisabled = false;
 
 /**
  * Gets template by ID
+ * @param {string} templateId - Template ID
+ * @param {Array<Object>} SOCIAL_MEDIA_TEMPLATES - Array of template objects
+ * @returns {Object|null} Template object or null
  */
 export const getTemplateById = (templateId, SOCIAL_MEDIA_TEMPLATES) => {
     return SOCIAL_MEDIA_TEMPLATES.find(template => template.id === templateId) || null;
@@ -48,6 +57,9 @@ export const getTemplateById = (templateId, SOCIAL_MEDIA_TEMPLATES) => {
 
 /**
  * Gets templates by category
+ * @param {string} category - Category name
+ * @param {Array<Object>} templateConfigs - Array of template configurations
+ * @returns {Array<Object>} Filtered templates
  */
 export const getTemplatesByCategory = (category, templateConfigs) => {
     return templateConfigs.filter(t => t.category === category);
@@ -55,64 +67,38 @@ export const getTemplatesByCategory = (category, templateConfigs) => {
 
 /**
  * Calculates total files generated from selected templates
+ * @param {Array<string>} selectedTemplates - Selected template IDs
+ * @param {Array<Object>} SOCIAL_MEDIA_TEMPLATES - Array of template objects
+ * @param {boolean} isFaviconSelected - Whether favicon is selected
+ * @param {boolean} isScreenshotSelected - Whether screenshot is selected
+ * @param {number} screenshotTemplateCount - Number of screenshot templates
+ * @returns {number} Total file count
  */
-export const calculateTotalTemplateFiles = (selectedTemplates, SOCIAL_MEDIA_TEMPLATES, isFaviconSelected = false, isScreenshotSelected = false, screenshotTemplateCount = 0) => {
-    if (!selectedTemplates || selectedTemplates.length === 0) {
-        return (isFaviconSelected ? APP_TEMPLATE_CONFIG.FAVICON.FILES_COUNT : 0) + (isScreenshotSelected ? screenshotTemplateCount : 0);
-    }
-
-    let totalFiles = 0;
-    const templateIds = selectedTemplates;
-    const templates = SOCIAL_MEDIA_TEMPLATES.filter(t => templateIds.includes(t.id));
-
-    templates.forEach(template => {
-        if (template.category === 'web') {
-            totalFiles += 2; // WEBP and JPG only (no PNG)
-        } else if (template.category === 'logo') {
-            totalFiles += 1; // PNG (and JPG if no transparency, added conditionally)
-            // JPG will be added conditionally in processSingleTemplate
-        } else if (template.category === 'favicon') {
-            totalFiles += APP_TEMPLATE_CONFIG.FAVICON.FILES_COUNT;
-        } else if (template.category === 'screenshots') {
-            totalFiles += 1;
+export const calculateTotalTemplateFiles = (selectedTemplates, SOCIAL_MEDIA_TEMPLATES, isFaviconSelected, isScreenshotSelected, screenshotTemplateCount, faviconMode = 'basic') => {
+    let count = (selectedTemplates || []).length;
+    if (isFaviconSelected) {
+        if (faviconMode === 'basic') {
+            count += (FAVICON_SIZES_BASIC.length + 5); // +5 for manifest, html, browserconfig, readme, ico
         } else {
-            totalFiles += 1; // Social media templates
+            count += (FAVICON_SIZES.length + 5); // +5 for same reason
         }
-    });
-
-    if (isFaviconSelected) totalFiles += APP_TEMPLATE_CONFIG.FAVICON.FILES_COUNT;
-    if (isScreenshotSelected) totalFiles += screenshotTemplateCount;
-
-    return totalFiles;
-};
-
-/**
- * Filters templates by type
- */
-export const filterTemplatesByType = (templates, type = 'social') => {
-    if (type === 'screenshot') {
-        return templates.filter(t => t.category === 'screenshots');
-    } else if (type === 'social') {
-        return templates.filter(t =>
-            t.category !== 'screenshots' &&
-            t.category !== 'favicon' &&
-            t.category !== 'web' &&
-            t.category !== 'logo'
-        );
-    } else if (type === 'web') {
-        return templates.filter(t => t.category === 'web' || t.category === 'logo');
     }
-    return templates;
+    if (isScreenshotSelected) {
+        count += (screenshotTemplateCount || 0);
+    }
+    return count;
 };
 
 /**
  * Gets category display name
+ * @param {string} categoryId - Category ID
+ * @returns {string} Display name
  */
 export const getCategoryDisplayName = (categoryId) => {
     switch (categoryId) {
-        case 'web': return 'Web Images';
-        case 'logo': return 'Logo Variations';
-        case 'favicon': return 'Favicon Set';
+        case TEMPLATE_CATEGORIES_CONST.WEB: return 'Web Images';
+        case TEMPLATE_CATEGORIES_CONST.LOGO: return 'Logo Variations';
+        case TEMPLATE_CATEGORIES_CONST.FAVICON: return 'Favicon Set';
         case 'facebook': return 'Facebook';
         case 'twitter': return 'Twitter/X';
         case 'instagram': return 'Instagram';
@@ -120,26 +106,32 @@ export const getCategoryDisplayName = (categoryId) => {
         case 'pinterest': return 'Pinterest';
         case 'tiktok': return 'TikTok';
         case 'youtube': return 'YouTube';
-        case 'screenshots': return 'Screenshots';
+        case TEMPLATE_CATEGORIES_CONST.SCREENSHOTS: return 'Screenshots';
         default: return 'Social Media';
     }
 };
 
 /**
  * Gets category constant from ID
+ * @param {string} categoryId - Category ID
+ * @returns {string} Category constant
  */
 const getCategoryConstant = (categoryId) => {
     switch (categoryId) {
-        case 'web': return 'web';
-        case 'logo': return 'logo';
-        case 'favicon': return 'favicon';
-        case 'screenshots': return 'screenshots';
-        default: return 'social_media';
+        case TEMPLATE_CATEGORIES_CONST.WEB: return TEMPLATE_CATEGORIES_CONST.WEB;
+        case TEMPLATE_CATEGORIES_CONST.LOGO: return TEMPLATE_CATEGORIES_CONST.LOGO;
+        case TEMPLATE_CATEGORIES_CONST.FAVICON: return TEMPLATE_CATEGORIES_CONST.FAVICON;
+        case TEMPLATE_CATEGORIES_CONST.SCREENSHOTS: return TEMPLATE_CATEGORIES_CONST.SCREENSHOTS;
+        default: return TEMPLATE_CATEGORIES_CONST.SOCIAL || 'social_media';
     }
 };
 
 /**
  * Creates template error files
+ * @param {Object} template - Template object
+ * @param {Object} image - Image object
+ * @param {Error} error - Error object
+ * @returns {Promise<Array<Object>>} Array of error images
  */
 const createTemplateErrorFiles = async (template, image, error) => {
     return new Promise((resolve) => {
@@ -223,15 +215,17 @@ const createTemplateErrorFiles = async (template, image, error) => {
 };
 
 /**
- * Processes a single template - FIXED: Web templates only export JPG and WEBP
+ * Processes a single template
+ * @param {Object} template - Template object
+ * @param {Object} image - Image object
+ * @param {File} imageFile - Image file
+ * @param {boolean} useSmartCrop - Whether to use smart crop
+ * @param {boolean} aiModelLoaded - Whether AI model is loaded
+ * @param {boolean} isLargeImage - Whether image is large
+ * @param {boolean} hasTransparency - Whether image has transparency
+ * @returns {Promise<Array<Object>>} Array of processed images
  */
 const processSingleTemplate = async (template, image, imageFile, useSmartCrop, aiModelLoaded, isLargeImage, hasTransparency) => {
-    console.log('=== PROCESS SINGLE TEMPLATE ===');
-    console.log('Template ID:', template.id);
-    console.log('Template name:', template.name);
-    console.log('Template category:', template.category);
-    console.log('Template platform:', template.platform);
-
     const processedImages = [];
 
     try {
@@ -261,26 +255,37 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
             const targetHeight = template.height === 'auto' ? null : parseInt(template.height);
 
             if (targetHeight) {
-                if (useSmartCrop && aiModelLoaded && !isLargeImage && !aiUpscalingDisabled) {
+                if (useSmartCrop && aiModelLoaded && !aiUpscalingDisabled) {
                     try {
-                        processedFile = await processSmartCrop(
-                            processedFile,
-                            targetWidth,
-                            targetHeight,
-                            { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }
-                        );
-                        wasSmartCropped = true;
+                        // Use dedicated logo crop for logo templates to prevent cutoff
+                        if (isLogoTemplate) {
+                            processedFile = await processSmartCropForLogo(
+                                processedFile,
+                                targetWidth,
+                                targetHeight,
+                                { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP, isLogo: true, templateConfig: template.cropConfig }
+                            );
+                            wasSmartCropped = true;
+                            subjectProtected = true;
+                        } else {
+                            processedFile = await processSmartCrop(
+                                processedFile,
+                                targetWidth,
+                                targetHeight,
+                                { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP, isLogo: false, templateConfig: template.cropConfig }
+                            );
+                            wasSmartCropped = true;
+                        }
                     } catch (smartCropError) {
                         processedFile = await processSimpleSmartCrop(
                             processedFile,
                             targetWidth,
                             targetHeight,
                             'center',
-                            { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }
+                            { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP, isLogo: isLogoTemplate, templateConfig: template.cropConfig }
                         );
                     }
                 } else {
-                    // Use regular crop when smart crop is not available or appropriate
                     const cropResults = await processLemGendaryCrop(
                         [{ file: processedFile, name: image.name || APP_CONFIG.FILE_NAMING.DEFAULT_BASE_NAME }],
                         targetWidth,
@@ -293,7 +298,6 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     }
                 }
             } else {
-                // Resize only (when height is 'auto')
                 const resizeResults = await processLemGendaryResize(
                     [{ file: processedFile, name: image.name || APP_CONFIG.FILE_NAMING.DEFAULT_BASE_NAME }],
                     targetWidth,
@@ -310,15 +314,9 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
         const timestamp = APP_CONFIG.TEMPLATES.DEFAULT_TIMESTAMP;
         const baseName = `${template.platform}${APP_CONFIG.TEMPLATES.BASE_NAME_SEPARATOR}${template.name}`;
 
-        console.log('Processing category:', templateCategory);
-        console.log('Template has transparency:', hasTransparency);
-
         if (templateCategory === 'web') {
-            console.log('Creating WEB template images (JPG and WEBP only)');
-
-            // Create WEBP version for web
             try {
-                const webpFile = await optimizeForWeb(processedFile, DEFAULT_WEBP_QUALITY, IMAGE_FORMATS.WEBP);
+                const webpFile = await processLengendaryOptimize(processedFile, DEFAULT_WEBP_QUALITY, IMAGE_FORMATS.WEBP);
                 const webpName = `${baseName}${APP_CONFIG.TEMPLATES.BASE_NAME_SEPARATOR}${timestamp}${APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR}${IMAGE_FORMATS.WEBP}`;
 
                 processedImages.push({
@@ -337,14 +335,10 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     isLogo: false,
                     subjectProtected: false
                 });
-                console.log('Added WEBP web image');
-            } catch (webpError) {
-                console.warn('WebP conversion failed:', webpError);
-            }
+            } catch (webpError) { }
 
-            // Create JPG version for web (always, even if has transparency - will be converted to RGB)
             try {
-                const jpgFile = await optimizeForWeb(processedFile, DEFAULT_JPG_QUALITY, IMAGE_FORMATS.JPG);
+                const jpgFile = await processLengendaryOptimize(processedFile, DEFAULT_JPG_QUALITY, IMAGE_FORMATS.JPG);
                 const jpgName = `${baseName}${APP_CONFIG.TEMPLATES.BASE_NAME_SEPARATOR}${timestamp}${APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR}${IMAGE_FORMATS.JPG}`;
 
                 processedImages.push({
@@ -360,23 +354,15 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     processed: true,
                     aiCropped: wasSmartCropped,
                     upscaled: wasUpscaled,
-                    hasTransparency: false, // JPG never has transparency
+                    hasTransparency: false,
                     isLogo: false,
                     subjectProtected: false
                 });
-                console.log('Added JPG web image');
-            } catch (jpgError) {
-                console.warn('JPG conversion failed:', jpgError);
-            }
-
-            // REMOVED: PNG generation for web templates
-            console.log('Skipping PNG for web templates (only JPG and WEBP)');
+            } catch (jpgError) { }
 
         } else if (templateCategory === 'logo') {
-            console.log('Creating LOGO template images');
-            // Create PNG version (always for logos)
             try {
-                const pngFile = await optimizeForWeb(processedFile, DEFAULT_PNG_QUALITY, IMAGE_FORMATS.PNG);
+                const pngFile = await processLengendaryOptimize(processedFile, DEFAULT_PNG_QUALITY, IMAGE_FORMATS.PNG);
                 const pngName = `${baseName}${APP_CONFIG.TEMPLATES.BASE_NAME_SEPARATOR}${timestamp}${APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR}${IMAGE_FORMATS.PNG}`;
 
                 processedImages.push({
@@ -396,15 +382,11 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     isLogo: true,
                     subjectProtected: subjectProtected
                 });
-                console.log('Added PNG logo image');
-            } catch (pngError) {
-                console.warn('PNG conversion failed:', pngError);
-            }
+            } catch (pngError) { }
 
-            // Create JPG version if no transparency
             if (!hasTransparency) {
                 try {
-                    const jpgFile = await optimizeForWeb(processedFile, DEFAULT_JPG_QUALITY, IMAGE_FORMATS.JPG);
+                    const jpgFile = await processLengendaryOptimize(processedFile, DEFAULT_JPG_QUALITY, IMAGE_FORMATS.JPG);
                     const jpgName = `${baseName}${APP_CONFIG.TEMPLATES.BASE_NAME_SEPARATOR}${timestamp}${APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR}${IMAGE_FORMATS.JPG}`;
 
                     processedImages.push({
@@ -424,17 +406,11 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                         isLogo: true,
                         subjectProtected: subjectProtected
                     });
-                    console.log('Added JPG logo image');
-                } catch (jpgError) {
-                    console.warn('JPG conversion for logo failed:', jpgError);
-                }
-            } else {
-                console.log('Skipping JPG for logo (has transparency)');
+                } catch (jpgError) { }
             }
         } else if (templateCategory === 'screenshots') {
-            console.log('Creating SCREENSHOT template image');
             try {
-                const jpgFile = await optimizeForWeb(processedFile, DEFAULT_JPG_QUALITY, IMAGE_FORMATS.JPG);
+                const jpgFile = await processLengendaryOptimize(processedFile, DEFAULT_JPG_QUALITY, IMAGE_FORMATS.JPG);
                 const jpgName = `${baseName}${APP_CONFIG.TEMPLATES.BASE_NAME_SEPARATOR}${timestamp}${APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR}${IMAGE_FORMATS.JPG}`;
 
                 processedImages.push({
@@ -453,15 +429,10 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     isLogo: false,
                     subjectProtected: false
                 });
-                console.log('Added screenshot image');
-            } catch (jpgError) {
-                console.warn('JPG conversion for screenshot failed:', jpgError);
-            }
+            } catch (jpgError) { }
         } else {
-            // Social media and other templates
-            console.log('Creating SOCIAL MEDIA template image');
             try {
-                const jpgFile = await optimizeForWeb(processedFile, DEFAULT_JPG_QUALITY, IMAGE_FORMATS.JPG);
+                const jpgFile = await processLengendaryOptimize(processedFile, DEFAULT_JPG_QUALITY, IMAGE_FORMATS.JPG);
                 const jpgName = `${baseName}${APP_CONFIG.TEMPLATES.BASE_NAME_SEPARATOR}${timestamp}${APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR}${IMAGE_FORMATS.JPG}`;
 
                 processedImages.push({
@@ -480,25 +451,12 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     isLogo: false,
                     subjectProtected: false
                 });
-                console.log('Added social media image');
-            } catch (jpgError) {
-                console.warn('JPG conversion for social media failed:', jpgError);
-            }
+            } catch (jpgError) { }
         }
-
-        console.log('Total images created:', processedImages.length);
-        processedImages.forEach((img, idx) => {
-            console.log(`Image ${idx}:`, {
-                name: img.name,
-                category: img.template?.category,
-                format: img.format
-            });
-        });
 
         return processedImages;
 
     } catch (error) {
-        console.error('Error in processSingleTemplate:', error);
         if (process.env.NODE_ENV === 'development') {
             return await createTemplateErrorFiles(template, image, error);
         }
@@ -508,33 +466,28 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
 
 /**
  * Processes images using social media templates
+ * @async
+ * @param {Object} image - Image object
+ * @param {Array<Object>} selectedTemplates - Selected template objects
+ * @param {boolean} useSmartCrop - Whether to use smart crop
+ * @param {boolean} aiModelLoaded - Whether AI model is loaded
+ * @param {Object} options - Processing options
+ * @returns {Promise<Array<Object>>} Array of processed images
  */
 export const processTemplateImages = async (image, selectedTemplates, useSmartCrop = false, aiModelLoaded = false, options = {}) => {
-    console.log('=== PROCESS TEMPLATE IMAGES ===');
-    console.log('Selected templates count:', selectedTemplates.length);
-    console.log('Selected templates:', selectedTemplates.map(t => ({
-        id: t.id,
-        name: t.name,
-        category: t.category,
-        platform: t.platform
-    })));
-
     const processedImages = [];
 
     if (!image || !selectedTemplates || selectedTemplates.length === 0) {
-        console.log('No image or templates selected');
         return processedImages;
     }
 
     const imageFile = await ensureFileObject(image);
     if (!imageFile) {
-        console.log('Failed to get image file');
         return processedImages;
     }
 
     const transparencyInfo = await checkImageTransparencyDetailed(imageFile);
     const hasTransparency = transparencyInfo.hasTransparency;
-    console.log('Image has transparency:', hasTransparency);
 
     const img = new Image();
     const objectUrl = URL.createObjectURL(imageFile);
@@ -552,16 +505,12 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
 
     const totalPixels = img.naturalWidth * img.naturalHeight;
     const isLargeImage = totalPixels > LARGE_IMAGE_THRESHOLD;
-    console.log('Image dimensions:', img.naturalWidth, 'x', img.naturalHeight);
-    console.log('Is large image:', isLargeImage);
 
     const regularTemplates = selectedTemplates.filter(t => {
         if (!t || !t.category) return false;
         const category = t.category;
         return category !== 'favicon' && category !== 'screenshots';
     });
-
-    console.log('Regular templates to process:', regularTemplates.length);
 
     const wasCleanupInProgress = cleanupInProgress;
     cleanupInProgress = true;
@@ -570,7 +519,6 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
         for (const template of regularTemplates) {
             if (!template) continue;
 
-            console.log(`Processing template: ${template.name} (${template.category})`);
             const templateResults = await processSingleTemplate(
                 template,
                 image,
@@ -582,35 +530,30 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
             );
 
             processedImages.push(...templateResults);
-            console.log(`Added ${templateResults.length} images from template ${template.name}`);
 
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAYS.MEMORY_CLEANUP));
             safeCleanupGPUMemory();
         }
 
     } catch (error) {
-        console.error('Error in processTemplateImages:', error);
     } finally {
         cleanupInProgress = wasCleanupInProgress;
         setTimeout(safeCleanupGPUMemory, PROCESSING_DELAYS.MEMORY_CLEANUP);
     }
 
     const validImages = processedImages.filter(img => img && img.name && (img.file || img.blob));
-    console.log('Total valid images processed:', validImages.length);
-
-    // Log summary by category
-    const categorySummary = {};
-    validImages.forEach(img => {
-        const cat = img.template?.category || 'unknown';
-        categorySummary[cat] = (categorySummary[cat] || 0) + 1;
-    });
-    console.log('Category summary:', categorySummary);
 
     return validImages;
 };
 
 /**
  * Creates favicon preview image
+ * @async
+ * @param {File} imageFile - Source image file
+ * @param {string} siteName - Website name
+ * @param {string} themeColor - Theme color
+ * @param {string} backgroundColor - Background color
+ * @returns {Promise<File>} Favicon preview image file
  */
 export const createFaviconPreview = async (imageFile, siteName, themeColor = DEFAULT_FAVICON_THEME_COLOR, backgroundColor = DEFAULT_FAVICON_BACKGROUND_COLOR) => {
     return new Promise((resolve) => {
@@ -685,6 +628,8 @@ export const createFaviconPreview = async (imageFile, siteName, themeColor = DEF
 
 /**
  * Gets template categories with display information
+ * @param {Array<Object>} SOCIAL_MEDIA_TEMPLATES - Array of template objects
+ * @returns {Array<Object>} Array of category configurations
  */
 export const getTemplateCategories = (SOCIAL_MEDIA_TEMPLATES) => {
     const categories = new Set();
@@ -701,25 +646,25 @@ export const getTemplateCategories = (SOCIAL_MEDIA_TEMPLATES) => {
 
     categories.forEach(category => {
         switch (category) {
-            case 'web':
+            case TEMPLATE_CATEGORIES_CONST.WEB:
                 categoryConfigs.push({
-                    id: 'web',
+                    id: TEMPLATE_CATEGORIES_CONST.WEB,
                     name: 'Web Images',
                     icon: 'fas fa-globe',
                     description: 'Images optimized for web use'
                 });
                 break;
-            case 'logo':
+            case TEMPLATE_CATEGORIES_CONST.LOGO:
                 categoryConfigs.push({
-                    id: 'logo',
+                    id: TEMPLATE_CATEGORIES_CONST.LOGO,
                     name: 'Logo Variations',
                     icon: 'fas fa-palette',
                     description: 'Logo formats for different uses'
                 });
                 break;
-            case 'favicon':
+            case TEMPLATE_CATEGORIES_CONST.FAVICON:
                 categoryConfigs.push({
-                    id: 'favicon',
+                    id: TEMPLATE_CATEGORIES_CONST.FAVICON,
                     name: 'Favicon Set',
                     icon: 'fas fa-star',
                     description: 'Complete favicon package'
@@ -781,9 +726,9 @@ export const getTemplateCategories = (SOCIAL_MEDIA_TEMPLATES) => {
                     description: 'YouTube formats'
                 });
                 break;
-            case 'screenshots':
+            case TEMPLATE_CATEGORIES_CONST.SCREENSHOTS:
                 categoryConfigs.push({
-                    id: 'screenshots',
+                    id: TEMPLATE_CATEGORIES_CONST.SCREENSHOTS,
                     name: 'Website Screenshots',
                     icon: 'fas fa-camera',
                     description: 'Responsive website screenshots'
@@ -804,6 +749,8 @@ export const getTemplateCategories = (SOCIAL_MEDIA_TEMPLATES) => {
 
 /**
  * Checks if template requires smart crop
+ * @param {Object} template - Template object
+ * @returns {boolean} True if smart crop is required
  */
 export const requiresSmartCrop = (template) => {
     if (!template) return false;
@@ -817,35 +764,9 @@ export const requiresSmartCrop = (template) => {
 };
 
 /**
- * Validates template selection for processing
- */
-export const validateTemplateSelection = (selectedTemplates, SOCIAL_MEDIA_TEMPLATES) => {
-    if (!selectedTemplates || selectedTemplates.length === 0) {
-        return {
-            isValid: false,
-            error: 'No templates selected'
-        };
-    }
-
-    const validTemplates = selectedTemplates.filter(id =>
-        SOCIAL_MEDIA_TEMPLATES.some(t => t.id === id)
-    );
-
-    if (validTemplates.length !== selectedTemplates.length) {
-        return {
-            isValid: false,
-            error: 'Invalid template IDs detected'
-        };
-    }
-
-    return {
-        isValid: true,
-        validCount: validTemplates.length
-    };
-};
-
-/**
  * Groups templates by category for display
+ * @param {Array<Object>} templates - Array of template objects
+ * @returns {Object} Templates grouped by category
  */
 export const groupTemplatesByCategory = (templates) => {
     const grouped = {};
@@ -865,9 +786,13 @@ export const groupTemplatesByCategory = (templates) => {
 
 /**
  * Gets recommended templates for image
+ * @async
+ * @param {Object} image - Image object
+ * @param {Array<Object>} SOCIAL_MEDIA_TEMPLATES - Array of template objects
+ * @returns {Promise<Array<string>>} Array of recommended template IDs
  */
 export const getRecommendedTemplates = (image, SOCIAL_MEDIA_TEMPLATES) => {
-    if (!image || !SOCIAL_MEDIA_TEMPLATES) return [];
+    if (!image || !SOCIAL_MEDIA_TEMPLATES) return Promise.resolve([]);
 
     const img = new Image();
     const objectUrl = URL.createObjectURL(image.file || image.blob);
@@ -904,6 +829,10 @@ export const getRecommendedTemplates = (image, SOCIAL_MEDIA_TEMPLATES) => {
 
 /**
  * Creates processing summary for templates
+ * @param {Array<Object>} processedImages - Processed images
+ * @param {Array<string>} selectedTemplateIds - Selected template IDs
+ * @param {Array<Object>} SOCIAL_MEDIA_TEMPLATES - Array of template objects
+ * @returns {Object} Processing summary
  */
 export const createTemplateProcessingSummary = (processedImages, selectedTemplateIds, SOCIAL_MEDIA_TEMPLATES) => {
     const successfulImages = processedImages.filter(img => img.processed && !img.error && !img.isError);

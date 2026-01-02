@@ -8,7 +8,13 @@ import {
     SHADOWS,
     TRANSITIONS
 } from '../constants';
-import { generateTIFFPreview, generateQuickTIFFPreview, createFilePlaceholder } from '../utils/tiffPreviewUtils';
+
+import {
+    generateTIFFPreview,
+    generateQuickTIFFPreview,
+    createFilePlaceholder,
+    generateSVGPreview
+} from '../utils';
 
 function UploadGallerySection({
     images,
@@ -25,7 +31,6 @@ function UploadGallerySection({
     const [failedPreviews, setFailedPreviews] = useState(new Set());
     const [loadingPreviews, setLoadingPreviews] = useState(new Set());
 
-    // Generate or update previews for images
     useEffect(() => {
         const generatePreviews = async () => {
             const newPreviews = { ...imagePreviews };
@@ -34,38 +39,28 @@ function UploadGallerySection({
             for (const image of images) {
                 const imageId = image.id;
 
-                // Skip if preview already exists or failed or currently loading
                 if (newPreviews[imageId] || failedPreviews.has(imageId) || newLoadingPreviews.has(imageId)) continue;
 
-                // Mark as loading
                 newLoadingPreviews.add(imageId);
                 setLoadingPreviews(newLoadingPreviews);
 
                 try {
                     let previewUrl;
 
-                    console.log(`Generating preview for: ${image.name} (TIFF: ${image.isTIFF}, SVG: ${image.isSVG})`);
-
-                    // Handle TIFF files specifically
                     if (image.isTIFF) {
                         try {
-                            // Try full TIFF preview first
                             previewUrl = await generateTIFFPreview(image.file, 400);
                         } catch (tiffError) {
-                            console.warn('Full TIFF preview failed, trying quick preview:', tiffError.message);
                             try {
                                 previewUrl = await generateQuickTIFFPreview(image.file, 300);
                             } catch (quickError) {
-                                console.error('Both TIFF preview methods failed:', quickError.message);
                                 throw new Error('Failed to generate TIFF preview');
                             }
                         }
                     }
-                    // Handle SVG files
                     else if (image.isSVG) {
-                        previewUrl = await generateSVGPreview(image);
+                        previewUrl = await generateSVGPreview(image.file);
                     }
-                    // Handle regular images
                     else {
                         previewUrl = await generateRegularPreview(image);
                     }
@@ -77,20 +72,14 @@ function UploadGallerySection({
                         timestamp: Date.now()
                     };
 
-                    // Remove from failed set if it succeeds now
                     setFailedPreviews(prev => {
                         const newSet = new Set(prev);
                         newSet.delete(imageId);
                         return newSet;
                     });
 
-                    console.log(`Preview generated successfully for: ${image.name}`);
-
                 } catch (error) {
-                    console.warn(`Failed to create preview for ${image.name}:`, error.message);
-                    // Mark as failed
                     setFailedPreviews(prev => new Set(prev).add(imageId));
-                    // Create a simple placeholder
                     newPreviews[imageId] = {
                         url: createFilePlaceholder(image),
                         type: 'placeholder',
@@ -98,7 +87,6 @@ function UploadGallerySection({
                         timestamp: Date.now()
                     };
                 } finally {
-                    // Remove from loading set
                     newLoadingPreviews.delete(imageId);
                     setLoadingPreviews(newLoadingPreviews);
                 }
@@ -110,69 +98,6 @@ function UploadGallerySection({
         generatePreviews();
     }, [images]);
 
-    // Generate SVG preview
-    const generateSVGPreview = useCallback(async (image) => {
-        return new Promise((resolve, reject) => {
-            if (!image.file) {
-                reject(new Error('No SVG file available'));
-                return;
-            }
-
-            const reader = new FileReader();
-
-            reader.onload = (e) => {
-                try {
-                    const svgText = e.target.result;
-                    const svgBlob = new Blob([svgText], { type: 'image/svg+xml' });
-                    const svgUrl = URL.createObjectURL(svgBlob);
-
-                    const img = new Image();
-
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const maxSize = 400;
-                        let width = img.naturalWidth || img.width || 200;
-                        let height = img.naturalHeight || img.height || 150;
-
-                        if (width > maxSize || height > maxSize) {
-                            const scale = Math.min(maxSize / width, maxSize / height);
-                            width = Math.round(width * scale);
-                            height = Math.round(height * scale);
-                        }
-
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-
-                        // White background for SVG
-                        ctx.fillStyle = '#ffffff';
-                        ctx.fillRect(0, 0, width, height);
-
-                        // Draw SVG
-                        ctx.drawImage(img, 0, 0, width, height);
-
-                        URL.revokeObjectURL(svgUrl);
-                        resolve(canvas.toDataURL('image/png'));
-                    };
-
-                    img.onerror = () => {
-                        URL.revokeObjectURL(svgUrl);
-                        reject(new Error('Failed to load SVG'));
-                    };
-
-                    img.src = svgUrl;
-
-                } catch (error) {
-                    reject(error);
-                }
-            };
-
-            reader.onerror = () => reject(new Error('Failed to read SVG file'));
-            reader.readAsText(image.file);
-        });
-    }, []);
-
-    // Generate regular image preview
     const generateRegularPreview = useCallback(async (image) => {
         return new Promise((resolve, reject) => {
             if (!image.file) {
@@ -180,25 +105,20 @@ function UploadGallerySection({
                 return;
             }
 
-            // Try to use existing URL first
             if (image.url && (image.url.startsWith('blob:') || image.url.startsWith('data:'))) {
-                // Test if URL works
                 const img = new Image();
                 img.onload = () => resolve(image.url);
                 img.onerror = () => {
-                    // URL doesn't work, create new one
                     createNewPreviewFromFile(image).then(resolve).catch(reject);
                 };
                 img.src = image.url;
                 return;
             }
 
-            // Create new preview from file
             createNewPreviewFromFile(image).then(resolve).catch(reject);
         });
     }, []);
 
-    // Create new preview from file
     const createNewPreviewFromFile = useCallback((image) => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -225,7 +145,6 @@ function UploadGallerySection({
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
 
-                        // Draw the image
                         ctx.drawImage(img, 0, 0, width, height);
 
                         URL.revokeObjectURL(blobUrl);
@@ -249,42 +168,34 @@ function UploadGallerySection({
         });
     }, []);
 
-    // Get preview URL for an image
     const getPreviewUrl = useCallback((image) => {
         const preview = imagePreviews[image.id];
         if (preview && preview.url) {
             return preview.url;
         }
-        // Return original URL or placeholder
         return image.url || createFilePlaceholder(image);
     }, [imagePreviews]);
 
-    // Check if we should show a real image preview (not placeholder)
     const shouldShowRealPreview = useCallback((image) => {
         const preview = imagePreviews[image.id];
         return preview && preview.type === 'image' && !failedPreviews.has(image.id);
     }, [imagePreviews, failedPreviews]);
 
-    // Check if image is loading
     const isLoading = useCallback((imageId) => {
         return loadingPreviews.has(imageId);
     }, [loadingPreviews]);
 
-    // Handle image click
     const handleImageClick = useCallback((imageId) => {
         onImageSelect(imageId);
     }, [onImageSelect]);
 
-    // Clean up previews when component unmounts
     useEffect(() => {
         return () => {
-            // Clean up any generated blob URLs
             Object.values(imagePreviews).forEach(preview => {
                 if (preview.url && preview.url.startsWith('blob:')) {
                     try {
                         URL.revokeObjectURL(preview.url);
                     } catch (e) {
-                        // Ignore errors
                     }
                 }
             });
@@ -384,7 +295,6 @@ function UploadGallerySection({
                     width: 100%;
                     height: 150px;
                     overflow: hidden;
-                    background-color: #f8f9fa;
                 }
 
                 .gallery-image-preview {
@@ -392,7 +302,6 @@ function UploadGallerySection({
                     height: 100%;
                     object-fit: contain;
                     display: block;
-                    background-color: #ffffff;
                 }
 
                 .gallery-image-loading {
@@ -601,25 +510,23 @@ function UploadGallerySection({
                                         </div>
                                     )}
 
-                                    <div className="gallery-image-preview-container">
+                                    <div className="gallery-image-preview-container transparency-grid">
+
                                         {imageLoading ? (
                                             <div className="gallery-image-loading">
                                                 <div className="gallery-loading-spinner"></div>
                                             </div>
                                         ) : (
                                             <>
-                                                {/* Show real image if available */}
                                                 <img
                                                     src={previewUrl}
                                                     alt={image.name}
                                                     className="gallery-image-preview"
                                                     loading="lazy"
                                                     onLoad={(e) => {
-                                                        // Image loaded successfully
                                                         e.target.style.opacity = '1';
                                                     }}
-                                                    onError={(e) => {
-                                                        // Mark as failed if image errors
+                                                    onError={() => {
                                                         setFailedPreviews(prev => new Set(prev).add(image.id));
                                                     }}
                                                     style={{
@@ -628,7 +535,6 @@ function UploadGallerySection({
                                                     }}
                                                 />
 
-                                                {/* Show placeholder if real preview failed */}
                                                 {!showRealPreview && !imageLoading && (
                                                     <div className="gallery-image-placeholder">
                                                         <div className="gallery-placeholder-icon">
@@ -642,7 +548,6 @@ function UploadGallerySection({
                                             </>
                                         )}
 
-                                        {/* Show format indicator only if it's a special format */}
                                         {(image.isTIFF || image.isSVG) && !imageLoading && (
                                             <div className="gallery-special-format-indicator">
                                                 {image.isTIFF ? 'TIFF' : 'SVG'}

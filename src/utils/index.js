@@ -5,4 +5,7 @@ export * from './generalUtils.js';
 export * from './memoryUtils.js';
 export * from './faviconUtils.js';
 export * from './screenshotUtils.js';
-export * from './tiffPreviewUtils.js';
+export * from './tiffUtils.js';
+export * from './svgUtils.js';
+export * from './themeUtils.js';
+export * from './appUtils.js';

@@ -1,4 +1,3 @@
-// validationUtils.js - Complete version
 import {
     MAX_TARGET_FILESIZE_KB,
     MAX_CROP_DIMENSION,
@@ -6,7 +5,10 @@ import {
     PROCESSING_MODES,
     CROP_MODES,
     CROP_POSITIONS,
-    URL_CONSTANTS
+    CROP_POSITION_LIST,
+    URL_CONSTANTS,
+    IMAGE_FORMATS,
+    SUPPORTED_INPUT_FORMATS
 } from '../constants';
 
 /**
@@ -84,7 +86,7 @@ export const validateProcessingOptions = (processingOptions) => {
     }
 
     if (processingOptions.output?.formats) {
-        const validFormats = ['webp', 'avif', 'jpg', 'jpeg', 'png', 'original'];
+        const validFormats = Object.values(IMAGE_FORMATS);
         const invalidFormats = processingOptions.output.formats.filter(f => !validFormats.includes(f));
 
         if (invalidFormats.length > 0) {
@@ -114,10 +116,10 @@ export const validateProcessingOptions = (processingOptions) => {
     }
 
     if (processingOptions.cropMode && !Object.values(CROP_MODES).includes(processingOptions.cropMode)) {
-        errors.push('Crop mode must be either "smart" or "standard"');
+        errors.push(`Crop mode must be one of: ${Object.values(CROP_MODES).join(', ')}`);
     }
 
-    if (processingOptions.cropPosition && !CROP_POSITIONS.includes(processingOptions.cropPosition)) {
+    if (processingOptions.cropPosition && !CROP_POSITION_LIST.includes(processingOptions.cropPosition)) {
         errors.push('Invalid crop position');
     }
 
@@ -142,11 +144,11 @@ export const validateProcessingOptions = (processingOptions) => {
 };
 
 /**
- * Validates a screenshot URL.
+ * Validates screenshot URL
  * @param {string} url - URL to validate
- * @returns {Object} Validation result with isValid flag and message
+ * @returns {Object} Validation result
  */
-export const validateScreenshotUrl = (url) => {
+export function validateScreenshotUrlInput(url) {
     if (!url || url.trim() === '') {
         return {
             isValid: false,
@@ -171,12 +173,149 @@ export const validateScreenshotUrl = (url) => {
 
         return {
             isValid: true,
-            message: 'Valid URL'
+            message: 'Valid URL',
+            cleanUrl: formattedUrl
         };
     } catch (error) {
         return {
             isValid: false,
-            message: 'Invalid URL format. Please enter a valid website URL (e.g., example.com or https://example.com)'
+            message: 'Invalid URL format'
         };
     }
+}
+
+/**
+ * Validates image files
+ * @param {Array<File>} files - File list
+ * @returns {Array<File>} Validated files
+ */
+export const validateImageFiles = (files) => {
+    return Array.from(files).filter(file => {
+        const mimeType = file.type.toLowerCase();
+        return SUPPORTED_INPUT_FORMATS.some(format =>
+            mimeType === format || (format.includes('/') && mimeType.includes(format.split('/')[1]))
+        );
+    });
+};
+
+/**
+ * Validates image files before processing
+ * @param {Array<Object>} images - Array of image objects
+ * @returns {Array<Object>} Array of validation issues
+ */
+export const validateImageFilesBeforeProcessing = (images) => {
+    const issues = [];
+    const maxSize = 50 * 1024 * 1024;
+
+    images.forEach((image, index) => {
+        if (image.size > maxSize) {
+            issues.push({
+                image: image.name,
+                issue: `File too large (${formatFileSize(image.size)}). Maximum size is 50MB.`,
+                index
+            });
+        }
+
+        if (image.size === 0) {
+            issues.push({
+                image: image.name,
+                issue: 'File appears to be empty (0 bytes).',
+                index
+            });
+        }
+
+        if (image.isTIFF) {
+            issues.push({
+                image: image.name,
+                issue: 'TIFF file - may have conversion issues',
+                index,
+                warning: true
+            });
+        }
+
+
+    });
+
+    return issues;
+};
+
+/**
+ * Validates crop parameters
+ * @param {number} width - Crop width
+ * @param {number} height - Crop height
+ * @param {string} position - Crop position
+ * @returns {Object} Validation result
+ */
+export const validateCropParameters = (width, height, position) => {
+    const errors = [];
+
+    if (!width || width <= 0) {
+        errors.push('Width must be a positive number');
+    }
+
+    if (!height || height <= 0) {
+        errors.push('Height must be a positive number');
+    }
+
+    if (width > 10000) {
+        errors.push('Width cannot exceed 10000 pixels');
+    }
+
+    if (height > 10000) {
+        errors.push('Height cannot exceed 10000 pixels');
+    }
+
+    const validPositions = getCropPositions();
+    if (!validPositions.includes(position)) {
+        errors.push(`Invalid crop position. Must be one of: ${validPositions.join(', ')}`);
+    }
+
+    return {
+        isValid: errors.length === 0,
+        errors
+    };
+};
+
+/**
+ * Validates template selection for processing
+ * @param {Array<string>} selectedTemplates - Selected template IDs
+ * @param {Array<Object>} SOCIAL_MEDIA_TEMPLATES - Array of template objects
+ * @returns {Object} Validation result
+ */
+export const validateTemplateSelection = (selectedTemplates, SOCIAL_MEDIA_TEMPLATES) => {
+    if (!selectedTemplates || selectedTemplates.length === 0) {
+        return {
+            isValid: false,
+            error: 'No templates selected'
+        };
+    }
+
+    const validTemplates = selectedTemplates.filter(id =>
+        SOCIAL_MEDIA_TEMPLATES.some(t => t.id === id)
+    );
+
+    if (validTemplates.length !== selectedTemplates.length) {
+        return {
+            isValid: false,
+            error: 'Invalid template IDs detected'
+        };
+    }
+
+    return {
+        isValid: true,
+        validCount: validTemplates.length
+    };
+};
+
+/**
+ * Validates if an image object is valid
+ * @param {Object} image - Image object to validate
+ * @returns {boolean} True if image is valid
+ */
+export const validateImage = (image) => {
+    return image &&
+        typeof image === 'object' &&
+        image.name &&
+        typeof image.name === 'string' &&
+        (image.file || image.blob);
 };

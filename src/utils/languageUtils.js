@@ -1,22 +1,67 @@
 import { AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE } from '../constants';
 
 /**
- * Gets available languages.
- * @returns {Array<Object>} Array of language objects
+ * Gets available languages with flags
+ * @returns {Array<Object>} Array of language objects with code, name, and flag
  */
-export const getLanguages = () => {
-    return AVAILABLE_LANGUAGES;
+export const getLanguagesWithFlags = () => {
+    return AVAILABLE_LANGUAGES.map(lang => ({
+        code: lang.code,
+        name: lang.name,
+        flag: getFlagForLanguage(lang.code)
+    }));
 };
 
 /**
- * Gets current language object.
+ * Gets flag emoji for language code
+ * @param {string} langCode - Language code
+ * @returns {string} Flag emoji
+ */
+export const getFlagForLanguage = (langCode) => {
+    const flagMap = {
+        'en': 'US',
+        'hr': 'HR'
+    };
+    return flagMap[langCode] || 'GL';
+};
+
+/**
+ * Gets the current language from localStorage or defaults
+ * @returns {string} Current language code
+ */
+export const getCurrentLanguage = () => {
+    return localStorage.getItem('app-language') || DEFAULT_LANGUAGE;
+};
+
+/**
+ * Changes the application language
+ * @param {string} langCode - Language code to change to
+ * @param {Object} i18n - i18n instance
+ */
+export const changeApplicationLanguage = (langCode, i18n) => {
+    i18n.changeLanguage(langCode);
+    localStorage.setItem('app-language', langCode);
+};
+
+/**
+ * Gets current language object
  * @param {string} currentLangCode - Current language code
  * @returns {Object} Current language object
  */
-export const getCurrentLanguage = (currentLangCode) => {
-    return AVAILABLE_LANGUAGES.find(lang => lang.code === currentLangCode) ||
-        AVAILABLE_LANGUAGES.find(lang => lang.code === DEFAULT_LANGUAGE) ||
-        AVAILABLE_LANGUAGES[0];
+export const getCurrentLanguageObject = (currentLangCode) => {
+    const languages = getLanguagesWithFlags();
+    return languages.find(lang => lang.code === currentLangCode) || languages[0];
+};
+
+/**
+ * Initializes language from storage
+ * @param {Object} i18n - i18n instance
+ * @returns {string} Initialized language code
+ */
+export const initializeLanguage = (i18n) => {
+    const lang = getCurrentLanguage();
+    i18n.changeLanguage(lang);
+    return lang;
 };
 
 /**

@@ -5,7 +5,7 @@ import {
     SHADOWS,
     TRANSITIONS,
     MODAL_TYPES
-} from '../constants/sharedConstants';
+} from '../constants';
 
 function ModalElement({
     isOpen,
@@ -16,7 +16,6 @@ function ModalElement({
     onInteraction,
     actions
 }) {
-    // Handle ESC key to close modal
     useEffect(() => {
         const handleEscKey = (e) => {
             if (e.key === 'Escape' && isOpen) {
@@ -27,7 +26,6 @@ function ModalElement({
 
         if (isOpen) {
             document.addEventListener('keydown', handleEscKey);
-            // Prevent body scrolling when modal is open
             document.body.style.overflow = 'hidden';
         }
 
@@ -37,20 +35,17 @@ function ModalElement({
         };
     }, [isOpen, onClose, onInteraction]);
 
-    // Handle interaction (user clicked/touched the modal)
     const handleInteraction = () => {
         if (onInteraction) {
             onInteraction();
         }
     };
 
-    // Prevent event bubbling
     const handleModalClick = (e) => {
         e.stopPropagation();
         handleInteraction();
     };
 
-    // Handle overlay click (close modal)
     const handleOverlayClick = (e) => {
         if (e.target === e.currentTarget) {
             handleInteraction();
@@ -63,7 +58,6 @@ function ModalElement({
     return (
         <>
             <style>{`
-                /* Modal Overlay */
                 .modal-overlay {
                     position: fixed;
                     top: 0;
@@ -88,12 +82,11 @@ function ModalElement({
                     visibility: visible;
                 }
 
-                /* Modal Container - Consistent width for all modals */
                 .modal-container {
                     background-color: var(--color-bg-secondary);
                     border-radius: ${BORDER_RADIUS?.LG || '0.75rem'};
-                    width: 500px; /* Fixed width */
-                    max-width: 90vw; /* Responsive but consistent */
+                    width: 500px;
+                    max-width: 90vw;
                     border: 1px solid var(--border-color);
                     box-shadow: ${SHADOWS?.XL || '0 20px 25px rgba(0, 0, 0, 0.5)'};
                     animation: slideIn 0.3s ease-out;
@@ -108,14 +101,12 @@ function ModalElement({
                     transform: translateY(0);
                 }
 
-                /* Modal Content Area */
                 .modal-content {
                     padding: var(--space-xl);
                     overflow-y: auto;
-                    max-height: calc(90vh - 120px); /* Account for header/footer */
+                    max-height: calc(90vh - 120px);
                 }
 
-                /* Modal Header */
                 .modal-header {
                     display: flex;
                     justify-content: space-between;
@@ -134,7 +125,6 @@ function ModalElement({
                     flex: 1;
                 }
 
-                /* Modal Close Button */
                 .modal-close {
                     background: none;
                     border: none;
@@ -169,7 +159,6 @@ function ModalElement({
                     outline-offset: 2px;
                 }
 
-                /* Modal Body */
                 .modal-body {
                     margin-bottom: ${SPACING?.XL || '2rem'};
                     color: var(--color-text-secondary);
@@ -177,7 +166,6 @@ function ModalElement({
                     animation: fadeInUp 0.4s ease-out 0.1s both;
                 }
 
-                /* Modal Actions */
                 .modal-actions {
                     text-align: right;
                     animation: fadeInUp 0.4s ease-out 0.2s both;
@@ -186,7 +174,6 @@ function ModalElement({
                     background-color: var(--color-bg-secondary);
                 }
 
-                /* Modal Type Styles */
                 .modal-success .modal-header {
                     border-bottom-color: var(--color-success);
                 }
@@ -219,16 +206,14 @@ function ModalElement({
                     color: var(--color-primary);
                 }
 
-                /* Summary Modal Specific Overrides */
                 .modal-summary .modal-container {
-                    width: 500px; /* Same width as other modals */
+                    width: 500px;
                 }
 
                 .modal-summary .modal-content {
                     padding: ${SPACING?.XL || '2rem'};
                 }
 
-                /* Summary Modal Specific Styles */
                 .summary-content {
                     max-height: 50vh;
                     overflow-y: auto;
@@ -310,7 +295,6 @@ function ModalElement({
                     border-bottom: none;
                 }
 
-                /* Animations */
                 @keyframes fadeIn {
                     from { opacity: 0; }
                     to { opacity: 1; }
@@ -338,7 +322,6 @@ function ModalElement({
                     }
                 }
 
-                /* Responsive Styles */
                 @media (max-width: 768px) {
                     .modal-container {
                         width: 95vw;

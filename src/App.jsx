@@ -1,36 +1,45 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  createImageObjects,
-  loadAIModel,
   getProcessingConfiguration,
-  createProcessingSummary,
-  cleanupBlobUrls,
   createExportZip,
   createScreenshotZip,
   downloadZip,
-  generateExportSettings,
-  loadUTIFLibrary,
-  getTranslatedTemplateName,
-  checkImageTransparencyQuick
+  generateExportSettings
 } from './processors';
 import {
+  createImageObjects,
+  createProcessingSummary,
+  cleanupBlobUrls,
+  loadUTIFLibrary,
   captureMultipleScreenshots,
   convertScreenshotResultsToImages,
   validateScreenshotUrlInput,
+  validateImageFilesBeforeProcessing,
+  handleProcessingError,
+  calculateCategoriesApplied,
+  getSelectedImagesForProcessing,
   orchestrateCustomProcessing,
   orchestrateTemplateProcessing,
-  validateProcessingOptions,
+  setupAutoClose,
+  getImageDimensions,
+  safeCleanupGPUMemory,
+  generateSpecialFormatPreview,
   formatFileSize,
-  safeCleanupGPUMemory
+  checkImageTransparencyQuick
 } from './utils';
 import {
   getTemplateCategories,
   SOCIAL_MEDIA_TEMPLATES,
   SCREENSHOT_TEMPLATES,
+
   DEFAULT_FAVICON_BACKGROUND_COLOR,
   DEFAULT_FAVICON_SITE_NAME,
-  DEFAULT_FAVICON_THEME_COLOR
+  DEFAULT_FAVICON_THEME_COLOR,
+  FAVICON_SIZES,
+  FAVICON_SIZES_BASIC,
+  APP_TEMPLATE_CONFIG,
+  EXPORT_SETTINGS
 } from './configs/templateConfigs';
 import {
   PROCESSING_MODES,
@@ -39,15 +48,16 @@ import {
   ALL_OUTPUT_FORMATS,
   DEFAULT_PROCESSING_CONFIG,
   MODAL_TYPES,
-  EXPORT_SETTINGS,
   NUMBER_INPUT_CONSTANTS,
   IMAGE_FORMATS,
   CROP_POSITIONS,
+  CROP_POSITION_LIST,
   RESIZE_DIMENSION_RANGE,
   CROP_DIMENSION_RANGE,
-  ANIMATION_DURATIONS,
-  PROCESSING_DELAYS
-} from './constants/sharedConstants';
+  PROCESSING_DELAYS,
+  SUPPORTED_INPUT_FORMATS,
+  FILE_EXTENSIONS
+} from './constants';
 import {
   UploadSection,
   HeaderSection,
@@ -60,6 +70,11 @@ import {
 } from './components';
 import './styles/App.css';
 
+/**
+ * Main application component
+ * @component
+ * @returns {JSX.Element} App component
+ */
 function App() {
   const { t } = useTranslation();
   const [isScreenshotMode, setIsScreenshotMode] = useState(false);
@@ -109,8 +124,6 @@ function App() {
 
   const fileInputRef = useRef(null);
 
-  let autoCloseTimeout = null;
-
   useEffect(() => {
     return () => {
       if (autoCloseTimeoutRef.current) {
@@ -131,26 +144,44 @@ function App() {
   }, [processingOptions.processingMode, screenshotUrl, t]);
 
   useEffect(() => {
-    const loadAIModelAsync = async () => {
+    const loadAIModelIfNeeded = async () => {
       const needsAI = (processingOptions.cropMode === CROP_MODES.SMART && !aiModelLoaded) ||
         (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && !aiModelLoaded);
 
-      if (needsAI) {
-        try {
-          setAiLoading(true);
-          await loadAIModel();
+      if (!needsAI) return;
+
+      try {
+        setAiLoading(true);
+
+        const { loadAIModel } = await import('./utils/memoryUtils');
+        const model = await loadAIModel();
+
+        if (model && (model.modelType || typeof model.detect === 'function')) {
           setAiModelLoaded(true);
           setAiLoading(false);
-        } catch (error) {
-          setAiLoading(false);
-          showModal(t('message.error'), t('message.aiFailed'), MODAL_TYPES.ERROR);
-          if (processingOptions.cropMode === CROP_MODES.SMART) {
-            setProcessingOptions(prev => ({ ...prev, cropMode: CROP_MODES.STANDARD }));
-          }
+        } else {
+          throw new Error('AI model failed to load');
         }
+      } catch (error) {
+        setAiLoading(false);
+        setAiModelLoaded(false);
+
+        if (processingOptions.cropMode === CROP_MODES.SMART) {
+          setProcessingOptions(prev => ({
+            ...prev,
+            cropMode: CROP_MODES.STANDARD
+          }));
+        }
+
+        showModal(
+          t('message.warning'),
+          t('message.aiModelFailed'),
+          MODAL_TYPES.WARNING
+        );
       }
     };
-    loadAIModelAsync();
+
+    loadAIModelIfNeeded();
   }, [processingOptions.cropMode, processingOptions.processingMode, t]);
 
   useEffect(() => {
@@ -174,30 +205,22 @@ function App() {
 
   useEffect(() => {
     return () => {
-      // Clean up any remaining preview URLs
       images.forEach(image => {
         if (image.url && image.url.startsWith('blob:')) {
           try {
             URL.revokeObjectURL(image.url);
           } catch (e) {
-            // Ignore errors
           }
         }
       });
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (autoCloseTimeout) {
-        clearTimeout(autoCloseTimeout);
-        autoCloseTimeout = null;
-      }
-    };
-  }, []);
-
   /**
    * Updates processing modal progress
+   * @param {number} progress - Progress percentage
+   * @param {string} step - Progress step description
+   * @param {string} title - Modal title
    */
   const updateProcessingModal = (progress, step, title = t('message.processing')) => {
     setModal({
@@ -213,6 +236,8 @@ function App() {
 
   /**
    * Starts processing with initial modal
+   * @param {string} message - Initial message
+   * @param {number} count - Image count
    */
   const startProcessingModal = (message, count = 1) => {
     setModal({
@@ -226,38 +251,38 @@ function App() {
     });
   };
 
+  /**
+   * Handles screenshot URL change
+   * @param {string} url - New URL
+   */
   const handleScreenshotUrlChange = (url) => {
     setScreenshotUrl(url);
     const validation = validateScreenshotUrlInput(url);
     setScreenshotValidation(validation);
   };
 
+  /**
+   * Handles image upload
+   * @param {FileList} files - Uploaded files
+   */
   const handleImageUpload = async (files) => {
     try {
       setIsLoading(true);
 
-      // Validate files before processing
       const validFiles = Array.from(files).filter(file => {
         if (!file || !file.type) return false;
 
         const mimeType = file.type.toLowerCase();
         const fileName = file.name.toLowerCase();
 
-        // Check for supported image formats
-        const supportedTypes = [
-          'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
-          'image/gif', 'image/bmp', 'image/tiff', 'image/tif',
-          'image/svg+xml', 'image/x-icon', 'image/vnd.microsoft.icon',
-          'image/avif', 'image/apng'
-        ];
+        const isSupportedType = SUPPORTED_INPUT_FORMATS.some(type =>
+          mimeType === type || (type.includes('/') && mimeType.includes(type.split('/')[1]))
+        );
 
-        const supportedExtensions = [
-          '.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp',
-          '.tiff', '.tif', '.svg', '.ico', '.avif', '.apng'
-        ];
+        const allExtensions = Object.values(FILE_EXTENSIONS).flat();
+        const hasSupportedExtension = allExtensions.some(ext => fileName.endsWith(ext));
 
-        return supportedTypes.includes(mimeType) ||
-          supportedExtensions.some(ext => fileName.endsWith(ext));
+        return isSupportedType || hasSupportedExtension;
       });
 
       if (validFiles.length === 0) {
@@ -281,30 +306,22 @@ function App() {
         );
       }
 
-      // Create image objects with proper preview handling
       const newImages = await createImageObjects(validFiles);
 
-      // Generate additional preview data for each image
       const enhancedImages = await Promise.all(
         newImages.map(async (img) => {
           try {
-            // Generate a reliable preview URL
             let previewUrl = img.url;
 
-            // For TIFF and SVG, generate canvas preview to ensure display
             if (img.isTIFF || img.isSVG) {
               try {
                 const canvasPreview = await generateSpecialFormatPreview(img);
                 previewUrl = canvasPreview;
               } catch (previewError) {
-                // Fallback to blob URL
-                console.warn(`Failed to generate preview for ${img.name}:`, previewError);
               }
             }
 
-            // Ensure the URL is valid and accessible
             if (!previewUrl || !previewUrl.startsWith('blob:') && !previewUrl.startsWith('data:')) {
-              // Create a new blob URL if needed
               previewUrl = URL.createObjectURL(img.file);
             }
 
@@ -314,15 +331,12 @@ function App() {
               previewGenerated: true,
               previewType: img.isTIFF ? 'tiff' : img.isSVG ? 'svg' : 'regular',
               uploadTime: Date.now(),
-              // Add metadata for better display
               metadata: {
                 dimensions: await getImageDimensions(img.file, img.isTIFF, img.isSVG),
                 hasTransparency: await checkImageTransparencyQuick(img.file)
               }
             };
           } catch (error) {
-            console.error(`Error enhancing image ${img.name}:`, error);
-            // Return the basic image object if enhancement fails
             return {
               ...img,
               previewGenerated: false,
@@ -332,24 +346,18 @@ function App() {
         })
       );
 
-      // Clean up old images' blob URLs
       cleanupBlobUrls(images);
 
-      // Update images state
       setImages(prev => [...prev, ...enhancedImages]);
 
-      // Update selected images based on processing mode
       if (processingOptions.processingMode === PROCESSING_MODES.CUSTOM) {
         if (selectedImages.length === 0) {
-          // Select all new images in custom mode
           setSelectedImages(enhancedImages.map(img => img.id));
         } else {
-          // Add new images to existing selection
           setSelectedImages(prev => [...prev, ...enhancedImages.map(img => img.id)]);
         }
       }
 
-      // In template mode, auto-select first image if none selected
       if ((processingOptions.processingMode === PROCESSING_MODES.TEMPLATES || processingOptions.showTemplates) &&
         !processingOptions.templateSelectedImage &&
         enhancedImages.length > 0) {
@@ -360,7 +368,6 @@ function App() {
         setSelectedImages([enhancedImages[0].id]);
       }
 
-      // Show success message
       showModal(
         t('message.success'),
         t('message.successUpload', {
@@ -370,7 +377,6 @@ function App() {
         MODAL_TYPES.SUCCESS
       );
 
-      // Scroll to gallery if many images were added
       if (enhancedImages.length > 3) {
         setTimeout(() => {
           const galleryElement = document.querySelector('.gallery-card');
@@ -384,7 +390,6 @@ function App() {
       }
 
     } catch (error) {
-      console.error('Error in handleImageUpload:', error);
       showModal(
         t('message.error'),
         t('message.errorUpload') + ': ' + error.message,
@@ -393,174 +398,16 @@ function App() {
     } finally {
       setIsLoading(false);
 
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
   };
 
-  // Helper function to generate preview for special formats
-  const generateSpecialFormatPreview = async (image) => {
-    return new Promise((resolve, reject) => {
-      if (image.isTIFF) {
-        generateTiffPreview(image.file)
-          .then(resolve)
-          .catch(reject);
-      } else if (image.isSVG) {
-        generateSvgPreview(image.file)
-          .then(resolve)
-          .catch(reject);
-      } else {
-        // For regular images, create a blob URL
-        resolve(URL.createObjectURL(image.file));
-      }
-    });
-  };
-
-  // Helper function to generate TIFF preview
-  const generateTiffPreview = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = (e) => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = 200;
-          canvas.height = 150;
-          const ctx = canvas.getContext('2d');
-
-          // Draw TIFF placeholder
-          ctx.fillStyle = '#f0f8ff';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-          // Draw border
-          ctx.strokeStyle = '#007bff';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-
-          // Draw TIFF icon
-          ctx.fillStyle = '#007bff';
-          ctx.font = 'bold 32px Arial';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('📄', canvas.width / 2, canvas.height / 2 - 15);
-
-          // Draw text
-          ctx.fillStyle = '#333';
-          ctx.font = '12px Arial';
-          ctx.fillText('TIFF IMAGE', canvas.width / 2, canvas.height / 2 + 15);
-
-          resolve(canvas.toDataURL('image/png'));
-        } catch (error) {
-          reject(error);
-        }
-      };
-
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(file);
-    });
-  };
-
-  // Helper function to generate SVG preview
-  const generateSvgPreview = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = (e) => {
-        try {
-          const svgText = e.target.result;
-          const svgBlob = new Blob([svgText], { type: 'image/svg+xml' });
-          const svgUrl = URL.createObjectURL(svgBlob);
-
-          const img = new Image();
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = Math.min(img.width, 200);
-            canvas.height = Math.min(img.height, 150);
-            const ctx = canvas.getContext('2d');
-
-            // White background for SVG
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            URL.revokeObjectURL(svgUrl);
-            resolve(canvas.toDataURL('image/png'));
-          };
-
-          img.onerror = () => {
-            URL.revokeObjectURL(svgUrl);
-            reject(new Error('Failed to load SVG'));
-          };
-
-          img.src = svgUrl;
-        } catch (error) {
-          reject(error);
-        }
-      };
-
-      reader.onerror = reject;
-      reader.readAsText(file);
-    });
-  };
-
-  // Helper function to get image dimensions
-  const getImageDimensions = (file, isTIFF, isSVG) => {
-    return new Promise((resolve) => {
-      if (isSVG) {
-        // Parse SVG dimensions
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const parser = new DOMParser();
-            const svgDoc = parser.parseFromString(e.target.result, 'image/svg+xml');
-            const svgElement = svgDoc.documentElement;
-
-            let width = parseInt(svgElement.getAttribute('width')) || 100;
-            let height = parseInt(svgElement.getAttribute('height')) || 100;
-
-            if (!width || !height) {
-              const viewBox = svgElement.getAttribute('viewBox');
-              if (viewBox) {
-                const parts = viewBox.split(' ').map(Number);
-                if (parts.length >= 4) {
-                  width = parts[2] || 100;
-                  height = parts[3] || 100;
-                }
-              }
-            }
-
-            resolve({ width, height });
-          } catch {
-            resolve({ width: 100, height: 100 });
-          }
-        };
-        reader.onerror = () => resolve({ width: 100, height: 100 });
-        reader.readAsText(file);
-      } else {
-        // For regular images and TIFF
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-
-        img.onload = () => {
-          resolve({
-            width: img.naturalWidth || img.width,
-            height: img.naturalHeight || img.height
-          });
-          URL.revokeObjectURL(url);
-        };
-
-        img.onerror = () => {
-          URL.revokeObjectURL(url);
-          resolve({ width: 100, height: 100 });
-        };
-
-        img.src = url;
-      }
-    });
-  };
-
+  /**
+   * Handles image selection
+   * @param {string} imageId - Image ID
+   */
   const handleImageSelect = (imageId) => {
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
       setProcessingOptions(prev => ({
@@ -577,6 +424,10 @@ function App() {
     }
   };
 
+  /**
+   * Handles screenshot template toggle
+   * @param {string} templateId - Template ID
+   */
   const handleScreenshotTemplateToggle = (templateId) => {
     setSelectedScreenshotTemplates(prev => {
       if (prev.includes(templateId)) {
@@ -587,15 +438,24 @@ function App() {
     });
   };
 
+  /**
+   * Selects all screenshot templates
+   */
   const handleSelectAllScreenshotTemplates = () => {
     const allTemplateIds = Object.keys(SCREENSHOT_TEMPLATES || {});
     setSelectedScreenshotTemplates(allTemplateIds);
   };
 
+  /**
+   * Deselects all screenshot templates
+   */
   const handleDeselectAllScreenshotTemplates = () => {
     setSelectedScreenshotTemplates([]);
   };
 
+  /**
+   * Selects all images
+   */
   const handleSelectAll = () => {
     if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) return;
     if (selectedImages.length === images.length) {
@@ -605,6 +465,9 @@ function App() {
     }
   };
 
+  /**
+   * Removes selected images
+   */
   const handleRemoveSelected = () => {
     const imagesToRemove = processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
       ? [processingOptions.templateSelectedImage].filter(Boolean)
@@ -626,10 +489,18 @@ function App() {
     showModal(t('message.removed'), t('message.removedImages'), MODAL_TYPES.SUCCESS);
   };
 
+  /**
+   * Handles favicon toggle
+   * @param {boolean} selected - Selected state
+   */
   const handleFaviconToggle = (selected) => {
     setIsFaviconSelected(selected);
   };
 
+  /**
+   * Handles screenshot toggle
+   * @param {boolean} selected - Selected state
+   */
   const handleScreenshotToggle = (selected) => {
     setIsScreenshotSelected(selected);
     if (!selected) {
@@ -639,51 +510,19 @@ function App() {
     }
   };
 
-  const setupAutoClose = (type) => {
-    // Clear any existing timeout
+  /**
+   * Shows modal
+   * @param {string} title - Modal title
+   * @param {string} message - Modal message
+   * @param {string} type - Modal type
+   * @param {boolean} showProgress - Show progress indicator
+   * @param {number} progress - Progress percentage
+   * @param {string} progressStep - Progress step description
+   */
+  const showModal = (title, message, type = MODAL_TYPES.INFO, showProgress = false, progress = 0, progressStep = '') => {
     if (autoCloseTimeoutRef.current) {
       clearTimeout(autoCloseTimeoutRef.current);
       autoCloseTimeoutRef.current = null;
-    }
-
-    if (!userInteractedWithModal) {
-      let timeoutDuration;
-      switch (type) {
-        case MODAL_TYPES.SUCCESS:
-          timeoutDuration = ANIMATION_DURATIONS.MODAL_CLOSE_SUCCESS;
-          break;
-        case MODAL_TYPES.INFO:
-          timeoutDuration = ANIMATION_DURATIONS.MODAL_CLOSE_INFO;
-          break;
-        case MODAL_TYPES.ERROR:
-          timeoutDuration = ANIMATION_DURATIONS.MODAL_CLOSE_ERROR;
-          break;
-        case MODAL_TYPES.SUMMARY:
-          timeoutDuration = ANIMATION_DURATIONS.MODAL_CLOSE_SUMMARY;
-          break;
-        case MODAL_TYPES.WARNING:
-          timeoutDuration = ANIMATION_DURATIONS.MODAL_CLOSE_INFO;
-          break;
-        default:
-          timeoutDuration = 3000;
-      }
-
-      console.log(`Setting auto-close for ${type} modal: ${timeoutDuration}ms`);
-
-      autoCloseTimeoutRef.current = setTimeout(() => {
-        console.log(`Auto-closing ${type} modal`);
-        closeModal();
-      }, timeoutDuration);
-    } else {
-      console.log(`Not auto-closing ${type} modal - user interacted`);
-    }
-  };
-
-  const showModal = (title, message, type = MODAL_TYPES.INFO, showProgress = false, progress = 0, progressStep = '') => {
-    // Clear any existing timeout
-    if (autoCloseTimeout) {
-      clearTimeout(autoCloseTimeout);
-      autoCloseTimeout = null;
     }
 
     setModal({
@@ -696,27 +535,20 @@ function App() {
       progressStep
     });
 
-    // Set auto-close for non-progress modals
     if (!showProgress) {
-      let timeoutDuration = 3000; // Default
-
-      if (type === MODAL_TYPES.SUCCESS) timeoutDuration = 3000;
-      else if (type === MODAL_TYPES.INFO) timeoutDuration = 5000;
-      else if (type === MODAL_TYPES.ERROR) timeoutDuration = 7000;
-      else if (type === MODAL_TYPES.SUMMARY) timeoutDuration = 8000;
-      else if (type === MODAL_TYPES.WARNING) timeoutDuration = 5000;
-
-      autoCloseTimeout = setTimeout(() => {
-        closeModal();
-      }, timeoutDuration);
+      const autoClose = setupAutoClose(closeModal, type);
+      autoCloseTimeoutRef.current = autoClose.ref;
     }
   };
 
+  /**
+   * Shows summary modal
+   * @param {Object} summary - Processing summary
+   */
   const showSummaryModal = (summary) => {
-    // Clear any existing timeout
-    if (autoCloseTimeout) {
-      clearTimeout(autoCloseTimeout);
-      autoCloseTimeout = null;
+    if (autoCloseTimeoutRef.current) {
+      clearTimeout(autoCloseTimeoutRef.current);
+      autoCloseTimeoutRef.current = null;
     }
 
     setProcessingSummary(summary);
@@ -730,16 +562,17 @@ function App() {
       progressStep: ''
     });
 
-    // Set auto-close for summary
-    autoCloseTimeout = setTimeout(() => {
-      closeModal();
-    }, 8000);
+    const autoClose = setupAutoClose(closeModal, MODAL_TYPES.SUMMARY);
+    autoCloseTimeoutRef.current = autoClose.ref;
   };
 
+  /**
+   * Closes modal
+   */
   const closeModal = () => {
-    if (autoCloseTimeout) {
-      clearTimeout(autoCloseTimeout);
-      autoCloseTimeout = null;
+    if (autoCloseTimeoutRef.current) {
+      clearTimeout(autoCloseTimeoutRef.current);
+      autoCloseTimeoutRef.current = null;
     }
 
     setModal({
@@ -754,13 +587,19 @@ function App() {
     setProcessingSummary(null);
   };
 
+  /**
+   * Handles modal interaction
+   */
   const handleModalInteraction = () => {
-    if (autoCloseTimeout) {
-      clearTimeout(autoCloseTimeout);
-      autoCloseTimeout = null;
+    if (autoCloseTimeoutRef.current) {
+      clearTimeout(autoCloseTimeoutRef.current);
+      autoCloseTimeoutRef.current = null;
     }
   };
 
+  /**
+   * Toggles resize/crop view
+   */
   const toggleResizeCrop = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -769,13 +608,27 @@ function App() {
     }));
   };
 
+  /**
+   * Toggles crop mode with proper AI model loading
+   */
   const toggleCropMode = () => {
-    setProcessingOptions(prev => ({
-      ...prev,
-      cropMode: prev.cropMode === CROP_MODES.SMART ? CROP_MODES.STANDARD : CROP_MODES.SMART
-    }));
+    if (processingOptions.cropMode === CROP_MODES.STANDARD) {
+      setProcessingOptions(prev => ({
+        ...prev,
+        cropMode: CROP_MODES.SMART
+      }));
+    } else {
+      setProcessingOptions(prev => ({
+        ...prev,
+        cropMode: CROP_MODES.STANDARD
+      }));
+    }
   };
 
+  /**
+   * Handles format toggle
+   * @param {string} format - Format to toggle
+   */
   const handleFormatToggle = (format) => {
     setProcessingOptions(prev => {
       const currentFormats = prev.output.formats || [];
@@ -795,16 +648,22 @@ function App() {
     });
   };
 
+  /**
+   * Selects all formats
+   */
   const handleSelectAllFormats = () => {
     setProcessingOptions(prev => ({
       ...prev,
       output: {
         ...prev.output,
-        formats: ALL_OUTPUT_FORMATS
+        formats: ALL_OUTPUT_FORMATS.filter(format => format !== IMAGE_FORMATS.ORIGINAL)
       }
     }));
   };
 
+  /**
+   * Clears all formats
+   */
   const handleClearAllFormats = () => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -815,6 +674,10 @@ function App() {
     }));
   };
 
+  /**
+   * Toggles processing mode
+   * @param {string} mode - Processing mode
+   */
   const toggleProcessingMode = (mode) => {
     const newMode = mode === PROCESSING_MODES.TEMPLATES ? PROCESSING_MODES.TEMPLATES : PROCESSING_MODES.CUSTOM;
 
@@ -845,6 +708,10 @@ function App() {
     }
   };
 
+  /**
+   * Handles template toggle
+   * @param {string} templateId - Template ID
+   */
   const handleTemplateToggle = (templateId) => {
     setProcessingOptions(prev => {
       const newSelected = prev.selectedTemplates.includes(templateId)
@@ -855,6 +722,9 @@ function App() {
     });
   };
 
+  /**
+   * Selects all templates
+   */
   const handleSelectAllTemplates = () => {
     const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id);
     setProcessingOptions(prev => ({
@@ -863,6 +733,10 @@ function App() {
     }));
   };
 
+  /**
+   * Selects all templates in category
+   * @param {string} category - Category ID
+   */
   const handleSelectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
@@ -874,6 +748,10 @@ function App() {
     }));
   };
 
+  /**
+   * Deselects all templates in category
+   * @param {string} category - Category ID
+   */
   const handleDeselectAllInCategory = (category) => {
     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
       .filter(template => template.category === category)
@@ -885,6 +763,12 @@ function App() {
     }));
   };
 
+  /**
+   * Handles option change
+   * @param {string} category - Option category
+   * @param {string} key - Option key
+   * @param {any} value - New value
+   */
   const handleOptionChange = (category, key, value) => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -895,6 +779,11 @@ function App() {
     }));
   };
 
+  /**
+   * Handles single option change
+   * @param {string} key - Option key
+   * @param {any} value - New value
+   */
   const handleSingleOptionChange = (key, value) => {
     setProcessingOptions(prev => ({
       ...prev,
@@ -902,62 +791,21 @@ function App() {
     }));
   };
 
-  const getSelectedImagesForProcessing = () => {
-    if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
-      return processingOptions.templateSelectedImage
-        ? images.filter(img => img.id === processingOptions.templateSelectedImage)
-        : [];
-    } else {
-      return images.filter(img => selectedImages.includes(img.id));
-    }
-  };
-
+  /**
+   * Processes custom images
+   */
   const processCustomImages = async () => {
-    console.log('=== STARTING CUSTOM IMAGE PROCESSING ===');
-
-    const selectedImagesForProcessing = getSelectedImagesForProcessing();
-    console.log('Selected images for processing:', selectedImagesForProcessing.length);
+    const selectedImagesForProcessing = getSelectedImagesForProcessing(
+      images,
+      selectedImages,
+      processingOptions.processingMode,
+      processingOptions.templateSelectedImage
+    );
 
     if (selectedImagesForProcessing.length === 0) {
-      console.error('No images selected for processing');
       showModal(t('message.error'), t('message.errorSelectImages'), MODAL_TYPES.ERROR);
       return;
     }
-
-    // USE THE VALIDATION HELPER
-    console.log('Validating images before processing...');
-    const validationIssues = validateImageFilesBeforeProcessing(selectedImagesForProcessing);
-    if (validationIssues.length > 0) {
-      console.warn('Image validation issues found:', validationIssues);
-
-      // Show warning but continue processing
-      if (validationIssues.length === selectedImagesForProcessing.length) {
-        // All images have issues
-        const issuesList = validationIssues.map(issue =>
-          `${issue.image}: ${issue.issue}`
-        ).join('\n');
-
-        showModal(
-          t('message.error'),
-          `${t('message.errorProcessing')}:\n${issuesList}`,
-          MODAL_TYPES.ERROR
-        );
-        return;
-      } else {
-        // Some images have issues
-        const warningMessage = `${validationIssues.length} image(s) have issues but processing will continue with the rest.`;
-        console.warn(warningMessage);
-      }
-    }
-
-    const validation = validateProcessingOptions(processingOptions);
-    if (!validation.isValid) {
-      console.error('Processing options validation failed:', validation.errors);
-      showModal(t('message.error'), validation.errors.join('\n'), MODAL_TYPES.ERROR);
-      return;
-    }
-
-    console.log('Processing options validated successfully');
 
     setIsLoading(true);
     startProcessingModal(t('message.processingImages', { count: selectedImagesForProcessing.length }));
@@ -967,45 +815,39 @@ function App() {
 
       const processingConfig = getProcessingConfiguration(processingOptions);
 
-      // USE THE LOGGING HELPER
-      logProcessingAttempt(selectedImagesForProcessing, processingConfig, aiModelLoaded);
+      const validationIssues = validateImageFilesBeforeProcessing(selectedImagesForProcessing);
+      if (validationIssues.length > 0 && validationIssues.length === selectedImagesForProcessing.length) {
+        const issuesList = validationIssues.map(issue =>
+          `${issue.image}: ${issue.issue}`
+        ).join('\n');
+
+        showModal(
+          t('message.error'),
+          `${t('message.errorProcessing')}:\n${issuesList}`,
+          MODAL_TYPES.ERROR
+        );
+        setIsLoading(false);
+        return;
+      }
+
 
       updateProcessingModal(30, t('processing.processingImages'));
 
       let processedImages;
       try {
-        console.log('Calling orchestrateCustomProcessing...');
         processedImages = await orchestrateCustomProcessing(
           selectedImagesForProcessing,
           processingConfig,
           aiModelLoaded
         );
 
-        console.log('orchestrateCustomProcessing completed:', {
-          totalResults: processedImages?.length || 0,
-          successfulResults: processedImages?.filter(img => !img.error)?.length || 0,
-          failedResults: processedImages?.filter(img => img.error)?.length || 0
-        });
-
         if (!processedImages || processedImages.length === 0) {
-          throw new Error('No images were processed - function returned empty array');
+          throw new Error('No images were processed');
         }
 
-        // Check for errors in processed images
         const failedImages = processedImages.filter(img => img.error);
         if (failedImages.length > 0) {
-          console.warn('Some images failed to process:', failedImages);
-
-          // If all images failed
-          if (failedImages.length === processedImages.length) {
-            throw new Error(`All images failed to process: ${failedImages[0]?.error || 'Unknown error'}`);
-          }
-
-          // Show warning about failed images
           const failedNames = failedImages.map(img => img.name).join(', ');
-          console.warn(`Failed images: ${failedNames}`);
-
-          // Show a warning modal about failed images
           setTimeout(() => {
             showModal(
               t('message.warning'),
@@ -1016,34 +858,22 @@ function App() {
         }
 
       } catch (processingError) {
-        console.error('Error in orchestrateCustomProcessing:', {
-          message: processingError.message,
-          stack: processingError.stack,
-          name: processingError.name,
-          config: processingConfig,
-          aiModelLoaded: aiModelLoaded
-        });
-
-        // USE THE ERROR HANDLING HELPER
-        const errorInfo = handleProcessingError(processingError);
-        console.log('Error analysis:', errorInfo);
-
+        const errorInfo = handleProcessingError(processingError, t);
         throw new Error(`${errorInfo.userMessage}: ${processingError.message}\n\nSuggestion: ${errorInfo.suggestion}`);
       }
 
-      // Filter out only successful images
       const successfulImages = processedImages.filter(img => !img.error);
-      console.log(`Successful images: ${successfulImages.length}/${processedImages.length}`);
 
       if (successfulImages.length === 0) {
         throw new Error('No images were successfully processed');
       }
 
       updateProcessingModal(70, t('processing.creatingZip'));
-      console.log('Creating export zip...');
 
-      const settings = generateExportSettings(EXPORT_SETTINGS.CUSTOM);
-      console.log('Export settings:', settings);
+      const settings = generateExportSettings(EXPORT_SETTINGS.CUSTOM, {
+        includeOptimized: true,
+        includeOriginal: true
+      });
 
       let zipBlob;
       try {
@@ -1058,23 +888,15 @@ function App() {
         if (!zipBlob) {
           throw new Error('Failed to create zip file');
         }
-
-        console.log('Zip created successfully, size:', formatFileSize(zipBlob.size));
       } catch (zipError) {
-        console.error('Error creating zip:', zipError);
         throw new Error(`Failed to create zip file: ${zipError.message}`);
       }
 
       updateProcessingModal(90, t('processing.downloading'));
-      console.log('Downloading zip...');
 
       try {
         downloadZip(zipBlob, EXPORT_SETTINGS.DEFAULT_ZIP_NAME_CUSTOM);
-        console.log('Zip download initiated');
       } catch (downloadError) {
-        console.error('Error downloading zip:', downloadError);
-        // Don't throw here - we still want to show success even if auto-download fails
-        // Show a warning instead
         setTimeout(() => {
           showModal(
             t('message.warning'),
@@ -1085,7 +907,6 @@ function App() {
       }
 
       updateProcessingModal(100, t('processing.complete'));
-      console.log('Processing completed successfully');
 
       const summary = createProcessingSummary({
         imagesProcessed: selectedImagesForProcessing.length,
@@ -1100,33 +921,20 @@ function App() {
         failedCount: processedImages.filter(img => img.error).length
       }, processingConfig, t);
 
-      console.log('Generated summary:', summary);
-
-      // Close progress modal and show summary
       setTimeout(() => {
         closeModal();
         showSummaryModal(summary);
-        console.log('Summary modal shown');
       }, 1000);
 
     } catch (error) {
-      console.error('Error in processCustomImages:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
+      const errorInfo = handleProcessingError(error, t);
 
-      // USE THE ERROR HANDLING HELPER HERE TOO
-      const errorInfo = handleProcessingError(error);
-
-      // Show error modal with helpful message
       showModal(
         t('message.error'),
-        `${errorInfo.userMessage}\n\n${errorInfo.suggestion}`,
+        `${errorInfo.userMessage}\n\n${errorInfo.suggestion}\n\n[Debug] Raw error: ${error.message}`,
         MODAL_TYPES.ERROR
       );
 
-      // If it's a retryable error, offer to try again
       if (errorInfo.shouldRetry) {
         setTimeout(() => {
           showModal(
@@ -1138,188 +946,24 @@ function App() {
       }
 
     } finally {
-      console.log('=== PROCESSING COMPLETED ===');
       setIsLoading(false);
 
-      // Cleanup
       setTimeout(() => {
         safeCleanupGPUMemory();
-        console.log('GPU memory cleaned up');
       }, 500);
     }
   };
 
   /**
-   * Logs detailed information about processing attempt
+   * Processes templates
    */
-  const logProcessingAttempt = (images, config, aiLoaded) => {
-    console.group('Processing Attempt Details');
-    console.log('Timestamp:', new Date().toISOString());
-    console.log('Number of images:', images.length);
-    console.log('AI Model loaded:', aiLoaded);
-    console.log('Processing configuration:', config);
-
-    images.forEach((img, index) => {
-      console.log(`Image ${index + 1}:`, {
-        name: img.name,
-        type: img.type,
-        size: formatFileSize(img.size),
-        dimensions: img.metadata?.dimensions || 'Unknown',
-        hasTransparency: img.metadata?.hasTransparency || false,
-        isTIFF: img.isTIFF,
-        isSVG: img.isSVG
-      });
-    });
-
-    console.groupEnd();
-  };
-
-  /**
-   * Handle specific processing errors with better categorization
-   */
-  const handleProcessingError = (error) => {
-    const errorMessage = error.message.toLowerCase();
-    const errorStack = error.stack?.toLowerCase() || '';
-
-    console.log('Analyzing error:', { errorMessage, errorStack });
-
-    // AI/Model related errors
-    if (errorMessage.includes('ai') || errorMessage.includes('model') ||
-      errorMessage.includes('tensor') || errorMessage.includes('upscaler')) {
-      return {
-        userMessage: t('message.aiFailed'),
-        suggestion: t('suggestion.tryStandardCrop'),
-        shouldRetry: false,
-        type: 'ai_error'
-      };
-    }
-
-    // TIFF conversion errors
-    if (errorMessage.includes('tiff') || errorMessage.includes('utif')) {
-      return {
-        userMessage: t('message.tiffConversionFailed'),
-        suggestion: t('suggestion.convertTiffFirst'),
-        shouldRetry: false,
-        type: 'tiff_error'
-      };
-    }
-
-    // SVG conversion errors
-    if (errorMessage.includes('svg') || errorMessage.includes('vector')) {
-      return {
-        userMessage: t('message.svgConversionFailed'),
-        suggestion: t('suggestion.checkSVG'),
-        shouldRetry: false,
-        type: 'svg_error'
-      };
-    }
-
-    // Memory/GPU errors
-    if (errorMessage.includes('memory') || errorMessage.includes('gpu') ||
-      errorMessage.includes('texture') || errorMessage.includes('buffer')) {
-      return {
-        userMessage: t('message.memoryError'),
-        suggestion: t('suggestion.reduceBatchSize'),
-        shouldRetry: true,
-        type: 'memory_error'
-      };
-    }
-
-    // Timeout errors
-    if (errorMessage.includes('timeout') || errorMessage.includes('timed out') ||
-      errorMessage.includes('too long')) {
-      return {
-        userMessage: t('message.timeoutError'),
-        suggestion: t('suggestion.trySmaller'),
-        shouldRetry: true,
-        type: 'timeout_error'
-      };
-    }
-
-    // Network errors
-    if (errorMessage.includes('network') || errorMessage.includes('fetch') ||
-      errorMessage.includes('http') || errorMessage.includes('request')) {
-      return {
-        userMessage: 'Network error occurred',
-        suggestion: 'Check your internet connection and try again.',
-        shouldRetry: true,
-        type: 'network_error'
-      };
-    }
-
-    // File/IO errors
-    if (errorMessage.includes('file') || errorMessage.includes('blob') ||
-      errorMessage.includes('url') || errorMessage.includes('object')) {
-      return {
-        userMessage: 'File handling error',
-        suggestion: 'Try uploading the images again or use different files.',
-        shouldRetry: true,
-        type: 'file_error'
-      };
-    }
-
-    // Canvas/rendering errors
-    if (errorMessage.includes('canvas') || errorMessage.includes('context') ||
-      errorMessage.includes('draw') || errorMessage.includes('image')) {
-      return {
-        userMessage: 'Image rendering error',
-        suggestion: 'Try with different images or reduce image size.',
-        shouldRetry: true,
-        type: 'canvas_error'
-      };
-    }
-
-    // Default/generic error
-    return {
-      userMessage: t('message.errorProcessing'),
-      suggestion: t('suggestion.tryAgain'),
-      shouldRetry: true,
-      type: 'generic_error'
-    };
-  };
-
-  /**
-   * Validate individual image files before processing
-   */
-  const validateImageFilesBeforeProcessing = (images) => {
-    const issues = [];
-
-    images.forEach((image, index) => {
-      // Check file size (limit to 50MB per file)
-      const maxSize = 50 * 1024 * 1024; // 50MB
-      if (image.size > maxSize) {
-        issues.push({
-          image: image.name,
-          issue: `File too large (${formatFileSize(image.size)}). Maximum size is 50MB.`,
-          index
-        });
-      }
-
-      // Check if file is corrupt/empty
-      if (image.size === 0) {
-        issues.push({
-          image: image.name,
-          issue: 'File appears to be empty (0 bytes).',
-          index
-        });
-      }
-
-      // Warn about TIFF files (they can be problematic)
-      if (image.isTIFF) {
-        console.warn(`TIFF file detected: ${image.name} - may have conversion issues`);
-      }
-
-      // Warn about SVG files
-      if (image.isSVG) {
-        console.warn(`SVG file detected: ${image.name} - may require special handling`);
-      }
-    });
-
-    return issues;
-  };
-
   const processTemplates = async () => {
-    const selectedImagesForProcessing = getSelectedImagesForProcessing();
+    const selectedImagesForProcessing = getSelectedImagesForProcessing(
+      images,
+      selectedImages,
+      processingOptions.processingMode,
+      processingOptions.templateSelectedImage
+    );
     if (selectedImagesForProcessing.length === 0) {
       showModal(t('message.error'), t('message.errorSelectImage'), MODAL_TYPES.ERROR);
       return;
@@ -1377,6 +1021,7 @@ function App() {
         faviconSiteName: processingOptions.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
         faviconThemeColor: processingOptions.faviconThemeColor || DEFAULT_FAVICON_THEME_COLOR,
         faviconBackgroundColor: processingOptions.faviconBackgroundColor || DEFAULT_FAVICON_BACKGROUND_COLOR,
+        faviconMode: processingOptions.faviconMode || 'basic',
         screenshotUrl: isScreenshotSelected ? screenshotUrl : '',
         includeFavicon: isFaviconSelected,
         includeScreenshots: isScreenshotSelected,
@@ -1404,6 +1049,7 @@ function App() {
         faviconSiteName: processingOptions.faviconSiteName || DEFAULT_FAVICON_SITE_NAME,
         faviconThemeColor: processingOptions.faviconThemeColor || DEFAULT_FAVICON_THEME_COLOR,
         faviconBackgroundColor: processingOptions.faviconBackgroundColor || DEFAULT_FAVICON_BACKGROUND_COLOR,
+        faviconMode: processingOptions.faviconMode || 'basic',
         screenshotUrl: isScreenshotSelected ? screenshotUrl : '',
         includeFavicon: isFaviconSelected,
         includeScreenshots: isScreenshotSelected,
@@ -1436,9 +1082,17 @@ function App() {
         img.method.includes('placeholder')
       );
 
+      let faviconFilesCountEstimate = 0;
+      if (isFaviconSelected) {
+        if (processingOptions.faviconMode === 'basic') {
+          faviconFilesCountEstimate = FAVICON_SIZES_BASIC.length + 5;
+        } else {
+          faviconFilesCountEstimate = FAVICON_SIZES.length + 5;
+        }
+      }
+
       const totalFiles = processedImages.length +
-        (isFaviconSelected ? 9 : 0) +
-        (isScreenshotSelected ? selectedScreenshotTemplates.length : 0) +
+        faviconFilesCountEstimate +
         1;
 
       const categoriesApplied = calculateCategoriesApplied(
@@ -1473,55 +1127,44 @@ function App() {
         }, PROCESSING_DELAYS.MEMORY_CLEANUP);
       }
     } catch (error) {
-      showModal(t('message.error'), `${t('message.errorApplying')}: ${error.message}`, MODAL_TYPES.ERROR);
+      const errorInfo = handleProcessingError(error, t);
+      showModal(
+        t('message.error'),
+        `${errorInfo.userMessage}\n\n${errorInfo.suggestion}\n\n[Debug] Raw error: ${error.message}`,
+        MODAL_TYPES.ERROR
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
+  /**
+   * Increments value
+   * @param {string} key - Value key
+   * @param {number} increment - Increment amount
+   */
   const incrementValue = (key, increment = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
     const currentValue = parseInt(processingOptions[key] || '0');
     const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue + increment);
     handleSingleOptionChange(key, String(newValue));
   };
 
+  /**
+   * Decrements value
+   * @param {string} key - Value key
+   * @param {number} decrement - Decrement amount
+   */
   const decrementValue = (key, decrement = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
     const currentValue = parseInt(processingOptions[key] || '1');
     const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue - decrement);
     handleSingleOptionChange(key, String(newValue));
   };
 
-  const calculateCategoriesApplied = (selectedTemplates, templates, isFaviconSelected = false, isScreenshotSelected = false) => {
-    const categories = new Set();
-
-    if (selectedTemplates && selectedTemplates.length > 0) {
-      selectedTemplates.forEach(templateId => {
-        const template = templates.find(t => t.id === templateId);
-        if (template && template.category) {
-          let displayCategory = template.category;
-          if (displayCategory === 'web' || displayCategory === 'logo' ||
-            displayCategory === 'favicon' || displayCategory === 'screenshots') {
-            categories.add(displayCategory);
-          } else if (displayCategory === 'twitter') {
-            categories.add('twitter/x');
-          } else {
-            categories.add(displayCategory);
-          }
-        }
-      });
-    }
-
-    if (isFaviconSelected) {
-      categories.add('favicon');
-    }
-
-    if (isScreenshotSelected) {
-      categories.add('screenshots');
-    }
-
-    return categories.size;
-  };
-
+  /**
+   * Downloads screenshot zip
+   * @param {Array<Object>} screenshotImages - Screenshot images
+   * @param {string} url - URL
+   */
   const downloadScreenshotZip = async (screenshotImages, url) => {
     try {
       if (!screenshotImages || screenshotImages.length === 0) {
@@ -1544,6 +1187,12 @@ function App() {
     }
   };
 
+  /**
+   * Handles screenshot capture
+   * @param {string} url - URL to capture
+   * @param {Array<string>} selectedTemplateIds - Selected template IDs
+   * @returns {Promise<Object>} Screenshot results
+   */
   const handleCaptureScreenshots = async (url, selectedTemplateIds) => {
     try {
       if (!url || url.trim() === '') {
@@ -1586,7 +1235,12 @@ function App() {
     }
   };
 
-  const selectedImagesForProcessing = getSelectedImagesForProcessing();
+  const selectedImagesForProcessing = getSelectedImagesForProcessing(
+    images,
+    selectedImages,
+    processingOptions.processingMode,
+    processingOptions.templateSelectedImage
+  );
   const templateCategories = getTemplateCategories();
   const templateSelectedImageObj = images.find(img => img.id === processingOptions.templateSelectedImage);
 
@@ -1917,7 +1571,7 @@ function App() {
                               </button>
                             </div>
                             {processingOptions.cropMode === CROP_MODES.SMART && (
-                              <p className="text-sm text-muted mt-1">
+                              <p className="text-sm text-muted mt-sm">
                                 <i className="fas fa-info-circle mr-1"></i>
                                 {t('crop.smartBest')}
                               </p>
@@ -2001,7 +1655,7 @@ function App() {
                                 onChange={(e) => handleSingleOptionChange('cropPosition', e.target.value)}
                                 className="select-field"
                               >
-                                {CROP_POSITIONS.map(position => (
+                                {CROP_POSITION_LIST.map(position => (
                                   <option key={position} value={position}>
                                     {t(`crop.position.${position}`)}
                                   </option>
@@ -2147,21 +1801,51 @@ function App() {
                               )}
 
                               {category.id === 'favicon' && (
-                                <div className="checkbox-wrapper" onClick={() => handleFaviconToggle(!isFaviconSelected)}>
-                                  <input
-                                    type="checkbox"
-                                    className="checkbox-input"
-                                    checked={isFaviconSelected}
-                                    onChange={(e) => handleFaviconToggle(e.target.checked)}
-                                    disabled={!processingOptions.templateSelectedImage}
-                                  />
-                                  <span className="checkbox-custom"></span>
-                                  <span className="flex-1">
-                                    <div className="flex justify-between items-center">
-                                      <span className="font-medium">Favicon Set</span>
-                                      <span className="text-muted text-sm">Multiple sizes</span>
+                                <div className="flex flex-col">
+                                  <div className="checkbox-wrapper" onClick={() => handleFaviconToggle(!isFaviconSelected)}>
+                                    <input
+                                      type="checkbox"
+                                      className="checkbox-input"
+                                      checked={isFaviconSelected}
+                                      onChange={(e) => handleFaviconToggle(e.target.checked)}
+                                      disabled={!processingOptions.templateSelectedImage}
+                                    />
+                                    <span className="checkbox-custom"></span>
+                                    <span className="flex-1">
+                                      <div className="flex justify-between items-center">
+                                        <span className="font-medium">Favicon Set</span>
+                                        <span className="text-muted text-sm">Multiple sizes</span>
+                                      </div>
+                                    </span>
+                                  </div>
+
+                                  {isFaviconSelected && (
+                                    <div className="mt-2 pl-8 space-y-2">
+                                      <div className="checkbox-wrapper" onClick={(e) => { e.stopPropagation(); handleSingleOptionChange('faviconMode', 'basic'); }}>
+                                        <input
+                                          type="radio"
+                                          name="faviconMode"
+                                          className="checkbox-input"
+                                          checked={processingOptions.faviconMode === 'basic'}
+                                          onChange={() => { }}
+                                        />
+                                        <span className="checkbox-custom"></span>
+                                        <span className="flex-1 text-sm">Basic Set (Essential Only)</span>
+                                      </div>
+
+                                      <div className="checkbox-wrapper" onClick={(e) => { e.stopPropagation(); handleSingleOptionChange('faviconMode', 'complete'); }}>
+                                        <input
+                                          type="radio"
+                                          name="faviconMode"
+                                          className="checkbox-input"
+                                          checked={processingOptions.faviconMode !== 'basic'}
+                                          onChange={() => { }}
+                                        />
+                                        <span className="checkbox-custom"></span>
+                                        <span className="flex-1 text-sm">Complete Set (All Platforms)</span>
+                                      </div>
                                     </div>
-                                  </span>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -2195,8 +1879,6 @@ function App() {
               onSelectAll={handleSelectAll}
               onRemoveSelected={handleRemoveSelected}
               formatFileSize={formatFileSize}
-              processingOptions={processingOptions}
-              t={t}
             />
           </>
         )}

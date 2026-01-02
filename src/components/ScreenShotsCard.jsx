@@ -1,19 +1,91 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SCREENSHOT_TEMPLATES } from '../configs/templateConfigs';
 import {
     THEME_COLORS,
     STATUS_COLORS,
     SCREENSHOT_QUALITY,
     URL_CONSTANTS,
-    DEVICE_PRESETS,
-    DEVICE_VIEWPORTS,
     SPACING,
     BORDER_RADIUS,
     TRANSITIONS,
     SHADOWS
 } from '../constants';
+import {
+    getScreenshotTemplatesWithQuality,
+    getTemplateDimensions,
+    getDeviceName,
+    getInitialTemplates,
+    normalizeUrl,
+    openUrlInNewTab
+} from '../utils';
 
+/**
+ * Gets FontAwesome icon component for template
+ * @param {string} templateId - Template ID
+ * @returns {JSX.Element} FontAwesome icon component
+ */
+const getTemplateIcon = (templateId) => {
+    if (templateId.includes('-full')) {
+        if (templateId.includes('mobile')) {
+            return (
+                <span className="fa-stack fa-4x">
+                    <i className="fa-solid fa-mobile-screen fa-stack-2x"></i>
+                    <i className="fa-solid fa-arrows-down-to-line fa-stack-1x"></i>
+                </span>
+            );
+        } else if (templateId.includes('tablet')) {
+            return (
+                <span className="fa-stack fa-4x">
+                    <i className="fa-solid fa-tablet-screen-button fa-stack-2x"></i>
+                    <i className="fa-solid fa-arrows-down-to-line fa-stack-1x"></i>
+                </span>
+            );
+        } else if (templateId.includes('hd')) {
+            return (
+                <span className="fa-stack fa-4x">
+                    <i className="fa-solid fa-display fa-stack-2x"></i>
+                    <i className="fa-solid fa-arrows-down-to-line fa-stack-1x"></i>
+                </span>
+            );
+        } else {
+            return (
+                <span className="fa-stack fa-4x">
+                    <i className="fa-solid fa-desktop fa-stack-2x"></i>
+                    <i className="fa-solid fa-arrows-down-to-line fa-stack-1x"></i>
+                </span>
+            );
+        }
+    } else {
+        if (templateId.includes('mobile')) {
+            return <i className="fa-solid fa-mobile-screen fa-4x"></i>;
+        } else if (templateId.includes('tablet')) {
+            return <i className="fa-solid fa-tablet-screen-button fa-4x"></i>;
+        } else if (templateId.includes('hd')) {
+            return <i className="fa-solid fa-display fa-4x"></i>;
+        } else {
+            return <i className="fa-solid fa-desktop fa-4x"></i>;
+        }
+    }
+};
+
+/**
+ * ScreenShotsCard component for capturing website screenshots
+ * @component
+ * @param {Object} props - Component props
+ * @param {boolean} props.isSelected - Whether screenshot feature is selected
+ * @param {Function} props.onToggle - Toggle handler for screenshot feature
+ * @param {Function} props.onUrlChange - URL change handler
+ * @param {string} [props.screenshotUrl=''] - Initial screenshot URL
+ * @param {Object} [props.validation=null] - URL validation result
+ * @param {boolean} props.isCapturing - Whether screenshots are being captured
+ * @param {number} props.captureProgress - Capture progress percentage
+ * @param {Function} props.onCaptureClick - Capture button click handler
+ * @param {Array<string>} props.selectedTemplates - Selected template IDs
+ * @param {Function} props.onTemplateToggle - Template toggle handler
+ * @param {Function} props.onSelectAllTemplates - Select all templates handler
+ * @param {Function} props.onDeselectAllTemplates - Deselect all templates handler
+ * @returns {JSX.Element} Screenshot card component
+ */
 const ScreenShotsCard = ({
     isSelected,
     onToggle,
@@ -32,7 +104,8 @@ const ScreenShotsCard = ({
     const [url, setUrl] = useState(screenshotUrl);
     const [isDarkTheme, setIsDarkTheme] = useState(true);
 
-    // Detect current theme from document
+    const screenshotTemplateList = getScreenshotTemplatesWithQuality();
+
     useEffect(() => {
         const detectTheme = () => {
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
@@ -41,17 +114,14 @@ const ScreenShotsCard = ({
             setIsDarkTheme(isDark);
         };
 
-        // Initial detection
         detectTheme();
 
-        // Listen for theme changes
         const observer = new MutationObserver(detectTheme);
         observer.observe(document.documentElement, {
             attributes: true,
             attributeFilter: ['data-theme']
         });
 
-        // Listen for system theme changes
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
         const handleSystemThemeChange = () => detectTheme();
         mediaQuery.addEventListener('change', handleSystemThemeChange);
@@ -62,50 +132,24 @@ const ScreenShotsCard = ({
         };
     }, []);
 
-    // Get theme colors based on current theme
-    const themeColors = isDarkTheme ? THEME_COLORS.DARK : THEME_COLORS.LIGHT;
-
-    // Get all screenshot templates with applied constants
-    const screenshotTemplateList = Object.values(SCREENSHOT_TEMPLATES || {}).map(template => {
-        // Apply quality settings from constants
-        const updatedTemplate = { ...template };
-        if (updatedTemplate.requestBody?.options) {
-            updatedTemplate.requestBody.options.quality = SCREENSHOT_QUALITY.JPEG_QUALITY;
-        }
-        return updatedTemplate;
-    });
-
-    // Get device-specific viewport using DEVICE_PRESETS
-    const getDeviceViewport = (deviceType) => {
-        switch (deviceType) {
-            case 'mobile':
-                return DEVICE_PRESETS.mobile.viewport;
-            case 'tablet':
-                return DEVICE_PRESETS.tablet.viewport;
-            case 'desktop':
-                return DEVICE_PRESETS.desktop.viewport;
-            case 'desktop-hd':
-                return DEVICE_VIEWPORTS.DESKTOP_HD;
-            default:
-                return DEVICE_PRESETS.desktop.viewport;
-        }
-    };
-
-    // Auto-select mobile and desktop templates when main checkbox is checked
     useEffect(() => {
         if (isSelected && selectedTemplates.length === 0) {
-            // Auto-select basic mobile and desktop templates
-            const basicMobile = screenshotTemplateList.find(t => t.id === 'screenshots-mobile');
-            const basicDesktop = screenshotTemplateList.find(t => t.id === 'screenshots-desktop');
-
-            if (basicMobile && onTemplateToggle) {
-                onTemplateToggle(basicMobile.id);
-            }
-            if (basicDesktop && onTemplateToggle) {
-                onTemplateToggle(basicDesktop.id);
-            }
+            const initialTemplates = getInitialTemplates();
+            initialTemplates.forEach(templateId => {
+                const templateExists = screenshotTemplateList.find(t => t.id === templateId);
+                if (templateExists && onTemplateToggle) {
+                    onTemplateToggle(templateId);
+                }
+            });
         }
     }, [isSelected]);
+
+    // Sync internal state with prop changes
+    useEffect(() => {
+        setUrl(screenshotUrl || '');
+    }, [screenshotUrl]);
+
+    const themeColors = isDarkTheme ? THEME_COLORS.DARK : THEME_COLORS.LIGHT;
 
     const handleWebsiteScreenshotToggle = (checked) => {
         onToggle(checked);
@@ -127,100 +171,14 @@ const ScreenShotsCard = ({
 
     const handleTestUrl = () => {
         if (url.trim() && validation?.isValid) {
-            // Clean and format the URL properly
-            let cleanUrl = url.trim();
-
-            // Remove any localhost:5173 prefix
-            if (cleanUrl.includes('localhost:5173/')) {
-                cleanUrl = cleanUrl.replace('localhost:5173/', '');
-            }
-
-            // Ensure URL has protocol
-            if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-                cleanUrl = `${URL_CONSTANTS.DEFAULT_PROTOCOL}${cleanUrl}`;
-            }
-
-            // Remove duplicate slashes and normalize URL
-            cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
-
-            // Open in new tab with proper safety attributes
-            window.open(cleanUrl, '_blank', 'noopener,noreferrer');
+            const normalizedUrl = normalizeUrl(url);
+            openUrlInNewTab(normalizedUrl);
         }
-    };
-
-    // Get icon for template
-    const getTemplateIcon = (templateId, templateName) => {
-        if (templateId.includes('-full')) {
-            // Full page templates use stacked icons
-            if (templateId.includes('mobile')) {
-                return (
-                    <span className="fa-stack fa-4x">
-                        <i className="fa-solid fa-mobile-screen fa-stack-2x"></i>
-                        <i className="fa-solid fa-arrows-down-to-line fa-stack-1x"></i>
-                    </span>
-                );
-            } else if (templateId.includes('tablet')) {
-                return (
-                    <span className="fa-stack fa-4x">
-                        <i className="fa-solid fa-tablet-screen-button fa-stack-2x"></i>
-                        <i className="fa-solid fa-arrows-down-to-line fa-stack-1x"></i>
-                    </span>
-                );
-            } else if (templateId.includes('hd')) {
-                return (
-                    <span className="fa-stack fa-4x">
-                        <i className="fa-solid fa-display fa-stack-2x"></i>
-                        <i className="fa-solid fa-arrows-down-to-line fa-stack-1x"></i>
-                    </span>
-                );
-            } else {
-                return (
-                    <span className="fa-stack fa-4x">
-                        <i className="fa-solid fa-desktop fa-stack-2x"></i>
-                        <i className="fa-solid fa-arrows-down-to-line fa-stack-1x"></i>
-                    </span>
-                );
-            }
-        } else {
-            // Regular templates use single icons
-            if (templateId.includes('mobile')) {
-                return <i className="fa-solid fa-mobile-screen fa-4x"></i>;
-            } else if (templateId.includes('tablet')) {
-                return <i className="fa-solid fa-tablet-screen-button fa-4x"></i>;
-            } else if (templateId.includes('hd')) {
-                return <i className="fa-solid fa-display fa-4x"></i>;
-            } else {
-                return <i className="fa-solid fa-desktop fa-4x"></i>;
-            }
-        }
-    };
-
-    // Get template dimensions using device viewports
-    const getTemplateDimensions = (template) => {
-        const deviceType = template.id.includes('mobile') ? 'mobile' :
-            template.id.includes('tablet') ? 'tablet' :
-                template.id.includes('hd') ? 'desktop-hd' : 'desktop';
-
-        const viewport = getDeviceViewport(deviceType);
-
-        if (template.height === 'auto') {
-            return `${viewport.width}×auto`;
-        }
-        return `${viewport.width}×${viewport.height}`;
-    };
-
-    // Get device name for display
-    const getDeviceName = (templateId) => {
-        if (templateId.includes('mobile')) return DEVICE_PRESETS.mobile.name;
-        if (templateId.includes('tablet')) return DEVICE_PRESETS.tablet.name;
-        if (templateId.includes('hd')) return 'Desktop HD';
-        return DEVICE_PRESETS.desktop.name;
     };
 
     return (
         <>
             <style>{`
-                /* Spinner animations - override prefers-reduced-motion */
                 @keyframes fa-spin {
                     0% {
                         transform: rotate(0deg);
@@ -237,7 +195,6 @@ const ScreenShotsCard = ({
                     animation-iteration-count: infinite !important;
                 }
 
-                /* Override prefers-reduced-motion for spinners */
                 @media (prefers-reduced-motion: reduce) {
                     .fa-spin {
                         animation: fa-spin 1s infinite linear !important;
@@ -655,7 +612,6 @@ const ScreenShotsCard = ({
             `}</style>
 
             <div className="screenshot-card">
-                {/* Card Header - ALWAYS VISIBLE */}
                 <div className="screenshot-card-header">
                     <div className="screenshot-header-controls">
                         <div
@@ -682,10 +638,8 @@ const ScreenShotsCard = ({
                     </div>
                 </div>
 
-                {/* Card Content - HIDDEN UNTIL CHECKBOX IS CHECKED */}
                 {isSelected && (
                     <div className="screenshot-card-content">
-                        {/* URL Input Section */}
                         <div className="url-section">
                             <label className="url-label">
                                 {t('screenshots.websiteUrl')}
@@ -719,7 +673,6 @@ const ScreenShotsCard = ({
                             )}
                         </div>
 
-                        {/* Template Actions - BUTTONS ARE BACK! */}
                         <div className="template-actions">
                             <h4 className="template-title">
                                 {t('screenshots.selectDevices')}
@@ -744,7 +697,6 @@ const ScreenShotsCard = ({
                             </div>
                         </div>
 
-                        {/* Templates Grid - 2 columns × 4 rows */}
                         <div className="templates-grid">
                             {screenshotTemplateList.map(template => (
                                 <label
@@ -753,7 +705,7 @@ const ScreenShotsCard = ({
                                     title={`${t(template.name)} - ${getTemplateDimensions(template)} - ${getDeviceName(template.id)}`}
                                 >
                                     <div className="template-icon-container">
-                                        {getTemplateIcon(template.id, template.name)}
+                                        {getTemplateIcon(template.id)}
                                     </div>
                                     <div className="template-info">
                                         <i
@@ -772,7 +724,6 @@ const ScreenShotsCard = ({
                             ))}
                         </div>
 
-                        {/* Capture Button */}
                         <div className="capture-section">
                             <button
                                 className={`capture-button ${isCapturing ? 'capturing' : ''}`}

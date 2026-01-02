@@ -1,12 +1,5 @@
 import { SVG_CONSTANTS } from '../constants';
 
-/**
- * LemGenda icon SVG component
- * @param {Object} props - Component props
- * @param {string} props.className - Additional CSS class names
- * @param {Object} props.props - Additional SVG props
- * @returns {JSX.Element} LemGendaIcon component
- */
 const LemGendaIconElement = ({ className = "", ...props }) => (
     <svg
         className={`header-icon ${className}`}

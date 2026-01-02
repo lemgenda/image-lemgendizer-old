@@ -1,40 +1,18 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SUPPORTED_INPUT_FORMATS, ERROR_MESSAGES, SPACING, BORDER_RADIUS, TRANSITIONS } from '../constants';
 
-const handleImageDrop = (e, onUpload) => {
-    e.preventDefault();
-    const files = Array.from(e.dataTransfer.files);
-    const imageFiles = files.filter(file =>
-        SUPPORTED_INPUT_FORMATS.some(format =>
-            file.type === format ||
-            file.name.toLowerCase().endsWith(format.split('/')[1]?.split('+')[0])
-        )
-    );
+import {
+    SUPPORTED_INPUT_FORMATS,
+    ERROR_MESSAGES,
+    SPACING,
+    BORDER_RADIUS,
+    TRANSITIONS
+} from '../constants';
 
-    if (imageFiles.length > 0) {
-        onUpload(imageFiles);
-    } else if (onUpload) {
-        onUpload([], ERROR_MESSAGES.INVALID_IMAGE_FILE);
-    }
-};
-
-const handleFileSelect = (e, onUpload) => {
-    const files = Array.from(e.target.files);
-    const imageFiles = files.filter(file =>
-        SUPPORTED_INPUT_FORMATS.some(format =>
-            file.type === format ||
-            file.name.toLowerCase().endsWith(format.split('/')[1]?.split('+')[0])
-        )
-    );
-
-    if (imageFiles.length > 0) {
-        onUpload(imageFiles);
-        e.target.value = '';
-    } else if (onUpload) {
-        onUpload([], ERROR_MESSAGES.INVALID_IMAGE_FILE);
-    }
-};
+import {
+     handleImageDrop,
+     handleFileSelect
+} from '../utils';
 
 function UploadSection({ onUpload, fileInputRef }) {
     const { t } = useTranslation();

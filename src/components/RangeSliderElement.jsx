@@ -1,18 +1,21 @@
 import { useTranslation } from 'react-i18next';
 import { COMPRESSION_QUALITY_RANGE, NUMBER_INPUT_CONSTANTS, SPACING, BORDER_RADIUS } from '../constants';
+import { calculatePercentage, generateTicks } from '../utils';
 
-const calculatePercentage = (min, max, value) => {
-  return ((value - min) / (max - min)) * 100;
-};
-
-const generateTicks = (min, max) => {
-  const ticks = [min];
-  const mid = Math.round((min + max) / 2);
-  ticks.push(mid);
-  ticks.push(max);
-  return ticks;
-};
-
+/**
+ * RangeSliderElement component for selecting values within a range
+ * @component
+ * @param {Object} props - Component props
+ * @param {number} [props.min=COMPRESSION_QUALITY_RANGE.MIN] - Minimum value
+ * @param {number} [props.max=COMPRESSION_QUALITY_RANGE.MAX] - Maximum value
+ * @param {number} [props.step=NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT] - Step value
+ * @param {number} [props.value=COMPRESSION_QUALITY_RANGE.DEFAULT] - Current value
+ * @param {Function} props.onChange - Change handler function
+ * @param {string} [props.label] - Label for the slider
+ * @param {string} [props.unit='%'] - Unit to display with value
+ * @param {boolean} [props.showTicks=true] - Whether to show tick marks
+ * @returns {JSX.Element} Range slider component
+ */
 function RangeSliderElement({
   min = COMPRESSION_QUALITY_RANGE.MIN,
   max = COMPRESSION_QUALITY_RANGE.MAX,
@@ -56,7 +59,6 @@ function RangeSliderElement({
           cursor: pointer;
           outline: none;
           transition: background 120ms linear;
-
           background: linear-gradient(
             to right,
             var(--color-primary) 0%,

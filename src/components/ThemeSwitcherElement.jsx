@@ -1,50 +1,41 @@
 import { useState, useEffect } from 'react';
-import { THEME_CONFIG, THEME_SWITCH, BORDER_RADIUS, SPACING, SHADOWS, TRANSITIONS } from '../constants';
+import { THEME_CONFIG, BORDER_RADIUS, SPACING, SHADOWS, TRANSITIONS } from '../constants';
+import {
+    getInitialTheme,
+    applyTheme,
+    getOppositeTheme,
+    createSystemThemeListener,
+    getThemeIconClass,
+    getThemeTooltip
+} from '../utils';
 
+/**
+ * ThemeSwitcherElement component for toggling between light and dark themes
+ * @component
+ * @returns {JSX.Element} Theme switcher component
+ */
 function ThemeSwitcherElement() {
     const [currentTheme, setCurrentTheme] = useState(THEME_CONFIG.DEFAULT);
     const [isInitialized, setIsInitialized] = useState(false);
     const [isAnimating, setIsAnimating] = useState(false);
 
-    // Initialize theme from localStorage or system preference
     useEffect(() => {
-        const savedTheme = localStorage.getItem(THEME_CONFIG.STORAGE_KEY);
-
-        if (savedTheme) {
-            setCurrentTheme(savedTheme);
-            applyTheme(savedTheme);
-        } else {
-            // Check system preference
-            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const systemTheme = prefersDark ? THEME_CONFIG.DARK : THEME_CONFIG.LIGHT;
-            setCurrentTheme(systemTheme);
-            applyTheme(systemTheme);
-        }
-
+        const initialTheme = getInitialTheme();
+        setCurrentTheme(initialTheme);
+        applyTheme(initialTheme);
         setIsInitialized(true);
 
-        // Listen for system theme changes
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        const handleSystemThemeChange = (e) => {
-            if (!localStorage.getItem(THEME_CONFIG.STORAGE_KEY)) {
-                const newTheme = e.matches ? THEME_CONFIG.DARK : THEME_CONFIG.LIGHT;
-                setCurrentTheme(newTheme);
-                applyTheme(newTheme);
-            }
-        };
+        const cleanup = createSystemThemeListener((newTheme) => {
+            setCurrentTheme(newTheme);
+            applyTheme(newTheme);
+        });
 
-        mediaQuery.addEventListener('change', handleSystemThemeChange);
-        return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
+        return cleanup;
     }, []);
 
-    const applyTheme = (theme) => {
-        document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem(THEME_CONFIG.STORAGE_KEY, theme);
-    };
-
-    const toggleTheme = () => {
+    const handleThemeToggle = () => {
         setIsAnimating(true);
-        const newTheme = currentTheme === THEME_CONFIG.DARK ? THEME_CONFIG.LIGHT : THEME_CONFIG.DARK;
+        const newTheme = getOppositeTheme(currentTheme);
         setCurrentTheme(newTheme);
         applyTheme(newTheme);
 
@@ -55,9 +46,9 @@ function ThemeSwitcherElement() {
         return null;
     }
 
-    const isDarkMode = currentTheme === THEME_CONFIG.DARK;
-    const iconClass = isDarkMode ? THEME_SWITCH.ICONS.LIGHT : THEME_SWITCH.ICONS.DARK;
-    const tooltip = isDarkMode ? THEME_SWITCH.TOOLTIPS.LIGHT : THEME_SWITCH.TOOLTIPS.DARK;
+    const isDark = currentTheme === THEME_CONFIG.DARK;
+    const iconClass = getThemeIconClass(currentTheme);
+    const tooltip = getThemeTooltip(currentTheme);
 
     return (
         <>
@@ -111,19 +102,19 @@ function ThemeSwitcherElement() {
                 }
 
                 .theme-icon.sun {
-                    color: #fbbf24 !important;
+                    color: var(--color-text-primary)!important;
                 }
 
                 .theme-icon.moon {
-                    color: #f59e0b !important;
+                    color: var(--color-text-primary)!important;
                 }
 
                 .theme-toggle-btn:hover .theme-icon.sun {
-                    color: #fbbf24 !important;
+                    color: var(--color-text-secondary)!important;
                 }
 
                 .theme-toggle-btn:hover .theme-icon.moon {
-                    color: #f59e0b !important;
+                    color: var(--color-text-secondary)!important;
                 }
 
                 .theme-tooltip {
@@ -152,7 +143,6 @@ function ThemeSwitcherElement() {
                     bottom: -40px !important;
                 }
 
-                /* Animation for theme switch */
                 @keyframes spin {
                     from {
                         transform: rotate(0deg) !important;
@@ -179,7 +169,6 @@ function ThemeSwitcherElement() {
                     animation: spin 0.5s ease-in-out !important, pulse 0.3s ease-in-out 0.5s !important;
                 }
 
-                /* Mobile responsive */
                 @media (max-width: 768px) {
                     .theme-switcher-container {
                         margin-right: ${SPACING.XS} !important;
@@ -208,13 +197,13 @@ function ThemeSwitcherElement() {
             <div className="theme-switcher-container">
                 <button
                     className={`theme-toggle-btn ${isAnimating ? 'animating' : ''}`}
-                    onClick={toggleTheme}
+                    onClick={handleThemeToggle}
                     aria-label={tooltip}
                     title={tooltip}
                     role="switch"
-                    aria-checked={isDarkMode}
+                    aria-checked={isDark}
                 >
-                    <i className={`${iconClass} theme-icon ${isDarkMode ? 'sun' : 'moon'}`}></i>
+                    <i className={`${iconClass} theme-icon ${isDark ? 'sun' : 'moon'}`}></i>
                     <span className="theme-tooltip">{tooltip}</span>
                 </button>
             </div>

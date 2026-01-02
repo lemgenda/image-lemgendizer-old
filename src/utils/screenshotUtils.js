@@ -2,9 +2,15 @@ import {
     URL_CONSTANTS
 } from '../constants';
 import { SCREENSHOT_TEMPLATES } from '../configs/templateConfigs';
+import { DEVICE_PRESETS, DEVICE_VIEWPORTS, SCREENSHOT_QUALITY } from '../constants';
 
 /**
  * Fetch with retry logic for rate limiting
+ * @async
+ * @param {string} url - URL to fetch
+ * @param {Object} options - Fetch options
+ * @param {number} maxRetries - Maximum number of retries
+ * @returns {Promise<Response>} Fetch response
  */
 async function fetchWithRetry(url, options, maxRetries = 3) {
     let lastError;
@@ -42,6 +48,8 @@ async function fetchWithRetry(url, options, maxRetries = 3) {
 
 /**
  * Gets viewport configuration based on template
+ * @param {Object} template - Screenshot template
+ * @returns {Object} Viewport configuration
  */
 const getViewportConfig = (template) => {
     const isMobile = template.id.includes('mobile');
@@ -74,6 +82,11 @@ const getViewportConfig = (template) => {
 
 /**
  * Captures a screenshot using Browserless API via Vite proxy
+ * @async
+ * @param {string} url - URL to capture
+ * @param {Object} template - Screenshot template
+ * @param {Object} options - Capture options
+ * @returns {Promise<Object>} Screenshot result
  */
 export const captureScreenshot = async (url, template, options = {}) => {
     try {
@@ -120,7 +133,7 @@ export const captureScreenshot = async (url, template, options = {}) => {
 
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Screenshot API failed: ${response.status} - ${errorText}`);
+            throw new Error('Screenshot API failed');
         }
 
         const blob = await response.blob();
@@ -153,6 +166,11 @@ export const captureScreenshot = async (url, template, options = {}) => {
 
 /**
  * Creates error image for failed screenshots
+ * @async
+ * @param {Object} template - Screenshot template
+ * @param {string} url - URL that failed
+ * @param {Error} error - Error object
+ * @returns {Promise<Object>} Error image data
  */
 const createScreenshotErrorImage = async (template, url, error) => {
     return new Promise((resolve) => {
@@ -176,7 +194,8 @@ const createScreenshotErrorImage = async (template, url, error) => {
         ctx.font = 'bold 80px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('⚠️', width / 2, height / 2 - 100);
+        const warningSymbol = 'ERR';
+        ctx.fillText(warningSymbol, width / 2, height / 2 - 100);
 
         ctx.font = 'bold 36px Arial';
         ctx.fillText('Screenshot Failed', width / 2, height / 2 - 20);
@@ -211,6 +230,10 @@ const createScreenshotErrorImage = async (template, url, error) => {
 
 /**
  * Wraps text to fit within specified width
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {string} text - Text to wrap
+ * @param {number} maxWidth - Maximum width
+ * @returns {Array<string>} Array of text lines
  */
 const wrapText = (ctx, text, maxWidth) => {
     const words = text.split(' ');
@@ -238,6 +261,11 @@ const wrapText = (ctx, text, maxWidth) => {
 
 /**
  * Captures multiple screenshots with reduced concurrency
+ * @async
+ * @param {Array<Object>} templates - Screenshot templates
+ * @param {string} url - URL to capture
+ * @param {Object} options - Capture options
+ * @returns {Promise<Object>} Screenshot results
  */
 export async function captureMultipleScreenshots(templates, url, options = {}) {
     const results = [];
@@ -270,6 +298,8 @@ export async function captureMultipleScreenshots(templates, url, options = {}) {
 
 /**
  * Converts screenshot results to processed image format
+ * @param {Object} screenshotResults - Screenshot results
+ * @returns {Array<Object>} Array of processed images
  */
 export function convertScreenshotResultsToImages(screenshotResults) {
     return screenshotResults.results
@@ -296,6 +326,7 @@ export function convertScreenshotResultsToImages(screenshotResults) {
 
 /**
  * Gets default screenshot templates for initial selection
+ * @returns {Array<string>} Array of default template IDs
  */
 export function getDefaultScreenshotTemplates() {
     return ['screenshots-mobile', 'screenshots-desktop'];
@@ -303,6 +334,7 @@ export function getDefaultScreenshotTemplates() {
 
 /**
  * Gets all screenshot template IDs
+ * @returns {Array<string>} Array of all template IDs
  */
 export function getAllScreenshotTemplateIds() {
     return Object.keys(SCREENSHOT_TEMPLATES || {});
@@ -310,6 +342,8 @@ export function getAllScreenshotTemplateIds() {
 
 /**
  * Filters screenshot templates by selected IDs
+ * @param {Array<string>} selectedTemplateIds - Selected template IDs
+ * @returns {Array<Object>} Filtered screenshot templates
  */
 export function filterScreenshotTemplates(selectedTemplateIds) {
     if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
@@ -331,6 +365,8 @@ export function filterScreenshotTemplates(selectedTemplateIds) {
 
 /**
  * Gets screenshot template by ID
+ * @param {string} templateId - Template ID
+ * @returns {Object|null} Screenshot template or null
  */
 export function getScreenshotTemplateById(templateId) {
     return SCREENSHOT_TEMPLATES[templateId] || null;
@@ -338,6 +374,7 @@ export function getScreenshotTemplateById(templateId) {
 
 /**
  * Gets all screenshot templates
+ * @returns {Array<Object>} Array of all screenshot templates
  */
 export function getAllScreenshotTemplates() {
     return Object.values(SCREENSHOT_TEMPLATES || {});
@@ -345,6 +382,7 @@ export function getAllScreenshotTemplates() {
 
 /**
  * Gets regular screenshot templates (non-full page)
+ * @returns {Array<Object>} Array of regular screenshot templates
  */
 export function getRegularScreenshotTemplates() {
     return Object.values(SCREENSHOT_TEMPLATES || {}).filter(t => !t.id.includes('-full'));
@@ -352,6 +390,7 @@ export function getRegularScreenshotTemplates() {
 
 /**
  * Gets full page screenshot templates
+ * @returns {Array<Object>} Array of full page screenshot templates
  */
 export function getFullPageScreenshotTemplates() {
     return Object.values(SCREENSHOT_TEMPLATES || {}).filter(t => t.id.includes('-full'));
@@ -359,6 +398,7 @@ export function getFullPageScreenshotTemplates() {
 
 /**
  * Gets default screenshot template objects for initial selection
+ * @returns {Array<Object>} Array of default screenshot template objects
  */
 export function getDefaultScreenshotTemplateObjects() {
     const regularTemplates = getRegularScreenshotTemplates();
@@ -370,6 +410,8 @@ export function getDefaultScreenshotTemplateObjects() {
 
 /**
  * Gets screenshot template configurations
+ * @param {Array<string>} selectedTemplateIds - Selected template IDs
+ * @returns {Array<Object>} Array of screenshot template configurations
  */
 export function getScreenshotTemplateConfigs(selectedTemplateIds) {
     if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
@@ -383,6 +425,9 @@ export function getScreenshotTemplateConfigs(selectedTemplateIds) {
 
 /**
  * Prepares screenshot templates for capture
+ * @param {Array<string>} selectedTemplateIds - Selected template IDs
+ * @param {string} url - URL to capture
+ * @returns {Array<Object>} Prepared screenshot templates
  */
 export function prepareScreenshotTemplates(selectedTemplateIds, url) {
     const templates = getScreenshotTemplateConfigs(selectedTemplateIds);
@@ -398,6 +443,11 @@ export function prepareScreenshotTemplates(selectedTemplateIds, url) {
 
 /**
  * Orchestrates screenshot processing
+ * @async
+ * @param {Array<string>} selectedTemplateIds - Selected template IDs
+ * @param {string} url - URL to capture
+ * @param {Function} onProgress - Progress callback
+ * @returns {Promise<Object>} Screenshot processing results
  */
 export async function orchestrateScreenshotProcessing(selectedTemplateIds, url, onProgress = null) {
     try {
@@ -440,6 +490,10 @@ export async function orchestrateScreenshotProcessing(selectedTemplateIds, url, 
 
 /**
  * Handles screenshot template selection
+ * @param {Array<string>} currentSelected - Currently selected template IDs
+ * @param {string} templateId - Template ID to toggle
+ * @param {boolean} isScreenshotSelected - Whether screenshot feature is selected
+ * @returns {Array<string>} Updated selected template IDs
  */
 export function handleScreenshotTemplateToggle(currentSelected, templateId, isScreenshotSelected) {
     if (!isScreenshotSelected) {
@@ -462,46 +516,10 @@ export function handleScreenshotTemplateToggle(currentSelected, templateId, isSc
 }
 
 /**
- * Validates screenshot URL
- */
-export function validateScreenshotUrlInput(url) {
-    if (!url || url.trim() === '') {
-        return {
-            isValid: false,
-            message: 'URL cannot be empty'
-        };
-    }
-
-    try {
-        let formattedUrl = url;
-        if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-            formattedUrl = `${URL_CONSTANTS.DEFAULT_PROTOCOL}${formattedUrl}`;
-        }
-
-        new URL(formattedUrl);
-        const hostname = new URL(formattedUrl).hostname;
-        if (!hostname || hostname === '') {
-            return {
-                isValid: false,
-                message: 'Invalid domain name'
-            };
-        }
-
-        return {
-            isValid: true,
-            message: 'Valid URL',
-            cleanUrl: formattedUrl
-        };
-    } catch (error) {
-        return {
-            isValid: false,
-            message: 'Invalid URL format'
-        };
-    }
-}
-
-/**
  * Calculates screenshot capture progress
+ * @param {number} current - Current progress
+ * @param {number} total - Total progress
+ * @returns {number} Progress percentage
  */
 export function calculateCaptureProgress(current, total) {
     if (total === 0) return 0;
@@ -510,6 +528,10 @@ export function calculateCaptureProgress(current, total) {
 
 /**
  * Creates screenshot capture status message
+ * @param {number} successful - Number of successful captures
+ * @param {number} total - Total number of captures
+ * @param {boolean} hasPlaceholders - Whether placeholders were generated
+ * @returns {string} Status message
  */
 export function createCaptureStatusMessage(successful, total, hasPlaceholders) {
     if (successful === total) {
@@ -520,3 +542,75 @@ export function createCaptureStatusMessage(successful, total, hasPlaceholders) {
         return 'Failed to capture screenshots';
     }
 }
+
+/**
+ * Gets all screenshot templates with quality settings applied
+ * @returns {Array<Object>} Array of screenshot templates with quality settings
+ */
+export const getScreenshotTemplatesWithQuality = () => {
+    return Object.values(SCREENSHOT_TEMPLATES || {}).map(template => {
+        const updatedTemplate = { ...template };
+        if (updatedTemplate.requestBody?.options) {
+            updatedTemplate.requestBody.options.quality = SCREENSHOT_QUALITY.JPEG_QUALITY;
+        }
+        return updatedTemplate;
+    });
+};
+
+/**
+ * Gets device viewport configuration
+ * @param {string} deviceType - Device type ('mobile', 'tablet', 'desktop', 'desktop-hd')
+ * @returns {Object} Viewport configuration with width and height
+ */
+export const getDeviceViewport = (deviceType) => {
+    switch (deviceType) {
+        case 'mobile':
+            return DEVICE_PRESETS.mobile.viewport;
+        case 'tablet':
+            return DEVICE_PRESETS.tablet.viewport;
+        case 'desktop':
+            return DEVICE_PRESETS.desktop.viewport;
+        case 'desktop-hd':
+            return DEVICE_VIEWPORTS.DESKTOP_HD;
+        default:
+            return DEVICE_PRESETS.desktop.viewport;
+    }
+};
+
+/**
+ * Gets template dimensions as formatted string
+ * @param {Object} template - Screenshot template object
+ * @returns {string} Formatted dimensions string (e.g., "1920×1080" or "375×auto")
+ */
+export const getTemplateDimensions = (template) => {
+    const deviceType = template.id.includes('mobile') ? 'mobile' :
+        template.id.includes('tablet') ? 'tablet' :
+            template.id.includes('hd') ? 'desktop-hd' : 'desktop';
+
+    const viewport = getDeviceViewport(deviceType);
+
+    if (template.height === 'auto') {
+        return `${viewport.width}×auto`;
+    }
+    return `${viewport.width}×${viewport.height}`;
+};
+
+/**
+ * Gets device name based on template ID
+ * @param {string} templateId - Template ID
+ * @returns {string} Device name
+ */
+export const getDeviceName = (templateId) => {
+    if (templateId.includes('mobile')) return DEVICE_PRESETS.mobile.name;
+    if (templateId.includes('tablet')) return DEVICE_PRESETS.tablet.name;
+    if (templateId.includes('hd')) return 'Desktop HD';
+    return DEVICE_PRESETS.desktop.name;
+};
+
+/**
+ * Gets initial templates for selection
+ * @returns {Array<string>} Array of default template IDs
+ */
+export const getInitialTemplates = () => {
+    return ['screenshots-mobile', 'screenshots-desktop'];
+};

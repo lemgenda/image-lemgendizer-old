@@ -35,27 +35,179 @@ export const TEMPLATE_CATEGORIES_CONST = {
 };
 
 // ================================
+// Smart Crop Configuration for Templates
+// ================================
+
+export const TEMPLATE_SMART_CROP_CONFIG = {
+    // Default crop strategies per template type
+    DEFAULT_STRATEGIES: {
+        'web': 'ai_priority',
+        'logo': 'logo_priority',
+        'instagram': 'hybrid',
+        'facebook': 'ai_priority',
+        'twitter': 'hybrid',
+        'linkedin': 'ai_priority',
+        'youtube': 'focal_point',
+        'pinterest': 'hybrid',
+        'tiktok': 'focal_point',
+        'favicon': 'center',
+        'screenshots': 'center'
+    },
+
+    // Priority subjects per template type
+    PRIORITY_SUBJECTS: {
+        'web': 'person',
+        'logo': 'logo',
+        'instagram': 'face',
+        'facebook': 'person',
+        'twitter': 'person',
+        'linkedin': 'face',
+        'youtube': 'face',
+        'pinterest': 'person',
+        'tiktok': 'face'
+    },
+
+    // Whether to preserve logos per template type
+    PRESERVE_LOGOS: {
+        'web': true,
+        'logo': true,
+        'instagram': false,
+        'facebook': true,
+        'twitter': true,
+        'linkedin': true,
+        'youtube': false,
+        'pinterest': true,
+        'tiktok': false
+    },
+
+    // Minimum subject size ratio per template
+    MIN_SUBJECT_SIZE: {
+        'web': 0.15,
+        'logo': 0.1,
+        'instagram': 0.2,
+        'facebook': 0.15,
+        'twitter': 0.15,
+        'linkedin': 0.2,
+        'youtube': 0.25,
+        'pinterest': 0.1,
+        'tiktok': 0.3
+    },
+
+    // Maximum padding ratio per template
+    MAX_PADDING: {
+        'web': 0.15,
+        'logo': 0.2,
+        'instagram': 0.1,
+        'facebook': 0.15,
+        'twitter': 0.1,
+        'linkedin': 0.15,
+        'youtube': 0.1,
+        'pinterest': 0.2,
+        'tiktok': 0.05
+    },
+
+    // Whether to use tight crop (crop through logos if needed)
+    TIGHT_CROP: {
+        'web': false,
+        'logo': false,
+        'instagram': true,
+        'facebook': false,
+        'twitter': false,
+        'linkedin': false,
+        'youtube': true,
+        'pinterest': false,
+        'tiktok': true
+    },
+
+    // Default quality per template type
+    DEFAULT_QUALITY: {
+        'web': 0.9,
+        'logo': 1.0,
+        'instagram': 0.85,
+        'facebook': 0.85,
+        'twitter': 0.8,
+        'linkedin': 0.9,
+        'youtube': 0.8,
+        'pinterest': 0.85,
+        'tiktok': 0.75,
+        'favicon': 1.0,
+        'screenshots': 0.8
+    },
+
+    // Default format per template type
+    DEFAULT_FORMAT: {
+        'web': 'webp',
+        'logo': 'png',
+        'instagram': 'jpg',
+        'facebook': 'jpg',
+        'twitter': 'jpg',
+        'linkedin': 'jpg',
+        'youtube': 'jpg',
+        'pinterest': 'jpg',
+        'tiktok': 'jpg',
+        'favicon': 'png',
+        'screenshots': 'jpg'
+    }
+};
+
+// ================================
 // Favicon Sizes
 // ================================
 
 export const FAVICON_SIZES = [
-    { name: 'android-chrome-192x192', width: 192, height: 192 },
-    { name: 'android-chrome-512x512', width: 512, height: 512 },
-    { name: 'i-pad-icon-1x', width: 76, height: 76 },
-    { name: 'i-pad-icon-2x', width: 152, height: 152 },
-    { name: 'i-phone-icon', width: 120, height: 120 },
-    { name: 'apple-touch-icon', width: 180, height: 180 },
+    // Standard favicons
     { name: 'favicon-16x16', width: 16, height: 16 },
     { name: 'favicon-32x32', width: 32, height: 32 },
-    { name: 'favicon-48x48', width: 48, height: 48 }
+    { name: 'favicon-48x48', width: 48, height: 48 },
+
+    // Additional standard sizes
+    { name: 'favicon-64x64', width: 64, height: 64 },
+    { name: 'favicon-96x96', width: 96, height: 96 },
+    { name: 'favicon-128x128', width: 128, height: 128 },
+    { name: 'favicon-256x256', width: 256, height: 256 },
+
+    // Apple Touch Icons
+    { name: 'apple-touch-icon-76x76', width: 76, height: 76 },
+    { name: 'apple-touch-icon-120x120', width: 120, height: 120 },
+    { name: 'apple-touch-icon-152x152', width: 152, height: 152 },
+    { name: 'apple-touch-icon-180x180', width: 180, height: 180 },
+
+    // Android Chrome Icons
+    { name: 'android-chrome-192x192', width: 192, height: 192 },
+    { name: 'android-chrome-512x512', width: 512, height: 512 },
+
+    // Windows Metro tiles
+    { name: 'mstile-70x70', width: 70, height: 70 },
+    { name: 'mstile-144x144', width: 144, height: 144 },
+    { name: 'mstile-150x150', width: 150, height: 150 },
+    { name: 'mstile-310x150', width: 310, height: 150 },
+    { name: 'mstile-310x310', width: 310, height: 310 }
 ];
 
-export const FAVICON_SIZE_LIST = [16, 32, 48, 64, 76, 120, 128, 152, 180, 256, 512];
+export const FAVICON_SIZES_BASIC = [
+    { name: 'favicon-16x16', width: 16, height: 16 },
+    { name: 'favicon-32x32', width: 32, height: 32 },
+    { name: 'android-chrome-192x192', width: 192, height: 192 },
+    { name: 'android-chrome-512x512', width: 512, height: 512 },
+    { name: 'apple-touch-icon', width: 180, height: 180 }
+];
+
+// All sizes as a simple array (including ICO sizes and additional sizes)
+export const FAVICON_SIZE_LIST = [16, 32, 48, 64, 70, 76, 96, 120, 128, 144, 150, 152, 180, 192, 256, 310, 512];
+
+// ICO file sizes (embedded in favicon.ico)
+export const FAVICON_ICO_SIZES = [16, 32, 48, 64];
+
+// Preview size (largest size for display)
 export const FAVICON_PREVIEW_SIZE = 512;
 
 // ================================
 // Template-Specific Application Configuration
 // ================================
+
+
+
+
 
 export const APP_TEMPLATE_CONFIG = {
     FAVICON: {
@@ -94,6 +246,12 @@ export const SCREENSHOT_TEMPLATES = {
         height: DEVICE_VIEWPORTS.MOBILE.height,
         fullPage: false,
         icon: 'fas fa-mobile-alt',
+        cropMode: 'center', // Screenshots use center crop
+        cropConfig: {
+            useSmartCrop: false,
+            preserveLogos: false,
+            tightCrop: true
+        },
         requestBody: {
             bestAttempt: true,
             blockConsentModals: true,
@@ -122,6 +280,12 @@ export const SCREENSHOT_TEMPLATES = {
         height: 'auto',
         fullPage: true,
         icon: 'fas fa-mobile-alt',
+        cropMode: 'center',
+        cropConfig: {
+            useSmartCrop: false,
+            preserveLogos: false,
+            tightCrop: true
+        },
         requestBody: {
             bestAttempt: true,
             blockConsentModals: true,
@@ -150,6 +314,12 @@ export const SCREENSHOT_TEMPLATES = {
         height: DEVICE_VIEWPORTS.TABLET.height,
         fullPage: false,
         icon: 'fas fa-tablet',
+        cropMode: 'center',
+        cropConfig: {
+            useSmartCrop: false,
+            preserveLogos: false,
+            tightCrop: true
+        },
         requestBody: {
             bestAttempt: true,
             blockConsentModals: true,
@@ -178,6 +348,12 @@ export const SCREENSHOT_TEMPLATES = {
         height: 'auto',
         fullPage: true,
         icon: 'fas fa-tablet',
+        cropMode: 'center',
+        cropConfig: {
+            useSmartCrop: false,
+            preserveLogos: false,
+            tightCrop: true
+        },
         requestBody: {
             bestAttempt: true,
             blockConsentModals: true,
@@ -206,6 +382,12 @@ export const SCREENSHOT_TEMPLATES = {
         height: DEVICE_VIEWPORTS.DESKTOP.height,
         fullPage: false,
         icon: 'fas fa-desktop',
+        cropMode: 'center',
+        cropConfig: {
+            useSmartCrop: false,
+            preserveLogos: false,
+            tightCrop: true
+        },
         requestBody: {
             bestAttempt: true,
             blockConsentModals: true,
@@ -234,6 +416,12 @@ export const SCREENSHOT_TEMPLATES = {
         height: 'auto',
         fullPage: true,
         icon: 'fas fa-desktop',
+        cropMode: 'center',
+        cropConfig: {
+            useSmartCrop: false,
+            preserveLogos: false,
+            tightCrop: true
+        },
         requestBody: {
             bestAttempt: true,
             blockConsentModals: true,
@@ -262,6 +450,12 @@ export const SCREENSHOT_TEMPLATES = {
         height: DEVICE_VIEWPORTS.DESKTOP_HD.height,
         fullPage: false,
         icon: 'fas fa-desktop-alt',
+        cropMode: 'center',
+        cropConfig: {
+            useSmartCrop: false,
+            preserveLogos: false,
+            tightCrop: true
+        },
         requestBody: {
             bestAttempt: true,
             blockConsentModals: true,
@@ -290,6 +484,12 @@ export const SCREENSHOT_TEMPLATES = {
         height: 'auto',
         fullPage: true,
         icon: 'fas fa-desktop-alt',
+        cropMode: 'center',
+        cropConfig: {
+            useSmartCrop: false,
+            preserveLogos: false,
+            tightCrop: true
+        },
         requestBody: {
             bestAttempt: true,
             blockConsentModals: true,
@@ -312,7 +512,7 @@ export const SCREENSHOT_TEMPLATES = {
 };
 
 // ================================
-// All Social Media Templates
+// All Social Media Templates (Updated with Smart Crop Config)
 // ================================
 
 export const SOCIAL_MEDIA_TEMPLATES = [
@@ -321,41 +521,89 @@ export const SOCIAL_MEDIA_TEMPLATES = [
         id: 'web-hero',
         name: 'template.WebHero',
         width: 1920,
-        height: 1080, // 16:9
+        height: 1080,
         platform: 'platform.web',
         category: 'web',
         icon: 'fas fa-desktop',
-        templateName: 'WebHero'
+        templateName: 'WebHero',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.9,
+            format: 'webp'
+        }
     },
     {
         id: 'web-blog',
         name: 'template.WebBlog',
         width: 1200,
-        height: 630, // 1.91:1
+        height: 630,
         platform: 'platform.web',
         category: 'web',
         icon: 'fas fa-blog',
-        templateName: 'WebBlog'
+        templateName: 'WebBlog',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.9,
+            format: 'webp'
+        }
     },
     {
         id: 'web-content',
         name: 'template.WebContent',
         width: 1200,
-        height: 675, // 16:9 normalized (replaces auto)
+        height: 675,
         platform: 'platform.web',
         category: 'web',
         icon: 'fas fa-image',
-        templateName: 'WebContent'
+        templateName: 'WebContent',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.9,
+            format: 'webp'
+        }
     },
     {
         id: 'web-thumb',
         name: 'template.WebThumb',
         width: 300,
-        height: 300, // 1:1
+        height: 300,
         platform: 'platform.web',
         category: 'web',
         icon: 'fas fa-square',
-        templateName: 'WebThumb'
+        templateName: 'WebThumb',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.1,
+            tightCrop: true,
+            quality: 0.9,
+            format: 'webp'
+        }
     },
 
     // Logo Images
@@ -363,21 +611,45 @@ export const SOCIAL_MEDIA_TEMPLATES = [
         id: 'logo-rect',
         name: 'template.LogoRectangular',
         width: 600,
-        height: 300, // 2:1
+        height: 300,
         platform: 'platform.logo',
         category: 'logo',
         icon: 'fas fa-copyright',
-        templateName: 'LogoRectangular'
+        templateName: 'LogoRectangular',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'logo_priority',
+            preserveLogos: true,
+            prioritySubject: 'logo',
+            minSubjectSize: 0.1,
+            maxPadding: 0.2,
+            tightCrop: false,
+            quality: 1.0,
+            format: 'png'
+        }
     },
     {
         id: 'logo-square',
         name: 'template.LogoSquare',
         width: 1024,
-        height: 1024, // 1:1
+        height: 1024,
         platform: 'platform.logo',
         category: 'logo',
         icon: 'fas fa-square',
-        templateName: 'LogoSquare'
+        templateName: 'LogoSquare',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'logo_priority',
+            preserveLogos: true,
+            prioritySubject: 'logo',
+            minSubjectSize: 0.1,
+            maxPadding: 0.2,
+            tightCrop: false,
+            quality: 1.0,
+            format: 'png'
+        }
     },
 
     // Instagram
@@ -385,51 +657,111 @@ export const SOCIAL_MEDIA_TEMPLATES = [
         id: 'ig-profile',
         name: 'template.InstagramProfile',
         width: 400,
-        height: 400, // 1:1
+        height: 400,
         platform: 'platform.instagram',
         category: 'instagram',
         icon: 'fab fa-instagram',
-        templateName: 'InstagramProfile'
+        templateName: 'InstagramProfile',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: false,
+            prioritySubject: 'face',
+            minSubjectSize: 0.2,
+            maxPadding: 0.1,
+            tightCrop: true,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
     {
         id: 'ig-square',
         name: 'template.InstagramSquare',
         width: 1080,
-        height: 1080, // 1:1
+        height: 1080,
         platform: 'platform.instagram',
         category: 'instagram',
         icon: 'fas fa-square',
-        templateName: 'InstagramSquare'
+        templateName: 'InstagramSquare',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: false,
+            prioritySubject: 'face',
+            minSubjectSize: 0.2,
+            maxPadding: 0.1,
+            tightCrop: true,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
     {
         id: 'ig-portrait',
         name: 'template.InstagramPortrait',
         width: 1080,
-        height: 1350, // 4:5
+        height: 1350,
         platform: 'platform.instagram',
         category: 'instagram',
         icon: 'fas fa-image',
-        templateName: 'InstagramPortrait'
+        templateName: 'InstagramPortrait',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: false,
+            prioritySubject: 'face',
+            minSubjectSize: 0.2,
+            maxPadding: 0.1,
+            tightCrop: true,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
     {
         id: 'ig-landscape',
         name: 'template.InstagramLandscape',
         width: 1080,
-        height: 608, // 1.91:1
+        height: 608,
         platform: 'platform.instagram',
         category: 'instagram',
         icon: 'fas fa-expand',
-        templateName: 'InstagramLandscape'
+        templateName: 'InstagramLandscape',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: false,
+            prioritySubject: 'face',
+            minSubjectSize: 0.2,
+            maxPadding: 0.1,
+            tightCrop: true,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
     {
         id: 'ig-stories',
         name: 'template.InstagramStoriesReels',
         width: 1080,
-        height: 1920, // 9:16
+        height: 1920,
         platform: 'platform.instagram',
         category: 'instagram',
         icon: 'fas fa-video',
-        templateName: 'InstagramStoriesReels'
+        templateName: 'InstagramStoriesReels',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: false,
+            prioritySubject: 'face',
+            minSubjectSize: 0.2,
+            maxPadding: 0.1,
+            tightCrop: true,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
 
     // Facebook
@@ -437,51 +769,111 @@ export const SOCIAL_MEDIA_TEMPLATES = [
         id: 'fb-profile',
         name: 'template.FacebookProfile',
         width: 360,
-        height: 360, // 1:1
+        height: 360,
         platform: 'platform.facebook',
         category: 'facebook',
         icon: 'fab fa-facebook',
-        templateName: 'FacebookProfile'
+        templateName: 'FacebookProfile',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
     {
         id: 'fb-cover',
         name: 'template.FacebookCoverBanner',
         width: 820,
-        height: 360, // ~2.28:1
+        height: 360,
         platform: 'platform.facebook',
         category: 'facebook',
         icon: 'fas fa-image',
-        templateName: 'FacebookCoverBanner'
+        templateName: 'FacebookCoverBanner',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
     {
         id: 'fb-shared',
         name: 'template.FacebookSharedImage',
         width: 1200,
-        height: 630, // 1.91:1
+        height: 630,
         platform: 'platform.facebook',
         category: 'facebook',
         icon: 'fas fa-share-alt',
-        templateName: 'FacebookSharedImage'
+        templateName: 'FacebookSharedImage',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
     {
         id: 'fb-square',
         name: 'template.FacebookSquarePost',
         width: 1200,
-        height: 1200, // 1:1
+        height: 1200,
         platform: 'platform.facebook',
         category: 'facebook',
         icon: 'fas fa-square',
-        templateName: 'FacebookSquarePost'
+        templateName: 'FacebookSquarePost',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
     {
         id: 'fb-stories',
         name: 'template.FacebookStories',
         width: 1080,
-        height: 1920, // 9:16
+        height: 1920,
         platform: 'platform.facebook',
         category: 'facebook',
         icon: 'fas fa-scroll',
-        templateName: 'FacebookStories'
+        templateName: 'FacebookStories',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
 
     // Twitter / X
@@ -489,51 +881,111 @@ export const SOCIAL_MEDIA_TEMPLATES = [
         id: 'tw-profile',
         name: 'template.XProfile',
         width: 400,
-        height: 400, // 1:1
+        height: 400,
         platform: 'platform.twitter',
         category: 'twitter',
         icon: 'fab fa-twitter',
-        templateName: 'XProfile'
+        templateName: 'XProfile',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.1,
+            tightCrop: false,
+            quality: 0.8,
+            format: 'jpg'
+        }
     },
     {
         id: 'tw-header',
         name: 'template.XHeaderBanner',
         width: 1500,
-        height: 500, // 3:1
+        height: 500,
         platform: 'platform.twitter',
         category: 'twitter',
         icon: 'fas fa-image',
-        templateName: 'XHeaderBanner'
+        templateName: 'XHeaderBanner',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.1,
+            tightCrop: false,
+            quality: 0.8,
+            format: 'jpg'
+        }
     },
     {
         id: 'tw-landscape',
         name: 'template.XLandscapePost',
         width: 1200,
-        height: 675, // 16:9
+        height: 675,
         platform: 'platform.twitter',
         category: 'twitter',
         icon: 'fas fa-expand',
-        templateName: 'XLandscapePost'
+        templateName: 'XLandscapePost',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.1,
+            tightCrop: false,
+            quality: 0.8,
+            format: 'jpg'
+        }
     },
     {
         id: 'tw-square',
         name: 'template.XSquarePost',
         width: 1080,
-        height: 1080, // 1:1
+        height: 1080,
         platform: 'platform.twitter',
         category: 'twitter',
         icon: 'fas fa-square',
-        templateName: 'XSquarePost'
+        templateName: 'XSquarePost',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.1,
+            tightCrop: false,
+            quality: 0.8,
+            format: 'jpg'
+        }
     },
     {
         id: 'tw-portrait',
         name: 'template.XPortraitPost',
         width: 1080,
-        height: 1350, // 4:5
+        height: 1350,
         platform: 'platform.twitter',
         category: 'twitter',
         icon: 'fas fa-image',
-        templateName: 'XPortraitPost'
+        templateName: 'XPortraitPost',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.15,
+            maxPadding: 0.1,
+            tightCrop: false,
+            quality: 0.8,
+            format: 'jpg'
+        }
     },
 
     // LinkedIn
@@ -541,51 +993,111 @@ export const SOCIAL_MEDIA_TEMPLATES = [
         id: 'li-profile',
         name: 'template.LinkedInProfile',
         width: 400,
-        height: 400, // 1:1
+        height: 400,
         platform: 'platform.linkedin',
         category: 'linkedin',
         icon: 'fab fa-linkedin',
-        templateName: 'LinkedInProfile'
+        templateName: 'LinkedInProfile',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'face',
+            minSubjectSize: 0.2,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.9,
+            format: 'jpg'
+        }
     },
     {
         id: 'li-cover',
         name: 'template.LinkedInPersonalCover',
         width: 1584,
-        height: 396, // 4:1
+        height: 396,
         platform: 'platform.linkedin',
         category: 'linkedin',
         icon: 'fas fa-image',
-        templateName: 'LinkedInPersonalCover'
+        templateName: 'LinkedInPersonalCover',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'face',
+            minSubjectSize: 0.2,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.9,
+            format: 'jpg'
+        }
     },
     {
         id: 'li-landscape',
         name: 'template.LinkedInLandscapePost',
         width: 1200,
-        height: 628, // 1.91:1
+        height: 628,
         platform: 'platform.linkedin',
         category: 'linkedin',
         icon: 'fas fa-expand',
-        templateName: 'LinkedInLandscapePost'
+        templateName: 'LinkedInLandscapePost',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'face',
+            minSubjectSize: 0.2,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.9,
+            format: 'jpg'
+        }
     },
     {
         id: 'li-square',
         name: 'template.LinkedInSquarePost',
         width: 1200,
-        height: 1200, // 1:1
+        height: 1200,
         platform: 'platform.linkedin',
         category: 'linkedin',
         icon: 'fas fa-square',
-        templateName: 'LinkedInSquarePost'
+        templateName: 'LinkedInSquarePost',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'face',
+            minSubjectSize: 0.2,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.9,
+            format: 'jpg'
+        }
     },
     {
         id: 'li-portrait',
         name: 'template.LinkedInPortraitPost',
         width: 1080,
-        height: 1350, // 4:5
+        height: 1350,
         platform: 'platform.linkedin',
         category: 'linkedin',
         icon: 'fas fa-image',
-        templateName: 'LinkedInPortraitPost'
+        templateName: 'LinkedInPortraitPost',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'ai_priority',
+            preserveLogos: true,
+            prioritySubject: 'face',
+            minSubjectSize: 0.2,
+            maxPadding: 0.15,
+            tightCrop: false,
+            quality: 0.9,
+            format: 'jpg'
+        }
     },
 
     // YouTube
@@ -593,31 +1105,67 @@ export const SOCIAL_MEDIA_TEMPLATES = [
         id: 'yt-channel',
         name: 'template.YouTubeChannelIcon',
         width: 1024,
-        height: 1024, // 1:1
+        height: 1024,
         platform: 'platform.youtube',
         category: 'youtube',
         icon: 'fab fa-youtube',
-        templateName: 'YouTubeChannelIcon'
+        templateName: 'YouTubeChannelIcon',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'focal_point',
+            preserveLogos: false,
+            prioritySubject: 'face',
+            minSubjectSize: 0.25,
+            maxPadding: 0.1,
+            tightCrop: true,
+            quality: 0.8,
+            format: 'jpg'
+        }
     },
     {
         id: 'yt-banner',
         name: 'template.YouTubeBanner',
         width: 2560,
-        height: 1440, // 16:9
+        height: 1440,
         platform: 'platform.youtube',
         category: 'youtube',
         icon: 'fas fa-image',
-        templateName: 'YouTubeBanner'
+        templateName: 'YouTubeBanner',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'focal_point',
+            preserveLogos: false,
+            prioritySubject: 'face',
+            minSubjectSize: 0.25,
+            maxPadding: 0.1,
+            tightCrop: true,
+            quality: 0.8,
+            format: 'jpg'
+        }
     },
     {
         id: 'yt-thumb',
         name: 'template.YouTubeThumbnail',
         width: 1280,
-        height: 720, // 16:9
+        height: 720,
         platform: 'platform.youtube',
         category: 'youtube',
         icon: 'fas fa-video',
-        templateName: 'YouTubeThumbnail'
+        templateName: 'YouTubeThumbnail',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'focal_point',
+            preserveLogos: false,
+            prioritySubject: 'face',
+            minSubjectSize: 0.25,
+            maxPadding: 0.1,
+            tightCrop: true,
+            quality: 0.8,
+            format: 'jpg'
+        }
     },
 
     // Pinterest
@@ -625,41 +1173,89 @@ export const SOCIAL_MEDIA_TEMPLATES = [
         id: 'pin-profile',
         name: 'template.PinterestProfile',
         width: 400,
-        height: 400, // 1:1
+        height: 400,
         platform: 'platform.pinterest',
         category: 'pinterest',
         icon: 'fab fa-pinterest',
-        templateName: 'PinterestProfile'
+        templateName: 'PinterestProfile',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.1,
+            maxPadding: 0.2,
+            tightCrop: false,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
     {
         id: 'pin-standard',
         name: 'template.PinterestStandardPin',
         width: 1000,
-        height: 1500, // 2:3
+        height: 1500,
         platform: 'platform.pinterest',
         category: 'pinterest',
         icon: 'fas fa-thumbtack',
-        templateName: 'PinterestStandardPin'
+        templateName: 'PinterestStandardPin',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.1,
+            maxPadding: 0.2,
+            tightCrop: false,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
     {
         id: 'pin-square',
         name: 'template.PinterestSquarePin',
         width: 1000,
-        height: 1000, // 1:1
+        height: 1000,
         platform: 'platform.pinterest',
         category: 'pinterest',
         icon: 'fas fa-square',
-        templateName: 'PinterestSquarePin'
+        templateName: 'PinterestSquarePin',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.1,
+            maxPadding: 0.2,
+            tightCrop: false,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
     {
         id: 'pin-story',
         name: 'template.PinterestStoryPin',
         width: 1080,
-        height: 1920, // 9:16
+        height: 1920,
         platform: 'platform.pinterest',
         category: 'pinterest',
         icon: 'fas fa-scroll',
-        templateName: 'PinterestStoryPin'
+        templateName: 'PinterestStoryPin',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'hybrid',
+            preserveLogos: true,
+            prioritySubject: 'person',
+            minSubjectSize: 0.1,
+            maxPadding: 0.2,
+            tightCrop: false,
+            quality: 0.85,
+            format: 'jpg'
+        }
     },
 
     // TikTok
@@ -667,21 +1263,45 @@ export const SOCIAL_MEDIA_TEMPLATES = [
         id: 'tt-profile',
         name: 'template.TikTokProfile',
         width: 400,
-        height: 400, // 1:1
+        height: 400,
         platform: 'platform.tiktok',
         category: 'tiktok',
         icon: 'fab fa-tiktok',
-        templateName: 'TikTokProfile'
+        templateName: 'TikTokProfile',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'focal_point',
+            preserveLogos: false,
+            prioritySubject: 'face',
+            minSubjectSize: 0.3,
+            maxPadding: 0.05,
+            tightCrop: true,
+            quality: 0.75,
+            format: 'jpg'
+        }
     },
     {
         id: 'tt-video',
         name: 'template.TikTokVideoCover',
         width: 1080,
-        height: 1920, // 9:16
+        height: 1920,
         platform: 'platform.tiktok',
         category: 'tiktok',
         icon: 'fas fa-video',
-        templateName: 'TikTokVideoCover'
+        templateName: 'TikTokVideoCover',
+        cropMode: 'smart',
+        cropConfig: {
+            useSmartCrop: true,
+            strategy: 'focal_point',
+            preserveLogos: false,
+            prioritySubject: 'face',
+            minSubjectSize: 0.3,
+            maxPadding: 0.05,
+            tightCrop: true,
+            quality: 0.75,
+            format: 'jpg'
+        }
     }
 ];
 
@@ -801,7 +1421,7 @@ export const EXPORT_FOLDERS = {
 };
 
 // ================================
-// Helper Functions
+// Helper Functions (Enhanced)
 // ================================
 
 /**
@@ -898,4 +1518,122 @@ export const getFaviconSizeArray = () => {
  */
 export const getFaviconSizes = () => {
     return FAVICON_SIZES;
+};
+
+/**
+ * Gets smart crop configuration for a template
+ * @param {Object} template - Template object
+ * @returns {Object} Smart crop configuration
+ */
+export const getTemplateSmartCropConfig = (template) => {
+    const category = template.category;
+    const defaultConfig = TEMPLATE_SMART_CROP_CONFIG;
+
+    return {
+        useSmartCrop: template.cropMode === 'smart',
+        strategy: template.cropConfig?.strategy || defaultConfig.DEFAULT_STRATEGIES[category] || 'ai_priority',
+        preserveLogos: template.cropConfig?.preserveLogos !== undefined
+            ? template.cropConfig.preserveLogos
+            : defaultConfig.PRESERVE_LOGOS[category] || true,
+        prioritySubject: template.cropConfig?.prioritySubject || defaultConfig.PRIORITY_SUBJECTS[category] || 'person',
+        minSubjectSize: template.cropConfig?.minSubjectSize || defaultConfig.MIN_SUBJECT_SIZE[category] || 0.15,
+        maxPadding: template.cropConfig?.maxPadding || defaultConfig.MAX_PADDING[category] || 0.15,
+        tightCrop: template.cropConfig?.tightCrop !== undefined
+            ? template.cropConfig.tightCrop
+            : defaultConfig.TIGHT_CROP[category] || false,
+        quality: template.cropConfig?.quality || defaultConfig.DEFAULT_QUALITY[category] || 0.85,
+        format: template.cropConfig?.format || defaultConfig.DEFAULT_FORMAT[category] || 'webp'
+    };
+};
+
+/**
+ * Gets processing options for a template
+ * @param {Object} template - Template object
+ * @param {Object} userOptions - User-provided options
+ * @returns {Object} Complete processing options
+ */
+export const getTemplateProcessingOptions = (template, userOptions = {}) => {
+    const cropConfig = getTemplateSmartCropConfig(template);
+
+    return {
+        ...userOptions,
+        cropMode: template.cropMode || 'smart',
+        cropPosition: 'center',
+        quality: cropConfig.quality,
+        format: cropConfig.format,
+        templateConfig: {
+            useAIDetection: template.cropMode === 'smart',
+            useLogoDetection: template.cropMode === 'smart' && cropConfig.preserveLogos,
+            ignoreLogos: !cropConfig.preserveLogos || cropConfig.tightCrop,
+            prioritySubject: cropConfig.prioritySubject,
+            minSubjectSize: cropConfig.minSubjectSize,
+            maxPadding: cropConfig.maxPadding,
+            tightCrop: cropConfig.tightCrop
+        }
+    };
+};
+
+/**
+ * Gets all templates with smart crop enabled
+ * @returns {Array} Templates with smart crop
+ */
+export const getSmartCropTemplates = () => {
+    return SOCIAL_MEDIA_TEMPLATES.filter(template => template.cropMode === 'smart');
+};
+
+/**
+ * Gets template by ID
+ * @param {string} templateId - Template ID
+ * @returns {Object|null} Template or null
+ */
+export const getTemplateById = (templateId) => {
+    // Check social media templates first
+    const socialMediaTemplate = SOCIAL_MEDIA_TEMPLATES.find(t => t.id === templateId);
+    if (socialMediaTemplate) return socialMediaTemplate;
+
+    // Check screenshot templates
+    const screenshotTemplate = SCREENSHOT_TEMPLATES[templateId];
+    if (screenshotTemplate) return screenshotTemplate;
+
+    return null;
+};
+
+/**
+ * Gets crop mode display name
+ * @param {string} cropMode - Crop mode
+ * @returns {string} Display name
+ */
+export const getCropModeDisplayName = (cropMode) => {
+    const modes = {
+        'smart': 'Smart Crop',
+        'center': 'Center Crop',
+        'standard': 'Standard Crop'
+    };
+    return modes[cropMode] || cropMode;
+};
+
+/**
+ * Gets strategy display name
+ * @param {string} strategy - Crop strategy
+ * @returns {string} Display name
+ */
+export const getStrategyDisplayName = (strategy) => {
+    const strategies = {
+        'ai_priority': 'AI Priority',
+        'logo_priority': 'Logo Priority',
+        'focal_point': 'Focal Point',
+        'hybrid': 'Hybrid',
+        'center': 'Center'
+    };
+    return strategies[strategy] || strategy;
+};
+
+// ================================
+// Export Settings
+// ================================
+
+export const EXPORT_SETTINGS = {
+    DEFAULT_ZIP_NAME_TEMPLATES: 'lemgendary-templates',
+    DEFAULT_ZIP_NAME_CUSTOM: 'lemgendary-custom',
+    DEFAULT_ZIP_NAME_SCREENSHOTS: 'lemgendary-screenshots'
 };

@@ -3,13 +3,25 @@ import {
     processLemGendaryCrop,
     processSmartCrop,
     processSimpleSmartCrop,
-    optimizeForWeb,
+    processLengendaryOptimize,
     processTemplateImages
 } from '../processors';
-import { safeCleanupGPUMemory } from '../utils';
+import { safeCleanupGPUMemory } from './memoryUtils';
+import {
+    URL_CONSTANTS,
+    PROCESSING_MODES,
+    CROP_MODES,
+    IMAGE_FORMATS
+} from '../constants';
+
+import { SCREENSHOT_TEMPLATES } from '../configs/templateConfigs';
 
 /**
  * Calculates percentage value
+ * @param {number} min - Minimum value
+ * @param {number} max - Maximum value
+ * @param {number} value - Current value
+ * @returns {number} Percentage value
  */
 export const calculatePercentage = (min, max, value) => {
     return ((value - min) / (max - min)) * 100;
@@ -17,6 +29,9 @@ export const calculatePercentage = (min, max, value) => {
 
 /**
  * Generates tick values for range sliders
+ * @param {number} min - Minimum value
+ * @param {number} max - Maximum value
+ * @returns {Array<number>} Array of tick values
  */
 export const generateTicks = (min, max) => {
     return [min, 25, 50, 75, max];
@@ -24,6 +39,9 @@ export const generateTicks = (min, max) => {
 
 /**
  * Debounce function
+ * @param {Function} func - Function to debounce
+ * @param {number} wait - Wait time in milliseconds
+ * @returns {Function} Debounced function
  */
 export const debounce = (func, wait) => {
     let timeout;
@@ -39,6 +57,9 @@ export const debounce = (func, wait) => {
 
 /**
  * Throttle function
+ * @param {Function} func - Function to throttle
+ * @param {number} limit - Limit time in milliseconds
+ * @returns {Function} Throttled function
  */
 export const throttle = (func, limit) => {
     let inThrottle;
@@ -54,7 +75,61 @@ export const throttle = (func, limit) => {
 };
 
 /**
- * Orchestrates custom image processing workflow.
+ * Normalizes a URL by ensuring it has a protocol
+ * @param {string} url - Raw URL input
+ * @returns {string} Normalized URL with protocol
+ */
+export const normalizeUrl = (url) => {
+    if (!url || url.trim() === '') {
+        return '';
+    }
+
+    let cleanUrl = url.trim();
+
+    if (cleanUrl.includes('localhost:5173/')) {
+        cleanUrl = cleanUrl.replace('localhost:5173/', '');
+    }
+
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+        cleanUrl = `${URL_CONSTANTS.DEFAULT_PROTOCOL}${cleanUrl}`;
+    }
+
+    cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
+    return cleanUrl;
+};
+
+/**
+ * Opens URL in new tab with security attributes
+ * @param {string} url - URL to open
+ */
+export const openUrlInNewTab = (url) => {
+    if (url && url.trim()) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
+};
+
+/**
+ * Cleans a URL for display or processing
+ * @param {string} url - URL to clean
+ * @returns {string} Cleaned URL
+ */
+export const cleanUrl = (url) => {
+    if (!url || url.trim() === '') {
+        return '';
+    }
+
+    let cleanUrl = url.trim();
+
+    if (cleanUrl.includes('localhost:5173/')) {
+        cleanUrl = cleanUrl.replace('localhost:5173/', '');
+    }
+
+    cleanUrl = cleanUrl.replace(/(https?:\/\/)\/+/g, '$1');
+    return cleanUrl;
+};
+
+/**
+ * Orchestrates custom image processing workflow
  * @async
  * @param {Array<Object>} images - Array of image objects to process
  * @param {Object} processingConfig - Processing configuration
@@ -70,7 +145,6 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
             let processedFile = image.file || image.blob;
 
             try {
-                // Step 1: Resize if needed
                 if (processingConfig.resize && processingConfig.resize.enabled) {
                     const resizeDimension = processingConfig.resize.dimension;
                     const resizeResults = await processLemGendaryResize(
@@ -87,11 +161,10 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                     }
                 }
 
-                // Step 2: Crop if needed (with AI support)
                 if (processingConfig.crop && processingConfig.crop.enabled) {
                     const { width, height, mode, position } = processingConfig.crop;
 
-                    if (mode === 'smart' && aiModelLoaded) {
+                    if (mode === CROP_MODES.SMART && aiModelLoaded) {
                         try {
                             processedFile = await processSmartCrop(
                                 processedFile,
@@ -99,12 +172,10 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                                 height,
                                 {
                                     quality: processingConfig.compression?.quality || 0.8,
-                                    format: 'webp'
+                                    format: IMAGE_FORMATS.WEBP
                                 }
                             );
                         } catch (aiError) {
-                            // Fallback to simple smart crop if AI fails
-                            console.warn('AI crop failed, falling back to simple smart crop:', aiError.message);
                             processedFile = await processSimpleSmartCrop(
                                 processedFile,
                                 width,
@@ -112,7 +183,7 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                                 position || 'center',
                                 {
                                     quality: processingConfig.compression?.quality || 0.8,
-                                    format: 'webp'
+                                    format: IMAGE_FORMATS.WEBP
                                 }
                             );
                         }
@@ -124,7 +195,7 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                             position || 'center',
                             {
                                 quality: processingConfig.compression?.quality || 0.8,
-                                format: 'webp'
+                                format: IMAGE_FORMATS.WEBP
                             }
                         );
 
@@ -134,11 +205,10 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                     }
                 }
 
-                // Step 3: Process output formats
-                const outputFormats = processingConfig.output?.formats || ['webp'];
+                const outputFormats = processingConfig.output?.formats || [IMAGE_FORMATS.WEBP];
 
                 for (const format of outputFormats) {
-                    if (format === 'original') {
+                    if (format === IMAGE_FORMATS.ORIGINAL) {
                         processedImages.push({
                             ...image,
                             file: image.file || image.blob,
@@ -148,7 +218,7 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                             isOriginal: true
                         });
                     } else {
-                        const optimizedFile = await optimizeForWeb(
+                        const optimizedFile = await processLengendaryOptimize(
                             processedFile,
                             processingConfig.compression?.quality || 0.8,
                             format
@@ -160,7 +230,6 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                                 fileName.split('.').pop() : format;
                             fileName = `${processingConfig.output.newFileName}-${String(i + 1).padStart(2, '0')}.${ext}`;
                         } else if (!fileName.includes(`.${format}`)) {
-                            // Add suffix indicating processing
                             let suffix = '';
                             if (processingConfig.resize?.enabled) {
                                 suffix += `-${processingConfig.resize.dimension}`;
@@ -193,7 +262,6 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                     }
                 }
 
-                // Cleanup GPU memory periodically
                 if (i % 3 === 0) {
                     await new Promise(resolve => setTimeout(resolve, 100));
                     safeCleanupGPUMemory();
@@ -209,18 +277,25 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
             }
         }
 
-        // Final cleanup
         safeCleanupGPUMemory();
-        return processedImages.filter(img => !img.error);
+        return processedImages;
 
     } catch (error) {
-        console.error('Error in orchestrateCustomProcessing:', error);
         throw error;
     }
 };
 
 /**
  * Orchestrates template processing
+ * @async
+ * @param {Object} selectedImage - Selected image object
+ * @param {Array<string>} selectedTemplateIds - Array of template IDs
+ * @param {Array<Object>} templateConfigs - Template configurations
+ * @param {boolean} useSmartCrop - Whether to use smart crop
+ * @param {boolean} aiModelLoaded - Whether AI model is loaded
+ * @param {Function} onProgress - Progress callback function
+ * @param {Object} processingOptions - Processing options
+ * @returns {Promise<Array<Object>>} Array of processed images
  */
 export const orchestrateTemplateProcessing = async (
     selectedImage,
@@ -254,12 +329,22 @@ export const orchestrateTemplateProcessing = async (
 
         const processedImages = [];
 
-        if (regularTemplates.length > 0) {
-            if (onProgress) onProgress('processing-regular-templates', 40);
+        // Handle screenshot templates
+        let screenshotTemplates = [];
+        if (includeScreenshots && processingOptions.selectedScreenshotTemplates && processingOptions.selectedScreenshotTemplates.length > 0) {
+            screenshotTemplates = processingOptions.selectedScreenshotTemplates
+                .map(id => SCREENSHOT_TEMPLATES[id])
+                .filter(t => t);
+        }
+
+        const allTemplates = [...regularTemplates, ...screenshotTemplates];
+
+        if (allTemplates.length > 0) {
+            if (onProgress) onProgress('processing-templates', 40);
 
             const templateImages = await processTemplateImages(
                 selectedImage,
-                regularTemplates,
+                allTemplates,
                 useSmartCrop,
                 aiModelLoaded,
                 processingOptions

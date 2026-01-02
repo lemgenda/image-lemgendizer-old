@@ -20,35 +20,18 @@ export const UI_CONSTANTS = {
     TEXT_TRUNCATE: {
         MAX_WIDTH: '20rem' // max-w-xs equivalent
     },
-    SPACING: {
-        XS: 'var(--space-xs)',
-        SM: 'var(--space-sm)',
-        MD: 'var(--space-md)',
-        LG: 'var(--space-lg)',
-        XL: 'var(--space-xl)'
-    },
     BORDER_RADIUS: {
         SM: 'var(--radius-sm)',
         MD: 'var(--radius-md)',
         LG: 'var(--radius-lg)',
         FULL: '9999px'
     }
+    // REMOVED: SPACING (duplicate - now using main SPACING export below)
 };
 
 // ================================
 // Image Processing Constants
 // ================================
-
-export const MAX_TEXTURE_SIZE = 16384;
-export const MAX_SAFE_DIMENSION = 4096;
-export const MAX_TOTAL_PIXELS = 16777216;
-export const MAX_TOTAL_PIXELS_FOR_AI = 8000000;
-export const MAX_SCALE_FACTOR = 4;
-export const MAX_PIXELS_FOR_SMART_SHARPENING = 4194304;
-export const MAX_DIMENSION_FOR_AI = 3000;
-export const LARGE_IMAGE_THRESHOLD = 4000000;
-export const MIN_IMAGE_SIZE = 1;
-export const MAX_IMAGE_SIZE = 10000000;
 
 export const SUPPORTED_INPUT_FORMATS = [
     'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
@@ -61,25 +44,7 @@ export const SUPPORTED_INPUT_FORMATS = [
 export const LEGACY_FORMATS = ['image/tiff', 'image/bmp', 'image/x-icon', 'image/vnd.microsoft.icon'];
 export const TIFF_FORMATS = ['image/tiff', 'image/tif', 'application/tif', 'application/tiff'];
 
-export const MAX_TEXTURE_FAILURES = 3;
-
-// ================================
-// AI/GPU Constants
-// ================================
-
-export const AVAILABLE_UPSCALE_FACTORS = [2, 3, 4, 8];
-export const TILE_SIZE = 2048;
-
-export const AI_SETTINGS = {
-    MIN_CONFIDENCE: 0.3,
-    FACE_DETECTION_ENABLED: true,
-    OBJECT_DETECTION_ENABLED: true,
-    DEFAULT_CROP_STRATEGY: 'balanced',
-    MAX_OBJECTS: 10,
-    MODEL_TYPE: 'lite_mobilenet_v2',
-    TENSORFLOW_VERSION: '4.10.0',
-    COCO_SSD_VERSION: '2.2.3'
-};
+// REMOVED: MAX_TEXTURE_FAILURES (duplicate - defined in imageConstants.js)
 
 // ================================
 // Performance Constants
@@ -118,7 +83,6 @@ export const COMPRESSION_QUALITY_RANGE = {
 // Format Constants
 // ================================
 
-export const DEFAULT_OUTPUT_FORMATS = ['webp'];
 
 export const OUTPUT_FORMATS = [
     { id: 'webp', name: 'WebP', description: 'Modern format with excellent compression' },
@@ -212,10 +176,23 @@ export const PROCESSING_MODES = {
 
 export const CROP_MODES = {
     SMART: 'smart',
-    STANDARD: 'standard'
+    STANDARD: 'standard',
+    CENTER: 'center'
 };
 
-export const CROP_POSITIONS = [
+export const CROP_POSITIONS = {
+    CENTER: 'center',
+    TOP_LEFT: 'top-left',
+    TOP: 'top',
+    TOP_RIGHT: 'top-right',
+    LEFT: 'left',
+    RIGHT: 'right',
+    BOTTOM_LEFT: 'bottom-left',
+    BOTTOM: 'bottom',
+    BOTTOM_RIGHT: 'bottom-right'
+};
+
+export const CROP_POSITION_LIST = [
     'center', 'top-left', 'top', 'top-right', 'left',
     'right', 'bottom-left', 'bottom', 'bottom-right'
 ];
@@ -232,6 +209,7 @@ export const MODAL_TYPES = {
     INFO: 'info',
     SUCCESS: 'success',
     ERROR: 'error',
+    WARNING: 'warning',
     SUMMARY: 'summary'
 };
 
@@ -252,14 +230,15 @@ export const DEFAULT_PROCESSING_CONFIG = {
     showCrop: false,
     showTemplates: false,
     selectedTemplates: [],
-    processingMode: 'custom',
+    processingMode: PROCESSING_MODES.CUSTOM,
     templateSelectedImage: null,
     smartCrop: false,
-    cropMode: 'smart',
-    cropPosition: 'center',
+    cropMode: CROP_MODES.SMART,
+    cropPosition: DEFAULT_CROP_POSITION,
     faviconSiteName: 'My Website',
     faviconThemeColor: '#ffffff',
-    faviconBackgroundColor: '#ffffff'
+    faviconBackgroundColor: '#ffffff',
+    faviconMode: 'basic'
 };
 
 export const EXPORT_SETTINGS = {
@@ -290,11 +269,6 @@ export const BROWSERLESS_BASE_URL = 'https://production-lon.browserless.io';
 
 export const API_TOKEN = '2TfpPHSu17r0zsSeb55ec0619d36b8451d9d39ca7c43a8a47';
 
-export const CACHE_CONFIG = {
-    LOCALSTORAGE_TTL: 7 * 24 * 60 * 60 * 1000,
-    MEMORY_TTL: 30 * 60 * 1000,
-    MAX_MEMORY_ENTRIES: 50
-};
 
 export const DEFAULT_SCREENSHOT_TIMEOUT = 45000;
 export const MAX_CONCURRENT_SCREENSHOTS = 2;
@@ -571,20 +545,6 @@ export const COLOR_DETECTION = {
     LUMINANCE_GREEN: 0.587,
     LUMINANCE_BLUE: 0.114,
     LIGHT_LUMINANCE_THRESHOLD: 0.5
-};
-
-// ================================
-// NEW CONSTANTS: AI Model weights
-// ================================
-
-export const AI_MODEL_WEIGHTS = {
-    SIZE_WEIGHT: 0.4,
-    CONFIDENCE_WEIGHT: 0.4,
-    CENTRALITY_WEIGHT: 0.2,
-    PERSON_CLASS_WEIGHT: 1.5,
-    FACE_CLASS_WEIGHT: 1.3,
-    ANIMAL_CLASS_WEIGHT: 1.2,
-    DEFAULT_CLASS_WEIGHT: 1.0
 };
 
 // ================================
