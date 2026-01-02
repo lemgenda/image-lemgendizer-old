@@ -297,7 +297,7 @@ export const processImagesForTemplates = async (images, templates, options = {})
         const imageResults = [];
 
         for (const template of templates) {
-            console.log(`[TemplateProcessor] Processing template: ${template.name}, cropMode: ${template.cropMode}`);
+
             try {
                 const croppedFile = await processTemplateSmartCrop(
                     image.file,
@@ -311,7 +311,7 @@ export const processImagesForTemplates = async (images, templates, options = {})
                     template.format || options.format || IMAGE_FORMATS.WEBP
                 );
 
-                console.log(`[TemplateProcessor] Template ${template.name} processed successfully`);
+
                 imageResults.push({
                     template: template.name,
                     description: template.description,
@@ -323,7 +323,7 @@ export const processImagesForTemplates = async (images, templates, options = {})
                 });
 
             } catch (error) {
-                console.error(`[TemplateProcessor] Template ${template.name} FAILED:`, error);
+
                 imageResults.push({
                     template: template.name,
                     description: template.description,
@@ -386,7 +386,6 @@ export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUA
         try {
             processedFile = await legacyConverter(imageFile);
         } catch (error) {
-            console.warn('Legacy conversion failed in processLengendaryOptimize:', error);
             if (isTIFF) {
                 processedFile = await createTIFFPlaceholderFile(imageFile);
             } else {

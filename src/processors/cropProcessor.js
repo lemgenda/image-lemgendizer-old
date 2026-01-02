@@ -1,3 +1,17 @@
+/**
+ * @fileoverview Image cropping processor with AI-powered smart crop functionality.
+ *
+ * This module provides advanced image cropping capabilities including:
+ * - AI-powered smart crop with subject detection
+ * - Logo-specific cropping with subject protection
+ * - Standard position-based cropping
+ * - SVG handling and conversion
+ * - Template-aware cropping for social media and web templates
+ *
+ * The smart crop functionality uses TensorFlow.js COCO-SSD model for object detection
+ * and implements intelligent subject prioritization with face detection support.
+ */
+
 import {
     CROP_MARGIN,
     SMART_CROP_CONFIG,
@@ -145,75 +159,56 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
     const isGIF = mimeType === 'image/gif' || FILE_EXTENSIONS.GIF.some(ext => fileName.endsWith(ext));
     const isICO = mimeType === 'image/x-icon' || mimeType === 'image/vnd.microsoft.icon' || FILE_EXTENSIONS.ICO.some(ext => fileName.endsWith(ext));
 
-    console.log(`[SmartCrop] Entered processSmartCrop for ${targetWidth}x${targetHeight}`);
     try {
         let processableFile = imageFile;
 
         if (isTIFF || isBMP || isGIF || isICO) {
             try {
-                console.log('[SmartCrop] Legacy format detected, converting...');
                 processableFile = await convertLegacyFormat(imageFile);
             } catch (convertError) {
-                console.warn('[SmartCrop] Legacy conversion failed, falling back to simple:', convertError);
+                // Conversion failed - fallback to simple crop with original file
                 return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
             }
         }
 
         const img = await loadImage(processableFile);
-        console.log(`[SmartCrop] Image loaded: ${img.width}x${img.height}`);
 
         const needsUpscaling = targetWidth > img.width || targetHeight > img.height;
         let sourceFile = processableFile;
 
         if (needsUpscaling) {
             const upscaleFactor = calculateUpscaleFactor(img.width, img.height, targetWidth, targetHeight);
-            console.log(`[SmartCrop] Needs upscaling: factor=${upscaleFactor}`);
             if (upscaleFactor > 1 && upscaleFactor <= MAX_SCALE_FACTOR) {
                 try {
                     sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
-                    console.log('[SmartCrop] AI Upscaling complete');
                 } catch (upscaleError) {
-                    console.warn('[SmartCrop] AI Upscaling failed, falling back to standard resize:', upscaleError);
+                    // Intentionally ignore - continue with non-upscaled image if AI upscaling fails
                 }
             }
         }
 
         // RESIZE: Create a canvas that COVERS the target dimensions
         const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight);
-        console.log(`[SmartCrop] Resized source created: ${resized.width}x${resized.height}`);
 
         let model = aiModel;
         if (!model) {
             try {
-                console.log('[SmartCrop] Loading AI Model...');
                 model = await loadAIModel();
                 aiModel = model;
-                console.log('[SmartCrop] AI Model loaded successfully');
             } catch (modelError) {
-                console.error('[SmartCrop] AI Model loading FAILED:', modelError);
                 model = null;
             }
         }
 
         const templateConfig = options.templateConfig || {};
-        // Default to true if not explicitly false
         const useAIDetection = templateConfig.useAIDetection !== false && model !== null;
         const useLogoDetection = options.isLogo === true && model !== null;
-
-        console.log('[SmartCrop] Config:', {
-            useAIDetection,
-            modelExists: !!model,
-            isLogo: options.isLogo,
-            templateConfig
-        });
 
         let logos = [];
         if (useLogoDetection) {
             try {
                 logos = await detectLogos(resized.element, resized.width, resized.height, model);
-                console.log(`[SmartCrop] Detected ${logos.length} logos`);
             } catch (logoError) {
-                console.warn('[SmartCrop] Logo detection failed:', logoError);
             }
         }
 
@@ -224,15 +219,15 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
         const currentStrategy = (SMART_CROP_CONFIG.DEFAULT_STRATEGY || 'ai_priority').toLowerCase();
 
         if (logos.length > 0 && useLogoDetection) {
-            console.log('[SmartCrop] Proceeding with Logo-based crop');
+
             const primaryLogo = logos[0];
             croppedFile = await cropFromResized(resized, targetWidth, targetHeight, primaryLogo, imageFile, logos);
             mainSubject = primaryLogo;
         }
         else if (useAIDetection && currentStrategy !== 'focal_point') {
-            console.log(`[SmartCrop] Proceeding with AI-based crop (Strategy: ${currentStrategy})`);
+
             try {
-                console.log('[SmartCrop] Starting AI Detection...');
+
                 // Determine if we need to downscale for AI detection efficiency
                 const isResizedTooLargeForAI = (resized.width * resized.height > MAX_TOTAL_PIXELS_FOR_AI) ||
                     (resized.width > MAX_DIMENSION_FOR_AI) ||
@@ -244,7 +239,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
                 if (isResizedTooLargeForAI) {
                     const maxAIdim = MAX_DIMENSION_FOR_AI || 1500;
                     detectionScale = Math.min(maxAIdim / resized.width, maxAIdim / resized.height);
-                    console.log(`[SmartCrop] Downscaling for AI: scale=${detectionScale}`);
+
 
                     const dCanvas = document.createElement('canvas');
                     dCanvas.width = Math.round(resized.width * detectionScale);
@@ -255,7 +250,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
                 }
 
                 let predictions = await model.detect(detectionElement);
-                console.log(`[SmartCrop] AI detected ${predictions.length} objects`);
+
 
                 // Scale predictions back to resized canvas space if we downscaled for detection
                 if (detectionScale !== 1 && predictions.length > 0) {
@@ -280,41 +275,41 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
                 }
 
                 mainSubject = findMainSubject(predictions, resized.width, resized.height);
-                console.log('[SmartCrop] Main subject:', mainSubject ? `${mainSubject.class} (${mainSubject.category})` : 'NONE FOUND');
+
 
                 if (mainSubject) {
                     if (SMART_CROP_CONFIG.USE_FACIAL_FEATURES &&
                         (mainSubject.category === 'face' || mainSubject.category === 'facial_feature')) {
-                        console.log('[SmartCrop] Cropping with Main Subject (Face/Feature)');
+
                         croppedFile = await cropFromResized(resized, targetWidth, targetHeight, mainSubject, imageFile, logos);
                     }
                     else if (SMART_CROP_CONFIG.DEFAULT_STRATEGY === 'ai_priority' || SMART_CROP_CONFIG.DEFAULT_STRATEGY === 'hybrid') {
-                        console.log('[SmartCrop] Cropping with Main Subject (AI Priority/Hybrid)');
+
                         croppedFile = await cropFromResized(resized, targetWidth, targetHeight, mainSubject, imageFile, logos);
                     } else {
                         // Fallback focal point
-                        console.log('[SmartCrop] Falling back to focal point (Strategy mismatch)');
+
                         focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
                         croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, logos);
                     }
                 } else {
-                    console.log('[SmartCrop] No main subject found, using focal point fallback');
+
                     focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
                     croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, logos);
                 }
             } catch (aiError) {
-                console.warn('[SmartCrop] AI Smart crop failed internally, falling back to focal point:', aiError);
+
                 focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
                 croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, logos);
             }
         } else {
-            console.log(`[SmartCrop] Skipping AI detection: useAIDetection=${useAIDetection}, model=${!!model}`);
+
             focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
             croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, logos);
         }
         return croppedFile;
     } catch (error) {
-        console.error('[SmartCrop] CRITICAL ERROR in processSmartCrop:', error);
+
         return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, CROP_MODES.SMART, options);
     }
 };
@@ -343,12 +338,6 @@ export const processTemplateSmartCrop = async (imageFile, template, options = {}
         minSubjectSize: template.minSubjectSize || 0.1,
         maxPadding: template.maxPadding || 0.2
     };
-
-    console.log(`[TemplateSmartCrop] Prepared for ${template.name}:`, {
-        cropMode: template.cropMode,
-        isSmartMode,
-        useAIDetection: templateConfig.useAIDetection
-    });
 
     const mergedOptions = {
         ...options,
@@ -514,7 +503,7 @@ export const processStandardCrop = async (imageFile, targetWidth, targetHeight, 
             try {
                 processableFile = await convertLegacyFormat(imageFile);
             } catch (e) {
-                console.warn('Legacy conversion failed for standard crop:', e);
+                // Intentionally ignore - continue with original file if conversion fails
             }
         }
 
@@ -987,11 +976,7 @@ const findMainSubject = (predictions, imgWidth, imgHeight) => {
         };
     });
     scoredPredictions.sort((a, b) => b.score - a.score);
-    if (scoredPredictions.length > 0) {
-        console.log('[SmartCrop] Best subjects:', scoredPredictions.slice(0, 3).map(p =>
-            `${p.class} (${(p.score).toFixed(3)})${p.score > 0.5 ? ' 🔥' : ''}`
-        ).join(', '));
-    }
+
     return scoredPredictions[0] || null;
 };
 
@@ -1165,12 +1150,12 @@ export const processSmartCropForLogo = async (imageFile, targetWidth, targetHeig
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
     const isSVG = isSVGFile(imageFile);
 
-    console.log(`[LogoCrop] Starting logo crop for ${targetWidth}x${targetHeight}`);
+
 
     // Special handling for SVG logos - preserve them as-is with proper scaling
     if (isSVG) {
         try {
-            console.log('[LogoCrop] SVG detected, using special SVG logo crop');
+
             const svgDimensions = await getSVGDimensions(imageFile);
             const svgAspectRatio = svgDimensions.width / svgDimensions.height;
             const targetAspectRatio = targetWidth / targetHeight;
@@ -1225,7 +1210,7 @@ export const processSmartCropForLogo = async (imageFile, targetWidth, targetHeig
 
             return new File([blob], fileName.replace(/\.svg$/i, `.png`), { type: MIME_TYPE_MAP.png });
         } catch (svgError) {
-            console.warn('[LogoCrop] SVG processing failed, falling back:', svgError);
+
             return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
         }
     }
@@ -1241,38 +1226,38 @@ export const processSmartCropForLogo = async (imageFile, targetWidth, targetHeig
 
         if (isTIFF || isBMP || isGIF || isICO) {
             try {
-                console.log('[LogoCrop] Legacy format detected, converting...');
+
                 processableFile = await convertLegacyFormat(imageFile);
             } catch (convertError) {
-                console.warn('[LogoCrop] Legacy conversion failed:', convertError);
+                // Conversion failed - fallback to simple crop with original file
                 return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
             }
         }
 
         const img = await loadImage(processableFile);
-        console.log(`[LogoCrop] Image loaded: ${img.width}x${img.height}`);
+
 
         // Load AI model for subject detection
         let model = aiModel;
         if (!model) {
             try {
-                console.log('[LogoCrop] Loading AI Model for subject detection...');
+
                 model = await loadAIModel();
                 aiModel = model;
-                console.log('[LogoCrop] AI Model loaded successfully');
+
             } catch (modelError) {
-                console.warn('[LogoCrop] AI Model loading failed, using center crop:', modelError);
+                // AI model loading failed - fallback to simple crop
                 return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
             }
         }
 
         // Detect subject bounds
         try {
-            console.log('[LogoCrop] Detecting subject for protective padding...');
+
             const detections = await model.detect(img);
 
             if (!detections || detections.length === 0) {
-                console.log('[LogoCrop] No subject detected, using full image with fit-to-contain');
+
                 // No subject detected - fit entire image within target dimensions
                 return await fitImageToContain(processableFile, targetWidth, targetHeight, options);
             }
@@ -1292,7 +1277,7 @@ export const processSmartCropForLogo = async (imageFile, targetWidth, targetHeig
             const subjectCenterX = minX + subjectWidth / 2;
             const subjectCenterY = minY + subjectHeight / 2;
 
-            console.log(`[LogoCrop] Subject bounds: ${subjectWidth.toFixed(0)}x${subjectHeight.toFixed(0)} at (${subjectCenterX.toFixed(0)}, ${subjectCenterY.toFixed(0)})`);
+
 
             // Add protective padding (20% on each side)
             const paddingRatio = LOGO_DETECTION_CONFIG.PROTECTIVE_PADDING || 0.2;
@@ -1329,11 +1314,11 @@ export const processSmartCropForLogo = async (imageFile, targetWidth, targetHeig
             cropX = Math.max(0, Math.min(cropX, img.width - cropWidth));
             cropY = Math.max(0, Math.min(cropY, img.height - cropHeight));
 
-            console.log(`[LogoCrop] Crop area: ${cropWidth.toFixed(0)}x${cropHeight.toFixed(0)} at (${cropX.toFixed(0)}, ${cropY.toFixed(0)})`);
+
 
             // If crop area matches image size, just resize
             if (cropWidth >= img.width * 0.95 && cropHeight >= img.height * 0.95) {
-                console.log('[LogoCrop] Crop area covers full image, using fit-to-contain');
+
                 return await fitImageToContain(processableFile, targetWidth, targetHeight, options);
             }
 
@@ -1360,16 +1345,16 @@ export const processSmartCropForLogo = async (imageFile, targetWidth, targetHeig
             const extension = format === IMAGE_FORMATS.PNG ? 'png' : 'webp';
             const outputFileName = fileName.replace(/\.[^.]+$/, `-logo-${targetWidth}x${targetHeight}.${extension}`);
 
-            console.log('[LogoCrop] Logo crop successful with subject protection');
+
             return new File([blob], outputFileName, { type: blob.type });
 
         } catch (detectionError) {
-            console.warn('[LogoCrop] Subject detection failed, using fit-to-contain:', detectionError);
+
             return await fitImageToContain(processableFile, targetWidth, targetHeight, options);
         }
 
     } catch (error) {
-        console.error('[LogoCrop] Logo crop failed:', error);
+
         return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
     }
 };

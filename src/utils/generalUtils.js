@@ -268,7 +268,6 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                 }
 
             } catch (error) {
-                console.error(`Error processing image ${image.name}:`, error);
                 processedImages.push({
                     ...image,
                     error: error.message,

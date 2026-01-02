@@ -16,12 +16,6 @@ export const handleProcessingError = (error, t) => {
     const errorMessage = error.message.toLowerCase();
     const errorStack = error.stack?.toLowerCase() || '';
 
-    // Log the full error for debugging purposes
-    console.group('Processing Error Diagnosis');
-    console.error('Raw Error:', error);
-    console.error('Message:', error.message);
-    console.groupEnd();
-
     if (/\bai\b/.test(errorMessage) || errorMessage.includes('model') ||
         errorMessage.includes('tensor') || errorMessage.includes('upscaler')) {
         return {
