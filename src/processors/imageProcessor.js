@@ -349,7 +349,7 @@ export const processImagesForTemplates = async (images, templates, options = {})
  * @param {string} format - Output format
  * @returns {Promise<File>} Optimized image file
  */
-export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUALITY, format = IMAGE_FORMATS.WEBP) => {
+export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUALITY, format = IMAGE_FORMATS.WEBP, targetSize = null) => {
     if (!imageFile || typeof imageFile !== 'object') {
         throw new Error(ERROR_MESSAGES.INVALID_IMAGE_FILE);
     }
@@ -422,7 +422,7 @@ export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUA
             reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
         }, 10000);
 
-        img.onload = () => {
+        img.onload = async () => {
             clearTimeout(timeout);
 
             try {
@@ -445,19 +445,19 @@ export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUA
                 ctx.drawImage(img, 0, 0);
 
                 let mimeType, extension;
-                let targetQuality = quality;
+                let currentQuality = quality;
 
                 switch (format.toLowerCase()) {
                     case IMAGE_FORMATS.JPG:
                     case IMAGE_FORMATS.JPEG:
                         mimeType = MIME_TYPE_MAP.jpg;
                         extension = 'jpg';
-                        targetQuality = DEFAULT_JPG_QUALITY;
+                        currentQuality = quality === 1 ? quality : Math.min(quality, DEFAULT_JPG_QUALITY);
                         break;
                     case IMAGE_FORMATS.PNG:
                         mimeType = MIME_TYPE_MAP.png;
                         extension = 'png';
-                        targetQuality = undefined;
+                        currentQuality = undefined;
                         break;
                     case IMAGE_FORMATS.WEBP:
                         mimeType = MIME_TYPE_MAP.webp;
@@ -477,17 +477,45 @@ export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUA
                         extension = 'webp';
                 }
 
-                canvas.toBlob((blob) => {
-                    URL.revokeObjectURL(objectUrl);
-                    if (!blob) {
-                        reject(new Error(PROCESSING_ERRORS.BLOB_CREATION_FAILED));
-                        return;
+                const tryCompress = (q) => {
+                    return new Promise((res) => {
+                        canvas.toBlob((blob) => res(blob), mimeType, q);
+                    });
+                };
+
+                let bestBlob = await tryCompress(currentQuality);
+
+                // Iterative quality reduction if targetSize is specified and format supports quality
+                if (targetSize && currentQuality !== undefined && bestBlob && (bestBlob.size / 1024) > targetSize) {
+                    const minQuality = 0.1;
+                    const steps = 8;
+                    let lastQuality = currentQuality;
+
+                    for (let i = 1; i <= steps; i++) {
+                        const nextQuality = currentQuality - (i * (currentQuality - minQuality) / steps);
+                        if (nextQuality <= 0) break;
+
+                        const newBlob = await tryCompress(nextQuality);
+                        if (!newBlob) break;
+
+                        bestBlob = newBlob;
+                        lastQuality = nextQuality;
+
+                        if ((newBlob.size / 1024) <= targetSize) {
+                            break;
+                        }
                     }
-                    const originalName = imageFile.name || 'image';
-                    const baseName = originalName.replace(/\.[^/.]+$/, '');
-                    const newName = `${baseName}.${extension}`;
-                    resolve(new File([blob], newName, { type: mimeType }));
-                }, mimeType, targetQuality);
+                }
+
+                URL.revokeObjectURL(objectUrl);
+                if (!bestBlob) {
+                    reject(new Error(PROCESSING_ERRORS.BLOB_CREATION_FAILED));
+                    return;
+                }
+                const originalName = imageFile.name || 'image';
+                const baseName = originalName.replace(/\.[^/.]+$/, '');
+                const newName = `${baseName}.${extension}`;
+                resolve(new File([bestBlob], newName, { type: mimeType }));
 
             } catch (error) {
                 URL.revokeObjectURL(objectUrl);
@@ -502,7 +530,7 @@ export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUA
             if (isTIFF) {
                 createTIFFPlaceholderFile(imageFile)
                     .then((placeholderFile) => {
-                        processLengendaryOptimize(placeholderFile, quality, format)
+                        processLengendaryOptimize(placeholderFile, quality, format, targetSize)
                             .then(resolve)
                             .catch(() => {
                                 resolve(placeholderFile);

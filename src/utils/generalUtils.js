@@ -221,7 +221,8 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                         const optimizedFile = await processLengendaryOptimize(
                             processedFile,
                             processingConfig.compression?.quality || 0.8,
-                            format
+                            format,
+                            processingConfig.compression?.targetSize
                         );
 
                         let fileName = image.name;

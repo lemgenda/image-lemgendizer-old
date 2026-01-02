@@ -66,9 +66,17 @@ import {
   RangeSliderElement,
   ScreenShotsCard,
   UploadGallerySection,
-  TemplateImageSection
+  TemplateImageSection,
+  FormatSelectionCard,
+  QualityControlsCard,
+  ResizeCropCard,
+  TemplateSelectionCard,
+  CustomProcessingTab,
+  TemplateProcessingTab,
+  TabPanel
 } from './components';
 import './styles/App.css';
+import './styles/TabPanel.css';
 
 /**
  * Main application component
@@ -709,6 +717,16 @@ function App() {
   };
 
   /**
+   * Translates template name
+   * @param {string} name - Template name or translation key
+   * @param {Function} tFunc - Translation function
+   * @returns {string} Translated name
+   */
+  const getTranslatedTemplateName = (name, tFunc) => {
+    return tFunc(name, { defaultValue: name });
+  };
+
+  /**
    * Handles template toggle
    * @param {string} templateId - Template ID
    */
@@ -1245,796 +1263,265 @@ function App() {
   const templateSelectedImageObj = images.find(img => img.id === processingOptions.templateSelectedImage);
 
   return (
-    <div className="app">
-      {isLoading && (
-        <div className="loading-overlay">
-          <div className="loading-spinner">
-            {isScreenshotSelected ? (
-              <>
-                <i className="fas fa-camera fa-spin fa-3x"></i>
-                <p>{t('loading.capturingScreenshots')}</p>
-                <p className="text-muted text-sm mt-2">
-                  {t('loading.screenshotProcess')}
-                </p>
-              </>
-            ) : (
-              <>
-                <i className="fas fa-spinner fa-spin fa-3x"></i>
-                <p>{t('loading.preparing')}</p>
-                <p className="text-muted text-sm mt-2">
-                  {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && aiModelLoaded
-                    ? t('loading.aiCropping')
-                    : t('loading.upscalingWhenNeeded')}
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+    <ErrorBoundary t={t}>
+      <div className="app-container">
+        <HeaderSection />
 
-      {aiLoading && (
-        <div className="loading-overlay">
-          <div className="loading-spinner">
-            <i className="fas fa-brain fa-spin fa-3x"></i>
-            <p>{t('loading.aiModel')}</p>
-            <p className="text-muted">{t('loading.oncePerSession')}</p>
-            <p className="text-sm mt-2">
-              {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
-                ? t('loading.aiForTemplates')
-                : t('loading.aiForSmartCrop')}
-            </p>
-          </div>
-        </div>
-      )}
+        <main className="app-main">
+          <UploadSection
+            onImagesSelected={handleImageUpload}
+            onImagesAdded={handleImageUpload}
+            isScreenshotMode={isScreenshotMode}
+          />
 
-      <HeaderSection />
+          {images.length > 0 && (
+            <div className="processing-section animate-fade-in">
+              <UploadGallerySection
+                images={images}
+                selectedImages={selectedImages}
+                onImageSelect={handleImageSelect}
+                onRemoveSelected={handleRemoveSelected}
+                onSelectAll={handleSelectAll}
+              />
 
-      <main className="main-content">
-        <UploadSection
-          onUpload={handleImageUpload}
-          fileInputRef={fileInputRef}
-        />
+              <div className="processing-modes-tabs mt-xl">
+                <TabPanel
+                  tabs={[
+                    { id: PROCESSING_MODES.CUSTOM, label: t('mode.custom'), description: t('mode.customInfo') },
+                    { id: PROCESSING_MODES.TEMPLATES, label: t('mode.templates'), description: t('mode.templatesInfo') }
+                  ]}
+                  activeTab={processingOptions.processingMode}
+                  onTabChange={(id) => setProcessingOptions(prev => ({ ...prev, processingMode: id }))}
+                />
 
-        {images.length > 0 && (
-          <>
-            <div className="card">
-              <div className="card-header">
-                <h2 className="card-title">
-                  <i className="fas fa-sliders-h"></i> {t('mode.title')}
-                </h2>
-                <div className="card-actions">
-                  <button
-                    className={`btn ${processingOptions.processingMode === PROCESSING_MODES.CUSTOM ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-                    onClick={() => toggleProcessingMode('custom')}
-                  >
-                    <i className="fas fa-sliders-h"></i> {t('mode.custom')}
-                  </button>
-                  <button
-                    className={`btn ${processingOptions.processingMode === PROCESSING_MODES.TEMPLATES ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-                    onClick={() => toggleProcessingMode('templates')}
-                  >
-                    <i className="fas fa-th-large"></i> {t('mode.templates')}
-                  </button>
-                </div>
-              </div>
-
-              <div className="alert alert-info">
-                <i className="fas fa-info-circle"></i>
-                {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
-                  ? t('mode.templatesInfo')
-                  : t('mode.customInfo')
-                }
-              </div>
-
-              {processingOptions.processingMode === PROCESSING_MODES.CUSTOM ? (
-                <>
-                  <div className="grid grid-cols-auto gap-lg mb-lg">
-                    <div className="card">
-                      <h3 className="card-title">
-                        <i className="fas fa-compress"></i> {t('compression.title')}
-                      </h3>
-                      <div className="form-group">
-                        <div className="range-wrapper">
-                          <RangeSliderElement
-                            label={t('compression.quality')}
-                            min={COMPRESSION_QUALITY_RANGE.MIN}
-                            max={COMPRESSION_QUALITY_RANGE.MAX}
-                            value={processingOptions.compression.quality}
-                            onChange={(val) =>
-                              handleOptionChange('compression', 'quality', val)
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">{t('compression.targetSize')}</label>
-                        <div className="number-input-wrapper">
-                          <input
-                            type="number"
-                            className="input-field"
-                            value={processingOptions.compression.fileSize}
-                            onChange={(e) => handleOptionChange('compression', 'fileSize', e.target.value)}
-                            placeholder={t('compression.auto')}
-                            min={NUMBER_INPUT_CONSTANTS.MIN_VALUE}
-                          />
-                          <div className="number-input-spinner">
-                            <button
-                              type="button"
-                              className="number-input-button"
-                              onClick={() => handleOptionChange('compression', 'fileSize', String(parseInt(processingOptions.compression.fileSize || 0) + NUMBER_INPUT_CONSTANTS.LARGE_INCREMENT))}
-                            >
-                              <i className="fas fa-chevron-up"></i>
-                            </button>
-                            <button
-                              type="button"
-                              className="number-input-button"
-                              onClick={() => handleOptionChange('compression', 'fileSize', String(Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, parseInt(processingOptions.compression.fileSize || 10) - NUMBER_INPUT_CONSTANTS.LARGE_INCREMENT)))}>
-                              <i className="fas fa-chevron-down"></i>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="card">
-                      <h3 className="card-title">
-                        <i className="fas fa-file-export"></i> {t('output.title')}
-                      </h3>
-
-                      <div className="form-group">
-                        <label className="form-label">{t('output.format')}</label>
-                        <div className="space-y-sm mb-md">
-                          <div className="grid grid-cols-2 gap-sm">
-                            <label className="checkbox-wrapper">
-                              <input
-                                type="checkbox"
-                                className="checkbox-input"
-                                checked={processingOptions.output.formats.includes(IMAGE_FORMATS.WEBP)}
-                                onChange={() => handleFormatToggle(IMAGE_FORMATS.WEBP)}
-                              />
-                              <span className="checkbox-custom"></span>
-                              <span className="checkbox-label">
-                                {t('output.format.webp')}
-                              </span>
-                            </label>
-                            <label className="checkbox-wrapper">
-                              <input
-                                type="checkbox"
-                                className="checkbox-input"
-                                checked={processingOptions.output.formats.includes(IMAGE_FORMATS.AVIF)}
-                                onChange={() => handleFormatToggle(IMAGE_FORMATS.AVIF)}
-                              />
-                              <span className="checkbox-custom"></span>
-                              <span className="checkbox-label">
-                                {t('output.format.avif')}
-                              </span>
-                            </label>
-                            <label className="checkbox-wrapper">
-                              <input
-                                type="checkbox"
-                                className="checkbox-input"
-                                checked={processingOptions.output.formats.includes(IMAGE_FORMATS.JPG)}
-                                onChange={() => handleFormatToggle(IMAGE_FORMATS.JPG)}
-                              />
-                              <span className="checkbox-custom"></span>
-                              <span className="checkbox-label">{t('output.format.jpg')}</span>
-                            </label>
-                            <label className="checkbox-wrapper">
-                              <input
-                                type="checkbox"
-                                className="checkbox-input"
-                                checked={processingOptions.output.formats.includes(IMAGE_FORMATS.PNG)}
-                                onChange={() => handleFormatToggle(IMAGE_FORMATS.PNG)}
-                              />
-                              <span className="checkbox-custom"></span>
-                              <span className="checkbox-label">{t('output.format.png')}</span>
-                            </label>
-                            <label className="checkbox-wrapper">
-                              <input
-                                type="checkbox"
-                                className="checkbox-input"
-                                checked={processingOptions.output.formats.includes(IMAGE_FORMATS.ORIGINAL)}
-                                onChange={() => handleFormatToggle(IMAGE_FORMATS.ORIGINAL)}
-                              />
-                              <span className="checkbox-custom"></span>
-                              <span className="checkbox-label">{t('output.format.original')}</span>
-                            </label>
-                          </div>
-
-                          <div className="flex flex-col gap-xs mt-sm">
-                            <button
-                              className="btn btn-secondary btn-xs"
-                              onClick={handleSelectAllFormats}
-                            >
-                              <i className="fas fa-check-square"></i> {t('output.selectAll')}
-                            </button>
-                            <button
-                              className="btn btn-secondary btn-xs"
-                              onClick={handleClearAllFormats}
-                            >
-                              <i className="fas fa-times-circle"></i> {t('output.clearAll')}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="form-group">
-                        <label className="checkbox-wrapper">
-                          <input
-                            type="checkbox"
-                            className="checkbox-input"
-                            checked={processingOptions.output.rename}
-                            onChange={(e) => handleOptionChange('output', 'rename', e.target.checked)}
-                          />
-                          <span className="checkbox-custom"></span>
-                          <span>{t('output.rename')}</span>
-                        </label>
-                      </div>
-                      {processingOptions.output.rename && (
-                        <div className="form-group">
-                          <label className="form-label">{t('output.newFileName')}</label>
-                          <input
-                            type="text"
-                            className="input-field"
-                            value={processingOptions.output.newFileName}
-                            onChange={(e) => handleOptionChange('output', 'newFileName', e.target.value)}
-                            placeholder={t('output.newFileName.placeholder')}
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="card">
-                      <h3 className="card-title">
-                        {processingOptions.showResize ? (
-                          <>
-                            <i className="fas fa-expand-alt"></i> {t('resize.title')}
-                          </>
-                        ) : (
-                          <>
-                            <i className="fas fa-crop-alt"></i> {processingOptions.cropMode === CROP_MODES.SMART ? t('crop.switchToSmart') : t('crop.switchToStandard')}
-                          </>
-                        )}
-                      </h3>
-                      <div className="mb-md">
-                        <button
-                          className="btn btn-secondary btn-full-width"
-                          onClick={toggleResizeCrop}
-                        >
-                          {processingOptions.showResize ? (
-                            <>
-                              <i className="fas fa-crop"></i> {t('resize.switchToCrop')}
-                            </>
-                          ) : (
-                            <>
-                              <i className="fas fa-expand-alt"></i> {t('resize.switchToResize')}
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {processingOptions.showResize ? (
-                        <div className="form-group">
-                          <label className="form-label">{t('resize.dimension')}</label>
-                          <div className="number-input-wrapper">
-                            <input
-                              type="number"
-                              className="input-field"
-                              value={processingOptions.resizeDimension}
-                              onChange={(e) => handleSingleOptionChange('resizeDimension', e.target.value)}
-                              placeholder={`e.g., ${RESIZE_DIMENSION_RANGE.DEFAULT}`}
-                              min={RESIZE_DIMENSION_RANGE.MIN}
-                              max={RESIZE_DIMENSION_RANGE.MAX}
-                            />
-                            <div className="number-input-spinner">
-                              <button
-                                type="button"
-                                className="number-input-button"
-                                onClick={() => incrementValue('resizeDimension', NUMBER_INPUT_CONSTANTS.LARGE_INCREMENT)}
-                              >
-                                <i className="fas fa-chevron-up"></i>
-                              </button>
-                              <button
-                                type="button"
-                                className="number-input-button"
-                                onClick={() => decrementValue('resizeDimension', NUMBER_INPUT_CONSTANTS.LARGE_INCREMENT)}
-                              >
-                                <i className="fas fa-chevron-down"></i>
-                              </button>
-                            </div>
-                          </div>
-                          <p className="form-helper">
-                            {t('resize.helper')}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-md">
-                          <div className="form-group">
-                            <div className="toggle-btn">
-                              <button
-                                type="button"
-                                className={`btn ${processingOptions.cropMode === CROP_MODES.SMART ? 'btn-primary' : 'btn-secondary'}`}
-                                onClick={toggleCropMode}
-                                disabled={aiLoading}
-                              >
-                                {processingOptions.cropMode === CROP_MODES.SMART ? (
-                                  <>
-                                    <i className="fas fa-crop-alt"></i> {t('crop.switchToStandard')}
-                                    {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
-                                  </>
-                                ) : (
-                                  <>
-                                    <i className="fas fa-brain"></i> {t('crop.switchToSmart')}
-                                    {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                            {processingOptions.cropMode === CROP_MODES.SMART && (
-                              <p className="text-sm text-muted mt-sm">
-                                <i className="fas fa-info-circle mr-1"></i>
-                                {t('crop.smartBest')}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-md">
-                            <div className="form-group">
-                              <label className="form-label">{t('crop.width')}</label>
-                              <div className="number-input-wrapper">
-                                <input
-                                  type="number"
-                                  className="input-field"
-                                  value={processingOptions.cropWidth}
-                                  onChange={(e) => handleSingleOptionChange('cropWidth', e.target.value)}
-                                  placeholder={`Width (${CROP_DIMENSION_RANGE.DEFAULT_WIDTH})`}
-                                  min={CROP_DIMENSION_RANGE.MIN}
-                                  max={CROP_DIMENSION_RANGE.MAX}
-                                  disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
-                                />
-                                <div className="number-input-spinner">
-                                  <button
-                                    type="button"
-                                    className="number-input-button"
-                                    onClick={() => incrementValue('cropWidth')}
-                                    disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
-                                  >
-                                    <i className="fas fa-chevron-up"></i>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="number-input-button"
-                                    onClick={() => decrementValue('cropWidth')}
-                                    disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
-                                  >
-                                    <i className="fas fa-chevron-down"></i>
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="form-group">
-                              <label className="form-label">{t('crop.height')}</label>
-                              <div className="number-input-wrapper">
-                                <input
-                                  type="number"
-                                  className="input-field"
-                                  value={processingOptions.cropHeight}
-                                  onChange={(e) => handleSingleOptionChange('cropHeight', e.target.value)}
-                                  placeholder={`Height (${CROP_DIMENSION_RANGE.DEFAULT_HEIGHT})`}
-                                  min={CROP_DIMENSION_RANGE.MIN}
-                                  max={CROP_DIMENSION_RANGE.MAX}
-                                  disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
-                                />
-                                <div className="number-input-spinner">
-                                  <button
-                                    type="button"
-                                    className="number-input-button"
-                                    onClick={() => incrementValue('cropHeight')}
-                                    disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
-                                  >
-                                    <i className="fas fa-chevron-up"></i>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="number-input-button"
-                                    onClick={() => decrementValue('cropHeight')}
-                                    disabled={aiLoading && processingOptions.cropMode === CROP_MODES.SMART}
-                                  >
-                                    <i className="fas fa-chevron-down"></i>
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {processingOptions.cropMode === CROP_MODES.STANDARD && (
-                            <div className="form-group">
-                              <label className="form-label">{t('crop.position')}</label>
-                              <select
-                                value={processingOptions.cropPosition}
-                                onChange={(e) => handleSingleOptionChange('cropPosition', e.target.value)}
-                                className="select-field"
-                              >
-                                {CROP_POSITION_LIST.map(position => (
-                                  <option key={position} value={position}>
-                                    {t(`crop.position.${position}`)}
-                                  </option>
-                                ))}
-                              </select>
-                              <p className="form-helper">
-                                {t('crop.helper')}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="text-center">
-                    <button
-                      className="btn btn-primary btn-lg"
-                      disabled={selectedImagesForProcessing.length === 0 || isLoading || (processingOptions.cropMode === CROP_MODES.SMART && aiLoading) || !processingOptions.output.formats || processingOptions.output.formats.length === 0}
-                      onClick={processCustomImages}
-                    >
-                      {isLoading ? (
-                        <>
-                          <i className="fas fa-spinner fa-spin"></i> {t('button.processing')}
-                        </>
-                      ) : processingOptions.cropMode === CROP_MODES.SMART && aiLoading ? (
-                        <>
-                          <i className="fas fa-spinner fa-spin"></i> {t('button.loadingAI')}
-                        </>
-                      ) : (
-                        <>
-                          <i className="fas fa-download"></i> {t('button.process')}
-                          <span className="ml-1">
-                            ({t('button.imageCount', { count: selectedImagesForProcessing.length })} × {t('button.formatCount', { count: processingOptions.output.formats.length })})
-                          </span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="card">
-                    <div className="card-header">
-                      <div>
-                        <h3 className="card-title">
-                          <i className="fas fa-th-large"></i> {t('templates.title')}
-                        </h3>
-                        <p className="text-muted mt-xs">
-                          <i className="fas fa-info-circle"></i>
-                          {t('templates.note')}
-                        </p>
-                      </div>
-                      <div className="card-actions">
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={handleSelectAllTemplates}
-                          disabled={!processingOptions.templateSelectedImage}
-                        >
-                          <i className="fas fa-check-square"></i> {t('templates.selectAll')}
-                        </button>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => setProcessingOptions(prev => ({ ...prev, selectedTemplates: [] }))}
-                          disabled={processingOptions.selectedTemplates.length === 0}
-                        >
-                          <i className="fas fa-times-circle"></i> {t('templates.clearAll')}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="templates-grid mb-lg">
-                      {templateCategories.map((category) => {
-                        const categoryTemplates = SOCIAL_MEDIA_TEMPLATES.filter(template =>
-                          template.category === category.id
-                        );
-
-                        return (
-                          <div key={category.id} className="card">
-                            <div className="card-header">
-                              <h4 className="card-title">
-                                <i className={`${category.icon} mr-sm`}></i> {t(`category.${category.id}`)}
-                              </h4>
-                              {category.id !== 'screenshots' && (
-                                <div className="card-actions">
-                                  <button
-                                    className="btn btn-secondary btn-sm"
-                                    onClick={() => handleSelectAllInCategory(category.id)}
-                                    disabled={!processingOptions.templateSelectedImage}
-                                  >
-                                    <i className="fas fa-check"></i> {t('templates.selectCategory')}
-                                  </button>
-                                  <button
-                                    className="btn btn-secondary btn-sm"
-                                    onClick={() => handleDeselectAllInCategory(category.id)}
-                                    disabled={!processingOptions.templateSelectedImage}
-                                  >
-                                    <i className="fas fa-times"></i> {t('templates.deselectCategory')}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                            <div className="space-y-sm">
-                              {categoryTemplates.map(template => (
-                                <label key={template.id} className="checkbox-wrapper">
-                                  <input
-                                    type="checkbox"
-                                    className="checkbox-input"
-                                    checked={processingOptions.selectedTemplates.includes(template.id)}
-                                    onChange={() => handleTemplateToggle(template.id)}
-                                    disabled={!processingOptions.templateSelectedImage}
-                                  />
-                                  <span className="checkbox-custom"></span>
-                                  <span className="flex-1">
-                                    <div className="flex justify-between items-center">
-                                      <span className="font-medium">{getTranslatedTemplateName(template.name, t)}</span>
-                                      <span className="text-muted text-sm">
-                                        {template.width}×{template.height === 'auto' ? 'auto' : template.height}
-                                      </span>
-                                    </div>
-                                  </span>
-                                </label>
-                              ))}
-
-                              {category.id === 'screenshots' && (
-                                <div className="screenshot-section">
-                                  <ScreenShotsCard
-                                    isSelected={isScreenshotSelected}
-                                    onToggle={handleScreenshotToggle}
-                                    screenshotUrl={screenshotUrl}
-                                    onUrlChange={handleScreenshotUrlChange}
-                                    validation={screenshotValidation}
-                                    isCapturing={isCapturingScreenshots}
-                                    captureProgress={captureProgress}
-                                    onCaptureClick={handleCaptureScreenshots}
-                                    selectedTemplates={selectedScreenshotTemplates}
-                                    onTemplateToggle={handleScreenshotTemplateToggle}
-                                    onSelectAllTemplates={handleSelectAllScreenshotTemplates}
-                                    onDeselectAllTemplates={handleDeselectAllScreenshotTemplates}
-                                    showTemplateActions={false}
-                                  />
-                                </div>
-                              )}
-
-                              {category.id === 'favicon' && (
-                                <div className="flex flex-col">
-                                  <div className="checkbox-wrapper" onClick={() => handleFaviconToggle(!isFaviconSelected)}>
-                                    <input
-                                      type="checkbox"
-                                      className="checkbox-input"
-                                      checked={isFaviconSelected}
-                                      onChange={(e) => handleFaviconToggle(e.target.checked)}
-                                      disabled={!processingOptions.templateSelectedImage}
-                                    />
-                                    <span className="checkbox-custom"></span>
-                                    <span className="flex-1">
-                                      <div className="flex justify-between items-center">
-                                        <span className="font-medium">Favicon Set</span>
-                                        <span className="text-muted text-sm">Multiple sizes</span>
-                                      </div>
-                                    </span>
-                                  </div>
-
-                                  {isFaviconSelected && (
-                                    <div className="mt-2 pl-8 space-y-2">
-                                      <div className="checkbox-wrapper" onClick={(e) => { e.stopPropagation(); handleSingleOptionChange('faviconMode', 'basic'); }}>
-                                        <input
-                                          type="radio"
-                                          name="faviconMode"
-                                          className="checkbox-input"
-                                          checked={processingOptions.faviconMode === 'basic'}
-                                          onChange={() => { }}
-                                        />
-                                        <span className="checkbox-custom"></span>
-                                        <span className="flex-1 text-sm">Basic Set (Essential Only)</span>
-                                      </div>
-
-                                      <div className="checkbox-wrapper" onClick={(e) => { e.stopPropagation(); handleSingleOptionChange('faviconMode', 'complete'); }}>
-                                        <input
-                                          type="radio"
-                                          name="faviconMode"
-                                          className="checkbox-input"
-                                          checked={processingOptions.faviconMode !== 'basic'}
-                                          onChange={() => { }}
-                                        />
-                                        <span className="checkbox-custom"></span>
-                                        <span className="flex-1 text-sm">Complete Set (All Platforms)</span>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <TemplateImageSection
-                      templateSelectedImageObj={templateSelectedImageObj}
+                <div className="tab-content mt-lg">
+                  {processingOptions.processingMode === PROCESSING_MODES.CUSTOM && (
+                    <CustomProcessingTab
                       processingOptions={processingOptions}
-                      isFaviconSelected={isFaviconSelected}
-                      isScreenshotSelected={isScreenshotSelected}
-                      selectedScreenshotTemplates={selectedScreenshotTemplates}
                       isLoading={isLoading}
-                      onProcessTemplates={processTemplates}
+                      aiLoading={aiLoading}
+                      selectedImagesForProcessing={selectedImagesForProcessing}
+                      onOptionChange={handleOptionChange}
+                      onSingleOptionChange={handleSingleOptionChange}
+                      onToggleResizeCrop={(active) => handleOptionChange('resizeCrop', 'active', active)}
+                      onToggleCropMode={(mode) => handleOptionChange('resizeCrop', 'cropMode', mode)}
+                      onProcess={handleProcessImages}
+                      onFormatToggle={handleFormatToggle}
+                      onSelectAllFormats={handleSelectAllFormats}
+                      onClearAllFormats={handleClearAllFormats}
+                      t={t}
+                    />
+                  )}
+
+                  {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && (
+                    <TemplateProcessingTab
+                      processingOptions={processingOptions}
+                      templateCategories={templateCategories}
+                      onSelectAllTemplates={handleSelectAllTemplates}
+                      onClearAllTemplates={() => setProcessingOptions(prev => ({ ...prev, selectedTemplates: [] }))}
+                      onSelectAllInCategory={handleSelectAllInCategory}
+                      onDeselectAllInCategory={handleDeselectAllInCategory}
+                      onTemplateToggle={handleTemplateToggle}
+                      getTranslatedTemplateName={getTranslatedTemplateName}
+                      isScreenshotSelected={isScreenshotSelected}
+                      onScreenshotToggle={handleScreenshotToggle}
+                      screenshotUrl={screenshotUrl}
+                      onScreenshotUrlChange={handleScreenshotUrlChange}
+                      screenshotValidation={screenshotValidation}
+                      isCapturingScreenshots={isCapturingScreenshots}
+                      captureProgress={captureProgress}
+                      onCaptureScreenshots={handleCaptureScreenshots}
+                      selectedScreenshotTemplates={selectedScreenshotTemplates}
+                      onScreenshotTemplateToggle={handleScreenshotTemplateToggle}
+                      onSelectAllScreenshotTemplates={handleSelectAllScreenshotTemplates}
+                      onDeselectAllScreenshotTemplates={handleDeselectAllScreenshotTemplates}
+                      isFaviconSelected={isFaviconSelected}
+                      onFaviconToggle={handleFaviconToggle}
+                      onSingleOptionChange={handleSingleOptionChange}
+                      templateSelectedImageObj={templateSelectedImageObj}
+                      isLoading={isLoading}
+                      onProcessTemplates={handleProcessTemplates}
                       formatFileSize={formatFileSize}
                       t={t}
                     />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+
+        <FooterSection />
+
+        <ModalElement
+          isOpen={modalState.isOpen}
+          onClose={handleCloseModal}
+          title={modalState.title}
+          type={modalState.type}
+          onInteraction={handleModalInteraction}
+          showProgress={modalState.showProgress}
+          progress={modalState.progress}
+          progressStep={modalState.progressStep}
+        >
+          <p>{modalState.message}</p>
+          {modalState.showProgress && modalState.progress < 100 && (
+            <div className="mt-3">
+              <div className="progress-bar-container">
+                <div
+                  className="progress-bar-fill"
+                  style={{ width: `${modalState.progress}%` }}
+                ></div>
+              </div>
+              <div className="progress-text">
+                <span>{modalState.progressStep}</span>
+                <span>{modalState.progress}%</span>
+              </div>
+            </div>
+          )}
+        </ModalElement>
+
+        <ModalElement
+          isOpen={modalState.isOpen && modalState.type === MODAL_TYPES.SUMMARY}
+          onClose={handleCloseModal}
+          title={modalState.title}
+          type={MODAL_TYPES.SUMMARY}
+          onInteraction={handleModalInteraction}
+          actions={
+            <button
+              className="btn btn-primary"
+              onClick={handleCloseModal}
+              onMouseDown={handleModalInteraction}
+            >
+              {t('button.ok')}
+            </button>
+          }
+        >
+          {processingSummary && (
+            <div className="summary-content">
+              <div className="summary-section">
+                <h4 className="summary-title">
+                  <i className="fas fa-check-circle text-success mr-2"></i>
+                  {t('summary.processingComplete')}
+                </h4>
+
+                <div className="summary-grid">
+                  <div className="summary-item">
+                    <div className="summary-label">{t('summary.mode')}:</div>
+                    <div className="summary-value capitalize">{processingSummary.mode}</div>
                   </div>
+
+                  {processingSummary.mode === 'templates' && processingSummary.templatesApplied > 0 && (
+                    <div className="summary-item">
+                      <div className="summary-label">{t('summary.templatesApplied')}:</div>
+                      <div className="summary-value">
+                        {processingSummary.templatesApplied}
+                      </div>
+                    </div>
+                  )}
+
+                  {processingSummary.mode === 'templates' && processingSummary.categoriesApplied > 0 && (
+                    <div className="summary-item">
+                      <div className="summary-label">{t('summary.categoriesApplied')}:</div>
+                      <div className="summary-value">{processingSummary.categoriesApplied}</div>
+                    </div>
+                  )}
+
+                  {processingSummary.screenshotCount > 0 && (
+                    <div className="summary-item">
+                      <div className="summary-label">{t('summary.screenshotCount')}:</div>
+                      <div className="summary-value text-success">
+                        <i className="fas fa-camera mr-1"></i>
+                        {processingSummary.screenshotCount}
+                      </div>
+                    </div>
+                  )}
+
+                  {processingSummary.mode === 'templates' && (
+                    <div className="summary-item">
+                      <div className="summary-label">{t('summary.formatsExported')}:</div>
+                      <div className="summary-value">
+                        {processingSummary.formatsExported && processingSummary.formatsExported.length > 0
+                          ? processingSummary.formatsExported.map(format => (
+                            <span key={format} className="format-badge">
+                              {format.toUpperCase()}
+                            </span>
+                          ))
+                          : 'WEBP, PNG, JPG, ICO'}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="summary-item">
+                    <div className="summary-label">{t('summary.totalFiles')}:</div>
+                    <div className="summary-value">
+                      {processingSummary.totalFiles}
+                    </div>
+                  </div>
+
+                  <div className="summary-item">
+                    <div className="summary-label">{t('summary.aiUsed')}:</div>
+                    <div className="summary-value">
+                      {processingSummary.aiUsed ? (
+                        <span className="text-success">
+                          <i className="fas fa-brain mr-1"></i> {t('summary.yes')}
+                        </span>
+                      ) : (
+                        <span className="text-muted">{t('summary.no')}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {processingSummary.upscalingUsed && (
+                    <div className="summary-item">
+                      <div className="summary-label">{t('summary.upscalingUsed')}:</div>
+                      <div className="summary-value text-success">
+                        <i className="fas fa-expand-arrows-alt mr-1"></i> {t('summary.yes')}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {processingSummary.operations && processingSummary.operations.length > 0 && (
+                <div className="summary-section">
+                  <h5 className="summary-subtitle">
+                    <i className="fas fa-tasks mr-2"></i>
+                    {t('summary.operationsPerformed')}:
+                  </h5>
+                  <ul className="summary-list">
+                    {processingSummary.operations.map((op, index) => (
+                      <li key={index} className="summary-list-item">
+                        <i className="fas fa-check text-success mr-2"></i>
+                        {op}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </ModalElement>
+
+        {(isLoading || aiLoading) && (
+          <div className="loading-overlay">
+            <div className="loading-spinner">
+              {aiLoading ? (
+                <>
+                  <i className="fas fa-brain fa-spin fa-3x"></i>
+                  <p>{t('loading.aiModel')}</p>
+                  <p className="text-muted">{t('loading.oncePerSession')}</p>
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-circle-notch fa-spin fa-3x"></i>
+                  <p>{t('processing.processing')}</p>
                 </>
               )}
             </div>
-
-            <UploadGallerySection
-              images={images}
-              selectedImages={selectedImages}
-              processingMode={processingOptions.processingMode}
-              templateSelectedImage={processingOptions.templateSelectedImage}
-              onImageSelect={handleImageSelect}
-              onSelectAll={handleSelectAll}
-              onRemoveSelected={handleRemoveSelected}
-              formatFileSize={formatFileSize}
-            />
-          </>
-        )}
-      </main>
-
-      <FooterSection />
-
-      <ModalElement
-        isOpen={modal.isOpen && modal.type !== MODAL_TYPES.SUMMARY}
-        onClose={closeModal}
-        title={modal.title}
-        type={modal.type}
-        onInteraction={handleModalInteraction}
-        showProgress={modal.showProgress}
-        progress={modal.progress}
-        progressStep={modal.progressStep}
-      >
-        <p>{modal.message}</p>
-        {modal.showProgress && modal.progress < 100 && (
-          <div className="mt-3">
-            <div className="progress-bar-container">
-              <div
-                className="progress-bar-fill"
-                style={{ width: `${modal.progress}%` }}
-              ></div>
-            </div>
-            <div className="progress-text">
-              <span>{modal.progressStep}</span>
-              <span>{modal.progress}%</span>
-            </div>
           </div>
         )}
-      </ModalElement>
-
-      <ModalElement
-        isOpen={modal.isOpen && modal.type === MODAL_TYPES.SUMMARY}
-        onClose={closeModal}
-        title={modal.title}
-        type={MODAL_TYPES.SUMMARY}
-        onInteraction={handleModalInteraction}
-        actions={
-          <button
-            className="btn btn-primary"
-            onClick={closeModal}
-            onMouseDown={handleModalInteraction}
-          >
-            {t('button.ok')}
-          </button>
-        }
-      >
-        {processingSummary && (
-          <div className="summary-content">
-            <div className="summary-section">
-              <h4 className="summary-title">
-                <i className="fas fa-check-circle text-success mr-2"></i>
-                {t('summary.processingComplete')}
-              </h4>
-
-              <div className="summary-grid">
-                <div className="summary-item">
-                  <div className="summary-label">{t('summary.mode')}:</div>
-                  <div className="summary-value capitalize">{processingSummary.mode}</div>
-                </div>
-
-                {processingSummary.mode === 'templates' && processingSummary.templatesApplied > 0 && (
-                  <div className="summary-item">
-                    <div className="summary-label">{t('summary.templatesApplied')}:</div>
-                    <div className="summary-value">
-                      {processingSummary.templatesApplied}
-                    </div>
-                  </div>
-                )}
-
-                {processingSummary.mode === 'templates' && processingSummary.categoriesApplied > 0 && (
-                  <div className="summary-item">
-                    <div className="summary-label">{t('summary.categoriesApplied')}:</div>
-                    <div className="summary-value">{processingSummary.categoriesApplied}</div>
-                  </div>
-                )}
-
-                {processingSummary.screenshotCount > 0 && (
-                  <div className="summary-item">
-                    <div className="summary-label">{t('summary.screenshotCount')}:</div>
-                    <div className="summary-value text-success">
-                      <i className="fas fa-camera mr-1"></i>
-                      {processingSummary.screenshotCount}
-                    </div>
-                  </div>
-                )}
-
-                {processingSummary.mode === 'templates' && (
-                  <div className="summary-item">
-                    <div className="summary-label">{t('summary.formatsExported')}:</div>
-                    <div className="summary-value">
-                      {processingSummary.formatsExported && processingSummary.formatsExported.length > 0
-                        ? processingSummary.formatsExported.map(format => (
-                          <span key={format} className="format-badge">
-                            {format.toUpperCase()}
-                          </span>
-                        ))
-                        : 'WEBP, PNG, JPG, ICO'}
-                    </div>
-                  </div>
-                )}
-
-                <div className="summary-item">
-                  <div className="summary-label">{t('summary.totalFiles')}:</div>
-                  <div className="summary-value">
-                    {processingSummary.totalFiles}
-                  </div>
-                </div>
-
-                <div className="summary-item">
-                  <div className="summary-label">{t('summary.aiUsed')}:</div>
-                  <div className="summary-value">
-                    {processingSummary.aiUsed ? (
-                      <span className="text-success">
-                        <i className="fas fa-brain mr-1"></i> {t('summary.yes')}
-                      </span>
-                    ) : (
-                      <span className="text-muted">{t('summary.no')}</span>
-                    )}
-                  </div>
-                </div>
-
-                {processingSummary.upscalingUsed && (
-                  <div className="summary-item">
-                    <div className="summary-label">{t('summary.upscalingUsed')}:</div>
-                    <div className="summary-value text-success">
-                      <i className="fas fa-expand-arrows-alt mr-1"></i> {t('summary.yes')}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {processingSummary.operations && processingSummary.operations.length > 0 && (
-              <div className="summary-section">
-                <h5 className="summary-subtitle">
-                  <i className="fas fa-tasks mr-2"></i>
-                  {t('summary.operationsPerformed')}:
-                </h5>
-                <ul className="summary-list">
-                  {processingSummary.operations.map((op, index) => (
-                    <li key={index} className="summary-list-item">
-                      <i className="fas fa-check text-success mr-2"></i>
-                      {op}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-      </ModalElement>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
 

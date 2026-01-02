@@ -96,6 +96,33 @@
 }
 
 /* ==========================================================================
+   PROGRESS BAR STYLES
+   ========================================================================== */
+
+.progress-bar-container {
+    height: 8px;
+    background-color: var(--color-bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 12px;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background-color: var(--color-primary);
+    transition: width var(--transition-normal) ease;
+    border-radius: 4px;
+}
+
+.progress-text {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+}
+
+/* ==========================================================================
    BASE STYLES & RESETS
    ========================================================================== */
 
@@ -990,7 +1017,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--color-bg-tertiary);
+    background-color: var(--color-bg-primary);
     border: none;
     color: var(--color-text-secondary);
     cursor: pointer;

@@ -1,0 +1,89 @@
+.error-boundary-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    width: 100%;
+    background-color: var(--bg-secondary);
+    padding: 2rem;
+    box-sizing: border-box;
+}
+
+.error-boundary-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 3rem;
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+}
+
+.error-icon {
+    font-size: 4rem;
+    color: var(--error-color, #f44336);
+    margin-bottom: 2rem;
+}
+
+.error-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.error-message {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    margin-bottom: 2.5rem;
+    line-height: 1.6;
+}
+
+.error-details {
+    margin-bottom: 2rem;
+    text-align: left;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background-color: var(--bg-secondary);
+}
+
+.error-details summary {
+    padding: 1rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-primary);
+    outline: none;
+}
+
+.error-stack {
+    padding: 1rem;
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--error-color);
+    overflow-x: auto;
+    border-top: 1px solid var(--border-color);
+    white-space: pre-wrap;
+}
+
+.error-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.error-actions .btn {
+    padding: 0.75rem 2rem;
+    font-size: 1rem;
+}
+
+@media (max-width: 640px) {
+    .error-boundary-card {
+        padding: 2rem;
+    }
+
+    .error-title {
+        font-size: 1.5rem;
+    }
+}

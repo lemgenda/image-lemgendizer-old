@@ -1,6 +1,6 @@
 {
     "name": "image-lemgendizer",
-    "version": "2.6.0",
+    "version": "2.7.0",
     "type": "module",
     "engines": {
         "node": ">=20.0.0"

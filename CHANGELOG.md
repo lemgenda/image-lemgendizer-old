@@ -3,6 +3,42 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[2.7.0] - 2026-01-02
+----------------------
+
+### Major Changes
+
+*   **Massive App.jsx Refactor**: Overhauled the core component to reduce complexity by ~33%.
+*   **Modular Component Architecture**: Extracted monolithic UI into focused, reusable components.
+*   **New Tabbed Navigation**: Introduced `TabPanel` for seamless switching between Custom and Template processing modes.
+*   **Stability & Fixes**: Resolved critical post-integration `ReferenceError`s and standardized prop handling.
+
+### Features
+
+*   **Modular Processing Tabs**:
+    *   `CustomProcessingTab`: Groups all custom output, quality, and resize/crop controls.
+    *   `TemplateProcessingTab`: Manages social media templates, favicons, and screenshots.
+*   **Refactored Components**:
+    *   `FormatSelectionCard`: Modern format selection and file renaming logic.
+    *   `QualityControlsCard`: Enhanced compression and target file size management.
+    *   `ResizeCropCard`: Fully modular resize and smart crop configuration.
+    *   `TemplateSelectionCard`: Streamlined template selection grid and platform categories.
+*   **Enhanced Progress Feedback**: Global progress bar styles standardized across the app.
+
+### Technical Improvements
+
+*   **Code Reduction**: `App.jsx` reduced from 2041 to ~1365 lines.
+*   **Prop Standardization**: Standardized `onScreenshotUrlChange` and other key handlers for better maintainability.
+*   **Improved Helper Logic**: Restored and optimized `getTranslatedTemplateName` and `getTranslatedPlatformName` utility functions.
+*   **JSDoc Documentation**: Comprehensive documentation added to all new modular components.
+
+### Bug Fixes
+
+*   **Fixed Layout Issues**: Corrected CSS for crop dropdowns and responsive card headers.
+*   **Restored Missing Helpers**: Fixed `ReferenceError`s caused by missing helper functions after refactor.
+*   **Prop Drilling Sync**: Synchronized screenshot URL handlers across the component hierarchy.
+*   **Translation Integrity**: Ensured all platform and template names correctly utilize translation keys.
+
 [2.6.0] - 2025-12-29
 ----------------------
 

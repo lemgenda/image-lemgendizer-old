@@ -9,7 +9,7 @@ const resources = {
             'app.processClientSide': 'All processing is done client-side',
             'app.subtitle': 'Batch Image Processing & Optimization Tool',
             'app.title': 'Image LemGendizer',
-            'app.version': 'Image LemGendizer v2.6.0',
+            'app.version': 'Image LemGendizer v2.7.0',
 
             'button.capture': 'Capture Screenshots',
             'button.capturing': 'Capturing...',
@@ -127,12 +127,24 @@ const resources = {
             'errors.screenshotFailed': 'Screenshot API failed',
             'errors.urlEmpty': 'URL cannot be empty',
             'errors.urlInvalid': 'Invalid URL format',
+            'errors.unsupportedCodec': 'Unsupported codec',
 
+            'footer.aiEnabled': 'AI Smart Crop Enabled',
+            'footer.title': 'Image Lemgendizer',
+            'footer.version': 'Version',
+            'footer.year': '2025',
+
+            'format.gif': 'GIF',
             'export.folders.logo': 'Logo Images',
             'export.folders.optimized': 'Optimized Images',
             'export.folders.original': 'Original Images',
             'export.folders.social': 'Social Media Images',
             'export.folders.web': 'Web Images',
+
+            'error.boundary.title': 'Something went wrong',
+            'error.boundary.subtitle': 'An unexpected error occurred in the application. Please reload to continue.',
+            'error.boundary.details': 'Technical Details',
+            'error.boundary.reload': 'Reload Application',
 
             'export.noValidImages': 'No valid images to export',
 
@@ -512,7 +524,7 @@ const resources = {
             'app.processClientSide': 'Sva obrada se vrši na klijentu',
             'app.subtitle': 'Alat za obradu i optimizaciju slika',
             'app.title': 'Image LemGendizer',
-            'app.version': 'Image LemGendizer v2.6.0',
+            'app.version': 'Image LemGendizer v2.7.0',
 
             'button.capture': 'Snimi Screenshotove',
             'button.capturing': 'Snimanje...',
@@ -638,12 +650,25 @@ const resources = {
             'errors.screenshotFailed': 'Screenshot API nije uspio',
             'errors.urlEmpty': 'URL ne može biti prazan',
             'errors.urlInvalid': 'Nevažeći format URL-a',
+            'errors.unsupportedCodec': 'Nepodržani kodek',
+
+            'footer.aiEnabled': 'AI pametno obrezivanje omogućeno',
+            'footer.title': 'Image Lemgendizer',
+            'footer.version': 'Verzija',
+            'footer.year': '2025',
+
+            'format.gif': 'GIF',
 
             'export.folders.logo': 'Logo slike',
             'export.folders.optimized': 'Optimizirane slike',
             'export.folders.original': 'Originalne slike',
             'export.folders.social': 'Društveni mediji slike',
             'export.folders.web': 'Web slike',
+
+            'error.boundary.title': 'Nešto je pošlo po zlu',
+            'error.boundary.subtitle': 'Došlo je do neočekivane pogreške u aplikaciji. Molimo osvježite stranicu za nastavak.',
+            'error.boundary.details': 'Tehnički detalji',
+            'error.boundary.reload': 'Ponovno učitaj aplikaciju',
 
             'export.noValidImages': 'Nema valjanih slika za izvoz',
 

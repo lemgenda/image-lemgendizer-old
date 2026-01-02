@@ -147,6 +147,23 @@ export const getTemplateDimensions = (template) => {
 };
 
 /**
+ * Gets translated platform name
+ * @param {string} platform - Platform name or key
+ * @param {Function} t - Translation function
+ * @returns {string} Translated platform name
+ */
+const getTranslatedPlatformName = (platform, t) => {
+    if (!platform) return '';
+    if (!t) return platform;
+
+    const translated = t(platform, { defaultValue: '' });
+    if (translated) return translated;
+
+    const categoryKey = `category.${platform.replace('platform.', '')}`;
+    return t(categoryKey, { defaultValue: platform });
+};
+
+/**
  * Gets translated image name
  * @param {Object} image - Image object
  * @param {Function} t - Translation function
@@ -156,10 +173,10 @@ const getTranslatedImageName = (image, t) => {
     if (!image.template) return image.name;
 
     const platform = image.template.platform || '';
-    const displayPlatform = t(platform);
+    const displayPlatform = getTranslatedPlatformName(platform, t);
 
     const template = image.template.name || '';
-    const templateName = t(template);
+    const templateName = t ? t(template, { defaultValue: template }) : template;
 
     const cleanPlatform = displayPlatform
         .replace(/\s*\/\s*X/g, '')
