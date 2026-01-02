@@ -188,7 +188,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
         }
 
         // RESIZE: Create a canvas that COVERS the target dimensions
-        const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight);
+        const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight, options);
 
         let model = aiModel;
         if (!model) {
@@ -221,7 +221,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
         if (logos.length > 0 && useLogoDetection) {
 
             const primaryLogo = logos[0];
-            croppedFile = await cropFromResized(resized, targetWidth, targetHeight, primaryLogo, imageFile, logos);
+            croppedFile = await cropFromResized(resized, targetWidth, targetHeight, primaryLogo, imageFile, options, logos);
             mainSubject = primaryLogo;
         }
         else if (useAIDetection && currentStrategy !== 'focal_point') {
@@ -281,31 +281,31 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
                     if (SMART_CROP_CONFIG.USE_FACIAL_FEATURES &&
                         (mainSubject.category === 'face' || mainSubject.category === 'facial_feature')) {
 
-                        croppedFile = await cropFromResized(resized, targetWidth, targetHeight, mainSubject, imageFile, logos);
+                        croppedFile = await cropFromResized(resized, targetWidth, targetHeight, mainSubject, imageFile, options, logos);
                     }
                     else if (SMART_CROP_CONFIG.DEFAULT_STRATEGY === 'ai_priority' || SMART_CROP_CONFIG.DEFAULT_STRATEGY === 'hybrid') {
 
-                        croppedFile = await cropFromResized(resized, targetWidth, targetHeight, mainSubject, imageFile, logos);
+                        croppedFile = await cropFromResized(resized, targetWidth, targetHeight, mainSubject, imageFile, options, logos);
                     } else {
                         // Fallback focal point
 
                         focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
-                        croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, logos);
+                        croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
                     }
                 } else {
 
                     focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
-                    croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, logos);
+                    croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
                 }
             } catch (aiError) {
 
                 focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
-                croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, logos);
+                croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
             }
         } else {
 
             focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
-            croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, logos);
+            croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
         }
         return croppedFile;
     } catch (error) {
@@ -471,10 +471,10 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             }
         }
 
-        const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight);
+        const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight, options);
         const focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
         const adjustedPosition = adjustCropPositionForFocalPoint(cropPosition, focalPoint, resized.width, resized.height);
-        const croppedFile = await cropFromResized(resized, targetWidth, targetHeight, adjustedPosition, imageFile);
+        const croppedFile = await cropFromResized(resized, targetWidth, targetHeight, adjustedPosition, imageFile, options);
         return croppedFile;
     } catch (error) {
         try {
@@ -507,8 +507,8 @@ export const processStandardCrop = async (imageFile, targetWidth, targetHeight, 
             }
         }
 
-        const resized = await resizeImageForCrop(processableFile, targetWidth, targetHeight);
-        return await cropFromResized(resized, targetWidth, targetHeight, cropPosition, imageFile);
+        const resized = await resizeImageForCrop(processableFile, targetWidth, targetHeight, options);
+        return await cropFromResized(resized, targetWidth, targetHeight, cropPosition, imageFile, options);
     } catch (error) {
         throw error;
     }
@@ -593,7 +593,7 @@ export const processSVGCrop = async (svgFile, width, height) => {
 /**
  * Resizes image for crop operation
  */
-const resizeImageForCrop = async (imageFile, targetWidth, targetHeight) => {
+const resizeImageForCrop = async (imageFile, targetWidth, targetHeight, options = {}) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
         const url = URL.createObjectURL(imageFile);
@@ -601,6 +601,9 @@ const resizeImageForCrop = async (imageFile, targetWidth, targetHeight) => {
             try {
                 const targetAspectRatio = targetWidth / targetHeight;
                 const imageAspectRatio = img.naturalWidth / img.naturalHeight;
+                const format = options.format || 'webp';
+                const quality = options.quality || DEFAULT_WEBP_QUALITY;
+                const mimeType = MIME_TYPE_MAP[format] || 'image/webp';
                 let scale;
                 let scaledWidth, scaledHeight;
                 if (imageAspectRatio > targetAspectRatio) {
@@ -636,7 +639,7 @@ const resizeImageForCrop = async (imageFile, targetWidth, targetHeight) => {
                             return;
                         }
                         resolve({
-                            file: new File([blob], TEMP_FILE_NAMES.RESIZED, { type: MIME_TYPE_MAP.webp }),
+                            file: new File([blob], TEMP_FILE_NAMES.RESIZED, { type: mimeType }),
                             element: canvas,
                             width: scaledWidth,
                             height: scaledHeight,
@@ -645,8 +648,8 @@ const resizeImageForCrop = async (imageFile, targetWidth, targetHeight) => {
                             originalHeight: img.naturalHeight
                         });
                     },
-                    MIME_TYPE_MAP.webp,
-                    DEFAULT_WEBP_QUALITY
+                    mimeType,
+                    quality
                 );
             } catch (error) {
                 URL.revokeObjectURL(url);
@@ -745,7 +748,7 @@ const calculateCropOffset = (srcWidth, srcHeight, targetWidth, targetHeight, pos
 /**
  * Crops from resized image
  */
-const cropFromResized = async (resized, targetWidth, targetHeight, position, originalFile, logos = []) => {
+const cropFromResized = async (resized, targetWidth, targetHeight, position, originalFile, options = {}, logos = []) => {
     const img = resized.element;
     let offsetX, offsetY;
     if (typeof position === 'string') {
@@ -827,8 +830,12 @@ const cropFromResized = async (resized, targetWidth, targetHeight, position, ori
         offsetX, offsetY, targetWidth, targetHeight,
         0, 0, targetWidth, targetHeight
     );
+    const format = options.format || 'webp';
+    const quality = options.quality || DEFAULT_WEBP_QUALITY;
+    const mimeType = MIME_TYPE_MAP[format] || 'image/webp';
+
     const blob = await new Promise(resolve => {
-        canvas.toBlob(resolve, 'image/webp', DEFAULT_WEBP_QUALITY);
+        canvas.toBlob(resolve, mimeType, quality);
     });
     const extension = originalFile.name.split('.').pop();
     let suffix = '-cropped';
@@ -843,7 +850,7 @@ const cropFromResized = async (resized, targetWidth, targetHeight, position, ori
         /\.[^/.]+$/,
         `${suffix}-${targetWidth}x${targetHeight}.${extension}`
     );
-    return new File([blob], newName, { type: MIME_TYPE_MAP.webp });
+    return new File([blob], newName, { type: mimeType });
 };
 
 /**

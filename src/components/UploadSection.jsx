@@ -1,21 +1,21 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { handleImageDrop, handleFileSelect } from '../utils';
 import '../styles/UploadSection.css';
 
-function UploadSection({ onUpload, fileInputRef }) {
+function UploadSection({ onImagesSelected, fileInputRef, isScreenshotMode }) {
     const { t } = useTranslation();
 
     const handleDrop = useCallback((e) => {
-        handleImageDrop(e, onUpload);
-    }, [onUpload]);
+        handleImageDrop(e, onImagesSelected);
+    }, [onImagesSelected]);
 
     const handleDragOver = useCallback((e) => {
         e.preventDefault();
     }, []);
 
     const handleFileChange = (e) => {
-        handleFileSelect(e, onUpload);
+        handleFileSelect(e, onImagesSelected);
     };
 
     return (

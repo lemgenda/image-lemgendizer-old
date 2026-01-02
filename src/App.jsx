@@ -73,7 +73,8 @@ import {
   TemplateSelectionCard,
   CustomProcessingTab,
   TemplateProcessingTab,
-  TabPanel
+  TabPanel,
+  ErrorBoundary
 } from './components';
 import './styles/App.css';
 import './styles/TabPanel.css';
@@ -1270,19 +1271,12 @@ function App() {
         <main className="app-main">
           <UploadSection
             onImagesSelected={handleImageUpload}
-            onImagesAdded={handleImageUpload}
+            fileInputRef={fileInputRef}
             isScreenshotMode={isScreenshotMode}
           />
 
           {images.length > 0 && (
             <div className="processing-section animate-fade-in">
-              <UploadGallerySection
-                images={images}
-                selectedImages={selectedImages}
-                onImageSelect={handleImageSelect}
-                onRemoveSelected={handleRemoveSelected}
-                onSelectAll={handleSelectAll}
-              />
 
               <div className="processing-modes-tabs mt-xl">
                 <TabPanel
@@ -1291,7 +1285,7 @@ function App() {
                     { id: PROCESSING_MODES.TEMPLATES, label: t('mode.templates'), description: t('mode.templatesInfo') }
                   ]}
                   activeTab={processingOptions.processingMode}
-                  onTabChange={(id) => setProcessingOptions(prev => ({ ...prev, processingMode: id }))}
+                  onTabChange={(id) => toggleProcessingMode(id)}
                 />
 
                 <div className="tab-content mt-lg">
@@ -1303,9 +1297,16 @@ function App() {
                       selectedImagesForProcessing={selectedImagesForProcessing}
                       onOptionChange={handleOptionChange}
                       onSingleOptionChange={handleSingleOptionChange}
-                      onToggleResizeCrop={(active) => handleOptionChange('resizeCrop', 'active', active)}
-                      onToggleCropMode={(mode) => handleOptionChange('resizeCrop', 'cropMode', mode)}
-                      onProcess={handleProcessImages}
+                      onToggleResizeCrop={() => setProcessingOptions(prev => ({
+                        ...prev,
+                        showResize: !prev.showResize,
+                        showCrop: prev.showResize // If it was resize, it will now be crop (showResize becomes false, showCrop becomes true)
+                      }))}
+                      onToggleCropMode={() => setProcessingOptions(prev => ({
+                        ...prev,
+                        cropMode: prev.cropMode === CROP_MODES.SMART ? CROP_MODES.STANDARD : CROP_MODES.SMART
+                      }))}
+                      onProcess={processCustomImages}
                       onFormatToggle={handleFormatToggle}
                       onSelectAllFormats={handleSelectAllFormats}
                       onClearAllFormats={handleClearAllFormats}
@@ -1340,12 +1341,25 @@ function App() {
                       onSingleOptionChange={handleSingleOptionChange}
                       templateSelectedImageObj={templateSelectedImageObj}
                       isLoading={isLoading}
-                      onProcessTemplates={handleProcessTemplates}
+                      onProcessTemplates={processTemplates}
                       formatFileSize={formatFileSize}
                       t={t}
                     />
                   )}
                 </div>
+              </div>
+
+              <div className="mt-xl">
+                <UploadGallerySection
+                  images={images}
+                  selectedImages={selectedImages}
+                  processingMode={processingOptions.processingMode}
+                  templateSelectedImage={processingOptions.templateSelectedImage}
+                  onImageSelect={handleImageSelect}
+                  onRemoveSelected={handleRemoveSelected}
+                  onSelectAll={handleSelectAll}
+                  formatFileSize={formatFileSize}
+                />
               </div>
             </div>
           )}
@@ -1354,42 +1368,42 @@ function App() {
         <FooterSection />
 
         <ModalElement
-          isOpen={modalState.isOpen}
-          onClose={handleCloseModal}
-          title={modalState.title}
-          type={modalState.type}
+          isOpen={modal.isOpen}
+          onClose={closeModal}
+          title={modal.title}
+          type={modal.type}
           onInteraction={handleModalInteraction}
-          showProgress={modalState.showProgress}
-          progress={modalState.progress}
-          progressStep={modalState.progressStep}
+          showProgress={modal.showProgress}
+          progress={modal.progress}
+          progressStep={modal.progressStep}
         >
-          <p>{modalState.message}</p>
-          {modalState.showProgress && modalState.progress < 100 && (
+          <p>{modal.message}</p>
+          {modal.showProgress && modal.progress < 100 && (
             <div className="mt-3">
               <div className="progress-bar-container">
                 <div
                   className="progress-bar-fill"
-                  style={{ width: `${modalState.progress}%` }}
+                  style={{ width: `${modal.progress}%` }}
                 ></div>
               </div>
               <div className="progress-text">
-                <span>{modalState.progressStep}</span>
-                <span>{modalState.progress}%</span>
+                <span>{modal.progressStep}</span>
+                <span>{modal.progress}%</span>
               </div>
             </div>
           )}
         </ModalElement>
 
         <ModalElement
-          isOpen={modalState.isOpen && modalState.type === MODAL_TYPES.SUMMARY}
-          onClose={handleCloseModal}
-          title={modalState.title}
+          isOpen={modal.isOpen && modal.type === MODAL_TYPES.SUMMARY}
+          onClose={closeModal}
+          title={modal.title}
           type={MODAL_TYPES.SUMMARY}
           onInteraction={handleModalInteraction}
           actions={
             <button
               className="btn btn-primary"
-              onClick={handleCloseModal}
+              onClick={closeModal}
               onMouseDown={handleModalInteraction}
             >
               {t('button.ok')}
@@ -1502,21 +1516,38 @@ function App() {
           )}
         </ModalElement>
 
-        {(isLoading || aiLoading) && (
+        {isLoading && (
           <div className="loading-overlay">
             <div className="loading-spinner">
-              {aiLoading ? (
+              {isScreenshotSelected ? (
                 <>
-                  <i className="fas fa-brain fa-spin fa-3x"></i>
-                  <p>{t('loading.aiModel')}</p>
-                  <p className="text-muted">{t('loading.oncePerSession')}</p>
+                  <i className="fas fa-camera fa-spin fa-3x"></i>
+                  <p>{t('loading.capturingScreenshots')}</p>
+                  <p className="text-muted text-sm mt-2">
+                    {t('loading.screenshotProcess')}
+                  </p>
                 </>
               ) : (
                 <>
-                  <i className="fas fa-circle-notch fa-spin fa-3x"></i>
-                  <p>{t('processing.processing')}</p>
+                  <i className="fas fa-spinner fa-spin fa-3x"></i>
+                  <p>{t('loading.preparing')}</p>
+                  <p className="text-muted text-sm mt-2">
+                    {processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && aiModelLoaded
+                      ? t('loading.aiCropping')
+                      : t('loading.upscalingWhenNeeded')}
+                  </p>
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {aiLoading && (
+          <div className="loading-overlay">
+            <div className="loading-spinner">
+              <i className="fas fa-brain fa-spin fa-3x"></i>
+              <p>{t('loading.aiModel')}</p>
+              <p className="text-muted">{t('loading.oncePerSession')}</p>
             </div>
           </div>
         )}

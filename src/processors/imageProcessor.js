@@ -564,20 +564,17 @@ export const getProcessingConfiguration = (processingOptions) => {
             rename: processingOptions.output?.rename || false,
             newFileName: processingOptions.output?.newFileName || ''
         },
-        resize: (processingOptions.showResize && processingOptions.resizeDimension &&
-            processingOptions.resizeDimension.trim() !== '') ? {
-            enabled: true,
-            dimension: parseInt(processingOptions.resizeDimension)
-        } : { enabled: false },
-        crop: (processingOptions.showCrop && processingOptions.cropWidth &&
-            processingOptions.cropWidth.trim() !== '' && processingOptions.cropHeight &&
-            processingOptions.cropHeight.trim() !== '') ? {
-            enabled: true,
-            width: parseInt(processingOptions.cropWidth),
-            height: parseInt(processingOptions.cropHeight),
+        resize: {
+            enabled: !!processingOptions.showResize,
+            dimension: parseInt(processingOptions.resizeDimension || '1200')
+        },
+        crop: {
+            enabled: !!processingOptions.showCrop,
+            width: parseInt(processingOptions.cropWidth || '1080'),
+            height: parseInt(processingOptions.cropHeight || '1080'),
             mode: processingOptions.cropMode || CROP_MODES.STANDARD,
             position: processingOptions.cropPosition || 'center'
-        } : { enabled: false },
+        },
         templates: {
             selected: processingOptions.selectedTemplates || [],
             mode: processingOptions.processingMode || PROCESSING_MODES.CUSTOM

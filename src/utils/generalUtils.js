@@ -211,7 +211,7 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                     if (format === IMAGE_FORMATS.ORIGINAL) {
                         processedImages.push({
                             ...image,
-                            file: image.file || image.blob,
+                            file: processedFile,
                             name: image.name,
                             format: image.originalFormat || image.type.split('/')[1],
                             processed: false,
