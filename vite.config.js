@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 
 // Get base URL from environment or use default
 const base = process.env.VITE_BASE_URL || './'
+console.log('Vite config loaded');
 
 export default defineConfig({
   plugins: [react()],
@@ -22,7 +23,13 @@ export default defineConfig({
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-tf': ['@tensorflow/tfjs', '@tensorflow-models/coco-ssd'],
+          'vendor-upscaler': ['upscaler', '@upscalerjs/esrgan-slim'],
+          'vendor-utils': ['jszip', 'file-saver', 'html2canvas']
+        }
       }
     },
     // Reduce chunk size warning
@@ -59,5 +66,17 @@ export default defineConfig({
     port: 4173,
     host: true,
     open: false
+  },
+
+  // Vitest configuration
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/setupTests.js'],
+    css: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+    },
   }
 })

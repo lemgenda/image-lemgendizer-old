@@ -32,6 +32,7 @@ const QualityControlsCard = ({
             <div className="form-group">
                 <RangeSliderElement
                     label={t('compression.quality')}
+                    id="compression-quality-slider"
                     value={quality}
                     onChange={(value) => onQualityChange('compression', 'quality', value)}
                     min={COMPRESSION_QUALITY_RANGE.MIN}
@@ -41,10 +42,11 @@ const QualityControlsCard = ({
             </div>
 
             <div className="form-group">
-                <label className="form-label">{t('compression.targetSize')}</label>
+                <label className="form-label" htmlFor="target-file-size">{t('compression.targetSize')}</label>
                 <div className="number-input-wrapper">
                     <input
                         type="number"
+                        id="target-file-size"
                         className="input-field"
                         value={fileSize}
                         onChange={(e) => onQualityChange('compression', 'fileSize', e.target.value)}

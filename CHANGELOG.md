@@ -3,6 +3,52 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[2.8.1] - 2026-01-04
+----------------------
+
+### Major Changes
+
+*   **Accessibility & Theming Overhaul**:
+    *   Achieved **WCAG AA/AAA Compliance** for color contrast in both Light and Dark themes.
+    *   Dark mode now uses high-contrast text on buttons (dark text on light buttons) for superior readability.
+    *   Fixed incorrect button text colors (white text on light backgrounds in some cases).
+    *   Added proper `aria-labels` and `id` associations for all form inputs (sliders, drop zones, url inputs).
+    *   Fixed invisible tab text in Dark Mode by standardizing `TabPanel` CSS variables.
+*   **Production Cleanup**:
+    *   Removed all debug console logs (`console.log`, `console.warn`) for a clean production console.
+    *   Resolved all remaining ESLint errors (including `no-empty` blocks).
+    *   Cleaned up temporary log files and build artifacts.
+*   **Bug Fixes**:
+    *   Fixed `createExportZip` function to correctly handle translations (passed `t` function properly).
+    *   Fixed screenshot filenames to be properly translated instead of hardcoded english fallbacks.
+
+[2.8.0] - 2026-01-03
+----------------------
+
+### Major Changes
+
+*   **Production Readiness**: Completed full production readiness audit and remediation.
+*   **Performance Optimization**:
+    *   Optimized AI upscaling with non-blocking async data transfer.
+    *   Implemented Web Worker for image sharpening to prevent UI freezing.
+    *   Optimized bundle size with manual chunks and dev-dependency cleanup.
+*   **UI Stability**: Fixed all UI integration tests and refined test matchers.
+*   **Proxy Server Improvements**: Cleaned up proxy server logs and error handling.
+
+### Features
+
+*   **Non-Blocking AI**: User interface remains responsive during heavy AI operations.
+*   **Optimized Bundle**: Faster initial load times due to better code splitting.
+*   **Enhanced Stability**: Robust error handling in proxy server and tests.
+
+### Technical Improvements
+
+*   **HTMLImageElement Mock**: Added robust mocking for JSDOM image handling.
+*   **Dependency Cleanup**: Moved `canvas` to devDependencies.
+*   **Code Cleanup**: Removed debugging logs and standardized logging.
+*   **Test Suite**: All tests (Unit, Integration, UI) are passing stable.
+*   **Documentation**: Complete JSDoc audit and standardization across all processors and utilities.
+
 [2.7.0] - 2026-01-02
 ----------------------
 

@@ -54,7 +54,6 @@ async function fetchWithRetry(url, options, maxRetries = 3) {
 const getViewportConfig = (template) => {
     const isMobile = template.id.includes('mobile');
     const isTablet = template.id.includes('tablet');
-    const isFullPage = template.id.includes('-full');
 
     let viewport = {
         isMobile: false,
@@ -132,7 +131,6 @@ export const captureScreenshot = async (url, template, options = {}) => {
         );
 
         if (!response.ok) {
-            const errorText = await response.text();
             throw new Error('Screenshot API failed');
         }
 
@@ -450,42 +448,37 @@ export function prepareScreenshotTemplates(selectedTemplateIds, url) {
  * @returns {Promise<Object>} Screenshot processing results
  */
 export async function orchestrateScreenshotProcessing(selectedTemplateIds, url, onProgress = null) {
-    try {
-        if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
-            throw new Error('No screenshot templates selected');
-        }
-
-        if (!url || url.trim() === '') {
-            throw new Error('No URL provided');
-        }
-
-        if (onProgress) onProgress('preparing-screenshots', 10);
-
-        const screenshotTemplates = getScreenshotTemplateConfigs(selectedTemplateIds);
-
-        if (onProgress) onProgress('capturing-screenshots', 30);
-
-        const results = await captureMultipleScreenshots(screenshotTemplates, url, {
-            delayBetweenRequests: 2000
-        });
-
-        if (onProgress) onProgress('processing-results', 80);
-
-        const processedImages = convertScreenshotResultsToImages(results);
-
-        if (onProgress) onProgress('completed', 100);
-
-        return {
-            results,
-            processedImages,
-            success: results.successful > 0,
-            total: results.total,
-            successful: results.successful
-        };
-
-    } catch (error) {
-        throw error;
+    if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
+        throw new Error('No screenshot templates selected');
     }
+
+    if (!url || url.trim() === '') {
+        throw new Error('No URL provided');
+    }
+
+    if (onProgress) onProgress('preparing-screenshots', 10);
+
+    const screenshotTemplates = getScreenshotTemplateConfigs(selectedTemplateIds);
+
+    if (onProgress) onProgress('capturing-screenshots', 30);
+
+    const results = await captureMultipleScreenshots(screenshotTemplates, url, {
+        delayBetweenRequests: 2000
+    });
+
+    if (onProgress) onProgress('processing-results', 80);
+
+    const processedImages = convertScreenshotResultsToImages(results);
+
+    if (onProgress) onProgress('completed', 100);
+
+    return {
+        results,
+        processedImages,
+        success: results.successful > 0,
+        total: results.total,
+        successful: results.successful
+    };
 }
 
 /**

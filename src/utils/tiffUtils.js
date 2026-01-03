@@ -30,34 +30,7 @@ const getTIFFExtensionPattern = () => {
     return new RegExp(`\\.(${tiffExtensions.join('|')})$`, 'i');
 };
 
-/**
- * Creates a regex pattern for TIFF file names
- * @returns {RegExp} Regex pattern for TIFF file names
- */
-const getTIFFFileNamePattern = () => {
-    const tiffExtensions = FILE_EXTENSIONS.TIFF.map(ext => ext.replace('.', ''));
-    return new RegExp(`(${tiffExtensions.join('|')})$`, 'i');
-};
 
-/**
- * Checks if a file is a TIFF file
- * @param {File} file - File to check
- * @returns {boolean} True if file is TIFF
- */
-const isTIFFFile = (file) => {
-    if (!file || !file.name) return false;
-
-    const fileName = file.name.toLowerCase();
-    const mimeType = file.type?.toLowerCase() || '';
-
-    // Check by MIME type
-    if (mimeType && TIFF_FORMATS.includes(mimeType)) {
-        return true;
-    }
-
-    // Check by file extension
-    return FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
-};
 
 /**
  * Loads UTIF library from CDN if not already available
@@ -121,7 +94,7 @@ export const convertTIFFWithUTIF = (tiffFile) => {
                         window.UTIF.decodeImages(arrayBuffer, ifds);
                         decodeSuccess = true;
                     }
-                } catch (imageDecodeError) {
+                } catch {
                     // Continue with placeholder
                 }
 
@@ -171,7 +144,7 @@ export const convertTIFFWithUTIF = (tiffFile) => {
                         if (rgba && rgba.length > 0 && rgba.length >= (width * height * 2)) {
                             rgbaSuccess = true;
                         }
-                    } catch (rgbaError) {
+                    } catch {
                         // Continue with placeholder
                     }
                 }
@@ -548,7 +521,7 @@ export const convertTIFFForProcessing = async (tiffFile) => {
         try {
             const result = await convertTIFFSimple(tiffFile);
             return result;
-        } catch (simpleError) {
+        } catch {
             // Continue to UTIF method
         }
 
@@ -556,20 +529,20 @@ export const convertTIFFForProcessing = async (tiffFile) => {
             try {
                 const result = await convertTIFFWithUTIF(tiffFile);
                 return result;
-            } catch (utifError) {
+            } catch {
                 // Continue to placeholder method
             }
         }
 
         try {
             return await createTIFFPlaceholderFromInfo(tiffFile);
-        } catch (placeholderError) {
+        } catch {
             // Use final fallback
         }
 
         return await createTIFFPlaceholderFile(tiffFile);
 
-    } catch (error) {
+    } catch {
         return await createTIFFPlaceholderFile(tiffFile);
     }
 };
@@ -603,18 +576,13 @@ export const isTIFFMimeType = (mimeType) => {
  * @returns {Promise<string>} Data URL of the preview image
  */
 export const generateTIFFPreview = async (tiffFile, maxSize = 400) => {
-    try {
-        if (!window.UTIF) {
-            throw new Error('UTIF library not loaded');
-        }
-
-        const pngFile = await convertTIFFWithUTIF(tiffFile);
-        const preview = await createScaledPreview(pngFile, maxSize);
-        return preview;
-
-    } catch (error) {
-        throw error;
+    if (!window.UTIF) {
+        throw new Error('UTIF library not loaded');
     }
+
+    const pngFile = await convertTIFFWithUTIF(tiffFile);
+    const preview = await createScaledPreview(pngFile, maxSize);
+    return preview;
 };
 
 
@@ -723,7 +691,7 @@ export const generateQuickTIFFPreview = async (tiffFile, maxSize = 300) => {
                     } else if (window.UTIF.decodeImages) {
                         window.UTIF.decodeImages(arrayBuffer, ifds);
                     }
-                } catch (decodeError) { }
+                } catch { /* ignore */ }
 
                 let width = firstIFD.width || firstIFD['ImageWidth'] || firstIFD['t256'] || 200;
                 let height = firstIFD.height || firstIFD['ImageLength'] || firstIFD['t257'] || 150;
@@ -765,7 +733,7 @@ export const generateQuickTIFFPreview = async (tiffFile, maxSize = 300) => {
                         resolve(canvas.toDataURL('image/png'));
                         return;
                     }
-                } catch (rgbaError) { }
+                } catch { /* ignore */ }
 
                 ctx.fillStyle = '#e3f2fd';
                 ctx.fillRect(0, 0, previewWidth, previewHeight);
@@ -904,7 +872,7 @@ export const convertLegacyFormat = async (imageFile) => {
     if (isTIFF) {
         try {
             return await convertTIFFForProcessing(imageFile);
-        } catch (error) {
+        } catch {
             return await createTIFFPlaceholderFile(imageFile);
         }
     }

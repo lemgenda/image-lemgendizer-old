@@ -44,16 +44,14 @@ import {
 
 import {
     convertLegacyFormat,
-    convertTIFFForProcessing,
+
     loadAIModel,
     calculateUpscaleFactor,
     safeCleanupGPUMemory,
     convertSVGToRaster,
     isSVGFile,
     getSVGDimensions,
-    createSVGPlaceholderWithAspectRatio,
-    checkImageTransparency,
-    checkImageTransparencyDetailed
+    createSVGPlaceholderWithAspectRatio
 } from '../utils';
 
 import {
@@ -66,7 +64,7 @@ let aiModelLoading = false;
 /**
  * Converts SVG to raster and crops it
  */
-const convertSVGToRasterAndCrop = async (svgFile, targetWidth, targetHeight, format = IMAGE_FORMATS.WEBP, cropPosition = 'center') => {
+const convertSVGToRasterAndCrop = async (svgFile, targetWidth, targetHeight, format = IMAGE_FORMATS.WEBP) => {
     try {
         const scaleFactor = 2;
         const conversionWidth = Math.max(targetWidth, 800) * scaleFactor;
@@ -129,7 +127,7 @@ const convertSVGToRasterAndCrop = async (svgFile, targetWidth, targetHeight, for
             type: format === IMAGE_FORMATS.PNG ? MIME_TYPE_MAP.png : MIME_TYPE_MAP.webp
         });
 
-    } catch (error) {
+    } catch {
         return await createSVGPlaceholderWithAspectRatio(svgFile, targetWidth, targetHeight, format);
     }
 };
@@ -145,7 +143,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
     if (isSVG) {
         try {
             return await convertSVGToRasterAndCrop(imageFile, targetWidth, targetHeight, options.format || IMAGE_FORMATS.WEBP, 'center');
-        } catch (svgError) {
+        } catch {
             return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
         }
     }
@@ -165,7 +163,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
         if (isTIFF || isBMP || isGIF || isICO) {
             try {
                 processableFile = await convertLegacyFormat(imageFile);
-            } catch (convertError) {
+            } catch {
                 // Conversion failed - fallback to simple crop with original file
                 return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
             }
@@ -181,7 +179,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
             if (upscaleFactor > 1 && upscaleFactor <= MAX_SCALE_FACTOR) {
                 try {
                     sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
-                } catch (upscaleError) {
+                } catch {
                     // Intentionally ignore - continue with non-upscaled image if AI upscaling fails
                 }
             }
@@ -195,7 +193,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
             try {
                 model = await loadAIModel();
                 aiModel = model;
-            } catch (modelError) {
+            } catch {
                 model = null;
             }
         }
@@ -208,8 +206,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
         if (useLogoDetection) {
             try {
                 logos = await detectLogos(resized.element, resized.width, resized.height, model);
-            } catch (logoError) {
-            }
+            } catch { /* ignored */ }
         }
 
         let croppedFile;
@@ -297,7 +294,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
                     focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
                     croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
                 }
-            } catch (aiError) {
+            } catch {
 
                 focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
                 croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
@@ -308,7 +305,7 @@ export const processSmartCrop = async (imageFile, targetWidth, targetHeight, opt
             croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
         }
         return croppedFile;
-    } catch (error) {
+    } catch {
 
         return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, CROP_MODES.SMART, options);
     }
@@ -374,17 +371,7 @@ export const processTemplateSmartCrop = async (imageFile, template, options = {}
                         imgHeight = parts[3];
                     }
                 }
-            } catch (error) {
-                imgWidth = 800;
-                imgHeight = 600;
-            }
-        } else if (isTIFF) {
-            try {
-                const convertedFile = await convertTIFFForProcessing(imageFile);
-                const img = await loadImage(convertedFile);
-                imgWidth = img.width;
-                imgHeight = img.height;
-            } catch (error) {
+            } catch {
                 imgWidth = 800;
                 imgHeight = 600;
             }
@@ -393,7 +380,7 @@ export const processTemplateSmartCrop = async (imageFile, template, options = {}
                 const img = await loadImage(imageFile);
                 imgWidth = img.width;
                 imgHeight = img.height;
-            } catch (error) {
+            } catch {
                 imgWidth = 800;
                 imgHeight = 600;
             }
@@ -414,7 +401,7 @@ export const processTemplateSmartCrop = async (imageFile, template, options = {}
     if (isSVG) {
         try {
             return await convertSVGToRasterAndCrop(imageFile, finalWidth, finalHeight, options.format || IMAGE_FORMATS.WEBP, cropPosition);
-        } catch (svgError) {
+        } catch {
             return await processStandardCrop(imageFile, finalWidth, finalHeight, cropPosition, mergedOptions);
         }
     }
@@ -422,9 +409,14 @@ export const processTemplateSmartCrop = async (imageFile, template, options = {}
 };
 
 /**
- * Processes simple smart crop without AI
+ * Processes simple smart crop without AI (center crop fallback or standard crop)
+ * @param {File} imageFile - The image file to process
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {Object} options - Processing options
+ * @returns {Promise<File|Object>} Processed image file
  */
-export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeight, cropPosition = 'center', options = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }) => {
+export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeight, options = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }) => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
     const isSVG = isSVGFile(imageFile);
@@ -432,8 +424,8 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
     if (isSVG) {
         try {
             return await processSVGCrop(imageFile, targetWidth, targetHeight);
-        } catch (svgError) {
-            return await processStandardCrop(imageFile, targetWidth, targetHeight, cropPosition, options);
+        } catch {
+            return await processStandardCrop(imageFile, targetWidth, targetHeight, CROP_POSITIONS.CENTER, options);
         }
     }
 
@@ -447,8 +439,8 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
         if (isTIFF || isBMP || isGIF || isICO) {
             try {
                 processableFile = await convertLegacyFormat(imageFile);
-            } catch (convertError) {
-                return await processStandardCrop(imageFile, targetWidth, targetHeight, cropPosition, options);
+            } catch {
+                return await processStandardCrop(imageFile, targetWidth, targetHeight, CROP_POSITIONS.CENTER, options);
             }
         }
 
@@ -466,20 +458,19 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
             if (upscaleFactor > 1) {
                 try {
                     sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
-                } catch (upscaleError) {
-                }
+                } catch { /* ignored */ }
             }
         }
 
         const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight, options);
         const focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
-        const adjustedPosition = adjustCropPositionForFocalPoint(cropPosition, focalPoint, resized.width, resized.height);
+        const adjustedPosition = adjustCropPositionForFocalPoint(CROP_POSITIONS.CENTER, focalPoint, resized.width, resized.height);
         const croppedFile = await cropFromResized(resized, targetWidth, targetHeight, adjustedPosition, imageFile, options);
         return croppedFile;
-    } catch (error) {
+    } catch {
         try {
-            return await processStandardCrop(imageFile, targetWidth, targetHeight, cropPosition, options);
-        } catch (cropError) {
+            return await processStandardCrop(imageFile, targetWidth, targetHeight, CROP_POSITIONS.CENTER, options);
+        } catch (error) {
             return await createErrorPlaceholder(imageFile, targetWidth, targetHeight, 'Crop Error', error.message);
         }
     }
@@ -487,8 +478,13 @@ export const processSimpleSmartCrop = async (imageFile, targetWidth, targetHeigh
 
 /**
  * Processes standard crop with proper resize
+ * @param {File} imageFile - The image file to process
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {Object} options - Processing options (quality, format, etc.)
+ * @returns {Promise<File|Object>} Processed image file
  */
-export const processStandardCrop = async (imageFile, targetWidth, targetHeight, cropPosition = 'center', options = {}) => {
+export const processStandardCrop = async (imageFile, targetWidth, targetHeight, options = {}) => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
@@ -497,25 +493,25 @@ export const processStandardCrop = async (imageFile, targetWidth, targetHeight, 
     const isGIF = mimeType === 'image/gif' || FILE_EXTENSIONS.GIF.some(ext => fileName.endsWith(ext));
     const isICO = mimeType === 'image/x-icon' || mimeType === 'image/vnd.microsoft.icon' || FILE_EXTENSIONS.ICO.some(ext => fileName.endsWith(ext));
 
-    try {
-        let processableFile = imageFile;
-        if (isTIFF || isBMP || isGIF || isICO) {
-            try {
-                processableFile = await convertLegacyFormat(imageFile);
-            } catch (e) {
-                // Intentionally ignore - continue with original file if conversion fails
-            }
+    let processableFile = imageFile;
+    if (isTIFF || isBMP || isGIF || isICO) {
+        try {
+            processableFile = await convertLegacyFormat(imageFile);
+        } catch {
+            // Intentionally ignore - continue with original file if conversion fails
         }
-
-        const resized = await resizeImageForCrop(processableFile, targetWidth, targetHeight, options);
-        return await cropFromResized(resized, targetWidth, targetHeight, cropPosition, imageFile, options);
-    } catch (error) {
-        throw error;
     }
+
+    const resized = await resizeImageForCrop(processableFile, targetWidth, targetHeight, options);
+    return await cropFromResized(resized, targetWidth, targetHeight, CROP_POSITIONS.CENTER, imageFile, options);
 };
 
 /**
  * Processes SVG crop operation with proper resize
+ * @param {File} svgFile - The SVG file to process
+ * @param {number} width - Target width
+ * @param {number} height - Target height
+ * @returns {Promise<File>} Processed image file
  */
 export const processSVGCrop = async (svgFile, width, height) => {
     try {
@@ -592,6 +588,11 @@ export const processSVGCrop = async (svgFile, width, height) => {
 
 /**
  * Resizes image for crop operation
+ * @param {File} imageFile - The image file to process
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {Object} options - Processing options
+ * @returns {Promise<Object>} Object containing resized element and dimensions
  */
 const resizeImageForCrop = async (imageFile, targetWidth, targetHeight, options = {}) => {
     return new Promise((resolve, reject) => {
@@ -700,7 +701,7 @@ const loadImage = (file) => {
 /**
  * Calculates crop offset based on position
  */
-const calculateCropOffset = (srcWidth, srcHeight, targetWidth, targetHeight, position) => {
+export const calculateCropOffset = (srcWidth, srcHeight, targetWidth, targetHeight, position) => {
     let offsetX, offsetY;
     switch (position) {
         case CROP_POSITIONS.TOP_LEFT:
@@ -763,7 +764,7 @@ const cropFromResized = async (resized, targetWidth, targetHeight, position, ori
 
         // Area Aware Centering: If the box fits (with some padding), center the whole box
         // We calculate each axis independently for better partial fits
-        const horizontalFits = width * 1.1 <= targetWidth;
+        // const horizontalFits = width * 1.1 <= targetWidth;
         const verticalFits = height * 1.1 <= targetHeight;
 
         subjectCenterX = x + width / 2;
@@ -868,7 +869,7 @@ const detectLogos = async (imgElement, width, height, model) => {
             ) || false;
             const meetsConfidence = pred.score >= (LOGO_DETECTION_CONFIG.MIN_LOGO_CONFIDENCE || 0.7);
             if (pred.bbox) {
-                const [x, y, w, h] = pred.bbox;
+                const [, , w, h] = pred.bbox;
                 const area = w * h;
                 const imageArea = width * height;
                 const sizeRatio = area / imageArea;
@@ -880,7 +881,7 @@ const detectLogos = async (imgElement, width, height, model) => {
         });
         logos.sort((a, b) => b.score - a.score);
         return logos;
-    } catch (error) {
+    } catch {
         return [];
     }
 };
@@ -1039,7 +1040,7 @@ const getLuminance = (data, idx) => {
 /**
  * Adjusts crop position based on focal point
  */
-const adjustCropPositionForFocalPoint = (position, focalPoint, width, height) => {
+export const adjustCropPositionForFocalPoint = (position, focalPoint, width, height) => {
     const THRESHOLD = PROCESSING_THRESHOLDS.FOCAL_POINT_THRESHOLD || 0.3;
     const centerX = width / 2;
     const centerY = height / 2;
@@ -1216,7 +1217,7 @@ export const processSmartCropForLogo = async (imageFile, targetWidth, targetHeig
             });
 
             return new File([blob], fileName.replace(/\.svg$/i, `.png`), { type: MIME_TYPE_MAP.png });
-        } catch (svgError) {
+        } catch {
 
             return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
         }
@@ -1235,7 +1236,7 @@ export const processSmartCropForLogo = async (imageFile, targetWidth, targetHeig
             try {
 
                 processableFile = await convertLegacyFormat(imageFile);
-            } catch (convertError) {
+            } catch {
                 // Conversion failed - fallback to simple crop with original file
                 return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
             }
@@ -1252,7 +1253,7 @@ export const processSmartCropForLogo = async (imageFile, targetWidth, targetHeig
                 model = await loadAIModel();
                 aiModel = model;
 
-            } catch (modelError) {
+            } catch {
                 // AI model loading failed - fallback to simple crop
                 return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
             }
@@ -1355,12 +1356,12 @@ export const processSmartCropForLogo = async (imageFile, targetWidth, targetHeig
 
             return new File([blob], outputFileName, { type: blob.type });
 
-        } catch (detectionError) {
+        } catch {
 
             return await fitImageToContain(processableFile, targetWidth, targetHeight, options);
         }
 
-    } catch (error) {
+    } catch {
 
         return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, 'center', options);
     }
@@ -1472,8 +1473,7 @@ export const initializeCropProcessor = async () => {
             aiModelLoading = true;
             try {
                 aiModel = await loadAIModel();
-            } catch (error) {
-            } finally {
+            } catch { /* ignored */ } finally {
                 aiModelLoading = false;
             }
         }

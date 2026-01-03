@@ -14,7 +14,7 @@ import {
  * @param {Object} image - Image object to check
  * @returns {boolean} True if file is preview or error
  */
-const isPreviewOrErrorFile = (image) => {
+export const isPreviewOrErrorFile = (image) => {
     try {
         if (!validateImage(image)) {
             return false;
@@ -284,7 +284,8 @@ const processFaviconSet = async (sourceImage, settings, zip = null) => {
  * @param {Function} t - Translation function
  * @returns {Promise<Blob>} ZIP file blob
  */
-export const createExportZip = async (originalImages, processedImages, settings, mode, formats = [APP_CONFIG.IMAGE_DEFAULTS.DEFAULT_FORMAT], t = null) => {
+export const createExportZip = async (originalImages, processedImages, settings, mode = [APP_CONFIG.IMAGE_DEFAULTS.DEFAULT_FORMAT], t = null) => {
+
     const zip = new JSZip();
 
     const validOriginalImages = originalImages.filter(validateImage);
@@ -296,7 +297,11 @@ export const createExportZip = async (originalImages, processedImages, settings,
         const originalFolderName = t ? t('export.folders.original') : EXPORT_FOLDERS.ORIGINAL_IMAGES;
         const originalFolder = zip.folder(originalFolderName);
         for (const image of validOriginalImages) {
-            originalFolder.file(image.name, image.file || image.blob);
+            try {
+                originalFolder.file(image.name, image.file || image.blob);
+            } catch {
+                // Ignore error adding original image
+            }
         }
     }
 
@@ -314,11 +319,15 @@ export const createExportZip = async (originalImages, processedImages, settings,
                 const formatFolderName = format.toUpperCase();
                 const formatFolder = optimizedFolder.folder(formatFolderName);
                 for (const image of images) {
-                    let fileName = image.name;
-                    if (!fileName.includes(APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR)) {
-                        fileName = `${fileName}${APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR}${format}`;
+                    try {
+                        let fileName = image.name;
+                        if (!fileName.includes(APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR)) {
+                            fileName = `${fileName}${APP_CONFIG.TEMPLATES.FORMAT_SEPARATOR}${format}`;
+                        }
+                        formatFolder.file(fileName, image.file || image.blob);
+                    } catch {
+                        // Ignore error adding optimized image
                     }
-                    formatFolder.file(fileName, image.file || image.blob);
                 }
             }
         }
@@ -334,8 +343,12 @@ export const createExportZip = async (originalImages, processedImages, settings,
             const webFolder = zip.folder(webFolderName);
 
             for (const image of webTemplates) {
-                const fileName = getTranslatedImageName(image, t);
-                webFolder.file(fileName, image.file || image.blob);
+                try {
+                    const fileName = getTranslatedImageName(image, t);
+                    webFolder.file(fileName, image.file || image.blob);
+                } catch {
+                    // Ignore error adding web template
+                }
             }
         }
     }
@@ -432,15 +445,15 @@ export const createExportZip = async (originalImages, processedImages, settings,
     const summary = createExportSummary(validOriginalImages, validProcessedImages, settings, mode, faviconFilesCount, t);
     zip.file('export-summary.txt', summary);
 
-    const zipBlob = await zip.generateAsync({
+
+
+    return zip.generateAsync({
         type: 'blob',
         compression: 'DEFLATE',
         compressionOptions: {
             level: 6
         }
     });
-
-    return zipBlob;
 };
 
 /**
@@ -461,7 +474,7 @@ export const createFaviconZip = async (imageFile, settings = {}) => {
  * @param {string} url - Website URL
  * @returns {Promise<Blob>} Screenshot ZIP file
  */
-export const createScreenshotZip = async (screenshotImages, url) => {
+export const createScreenshotZip = async (screenshotImages, url, t = null) => {
     const zip = new JSZip();
 
     const validImages = screenshotImages.filter(img =>
@@ -476,11 +489,15 @@ export const createScreenshotZip = async (screenshotImages, url) => {
 
     for (const image of validImages) {
         let fileName = image.name;
-        if (!fileName || fileName === '') {
+
+        if (t) {
+            fileName = getTranslatedImageName(image, t);
+        } else if (!fileName || fileName === '') {
             const timestamp = new Date().toISOString().split('T')[0];
             const templateName = image.template?.name?.replace(/\s+/g, '-').toLowerCase() || 'screenshot';
             fileName = `${templateName}-${timestamp}.${image.format}`;
         }
+
         screenshotFolder.file(fileName, image.file || image.blob);
     }
 

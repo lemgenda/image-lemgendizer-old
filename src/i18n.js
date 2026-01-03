@@ -9,7 +9,7 @@ const resources = {
             'app.processClientSide': 'All processing is done client-side',
             'app.subtitle': 'Batch Image Processing & Optimization Tool',
             'app.title': 'Image LemGendizer',
-            'app.version': 'Image LemGendizer v2.7.0',
+            'app.version': 'Image LemGendizer v2.8.0',
 
             'button.capture': 'Capture Screenshots',
             'button.capturing': 'Capturing...',
@@ -71,6 +71,9 @@ const resources = {
             'common.screenshot_other': 'screenshots',
             'common.template_one': 'template',
             'common.template_other': 'templates',
+            'common.selected': 'Selected',
+            'common.notSelected': 'Not selected',
+
 
             'compression.auto': 'Leave empty for auto',
             'compression.quality': 'Quality (1-100)',
@@ -197,6 +200,8 @@ const resources = {
             'gallery.templateImage': 'TEMPLATE IMAGE',
             'gallery.templatesMode': '(Templates mode: Click ONE image to select)',
             'gallery.title': 'Uploaded Images',
+            'gallery.image': 'Image',
+
 
             'loading.aiCropping': 'Applying AI smart cropping...',
             'loading.aiForSmartCrop': 'AI model loading for smart crop',
@@ -524,7 +529,7 @@ const resources = {
             'app.processClientSide': 'Sva obrada se vrši na klijentu',
             'app.subtitle': 'Alat za obradu i optimizaciju slika',
             'app.title': 'Image LemGendizer',
-            'app.version': 'Image LemGendizer v2.7.0',
+            'app.version': 'Image LemGendizer v2.8.0',
 
             'button.capture': 'Snimi Screenshotove',
             'button.capturing': 'Snimanje...',
@@ -594,6 +599,9 @@ const resources = {
             'common.template_one': 'predložak',
             'common.template_few': 'predloška',
             'common.template_other': 'predložaka',
+            'common.selected': 'Odabrano',
+            'common.notSelected': 'Nije odabrano',
+
 
             'compression.auto': 'Ostavite prazno za automatsko',
             'compression.quality': 'Kvaliteta (1-100)',
@@ -725,6 +733,8 @@ const resources = {
             'gallery.templateImage': 'SLIKA ZA PREDLOŠKE',
             'gallery.templatesMode': '(Način predložaka: Kliknite JEDNU sliku za odabir)',
             'gallery.title': 'Učitane slike',
+            'gallery.image': 'Slika',
+
 
             'loading.aiCropping': 'Primjenjujem pametno AI obrezivanje...',
             'loading.aiForSmartCrop': 'Učitavam AI model za pametno obrezivanje',

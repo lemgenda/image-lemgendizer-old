@@ -1,48 +1,76 @@
 {
-    "name": "image-lemgendizer",
-    "version": "2.7.0",
-    "type": "module",
-    "engines": {
-        "node": ">=20.0.0"
-    },
-    "scripts": {
-        "dev": "vite",
-        "build": "vite build",
-        "build:gh-pages": "VITE_BASE_URL='./' vite build",
-        "preview": "vite preview",
-        "proxy": "node proxy-server.js",
-        "dev:all": "concurrently \"npm run dev\" \"npm run proxy\""
-    },
-    "dependencies": {
-        "@fortawesome/fontawesome-free": "^7.1.0",
-        "@fortawesome/free-solid-svg-icons": "^7.1.0",
-        "@fortawesome/react-fontawesome": "^3.1.1",
-        "@tensorflow-models/coco-ssd": "^2.2.3",
-        "@tensorflow/tfjs": "~4.11.0",
-        "@upscalerjs/esrgan-slim": "^1.0.0-beta.12",
-        "canvas": "^3.2.0",
-        "cors": "^2.8.5",
-        "express": "^4.18.2",
-        "file-saver": "^2.0.5",
-        "html2canvas": "^1.4.1",
-        "i18next": "^25.7.3",
-        "i18next-browser-languagedetector": "^8.2.0",
-        "jszip": "^3.10.1",
-        "react": "^19.2.3",
-        "react-dom": "^19.2.3",
-        "react-dropzone": "^14.3.8",
-        "react-i18next": "^16.5.0",
-        "react-modal": "^3.16.3",
-        "upscaler": "^1.0.0-beta.19",
-        "utif": "^3.1.0"
-    },
-    "devDependencies": {
-        "@types/react": "^19.2.7",
-        "@types/react-dom": "^19.2.3",
-        "@vitejs/plugin-react": "^5.1.2",
-        "concurrently": "^8.2.2",
-        "gh-pages": "^6.3.0",
-        "terser": "^5.44.1",
-        "vite": "^7.3.0"
-    }
+  "name": "image-lemgendizer",
+  "version": "2.8.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:gh-pages": "VITE_BASE_URL='./' vite build",
+    "preview": "vite preview",
+    "proxy": "node proxy-server.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run proxy\"",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "lint": "eslint . --max-warnings 0",
+    "prepare": "husky",
+    "lint-staged": "lint-staged"
+  },
+  "lint-staged": {
+    "*.{js,jsx}": [
+      "eslint --max-warnings 0"
+    ]
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.1.0",
+    "@fortawesome/free-solid-svg-icons": "^7.1.0",
+    "@fortawesome/react-fontawesome": "^3.1.1",
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow/tfjs": "~4.11.0",
+    "@upscalerjs/esrgan-slim": "^1.0.0-beta.12",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "express-rate-limit": "^8.2.1",
+    "file-saver": "^2.0.5",
+    "helmet": "^8.1.0",
+    "html2canvas": "^1.4.1",
+    "i18next": "^25.7.3",
+    "i18next-browser-languagedetector": "^8.2.0",
+    "jszip": "^3.10.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-dropzone": "^14.3.8",
+    "react-i18next": "^16.5.0",
+    "react-modal": "^3.16.3",
+    "upscaler": "^1.0.0-beta.19",
+    "utif": "^3.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/ui": "^4.0.16",
+    "canvas": "^3.2.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.39.2",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.26",
+    "gh-pages": "^6.3.0",
+    "globals": "^17.0.0",
+    "husky": "^9.1.7",
+    "jsdom": "^27.4.0",
+    "lint-staged": "^16.2.7",
+    "terser": "^5.44.1",
+    "vite": "^7.3.0",
+    "vitest": "^4.0.16",
+    "vitest-canvas-mock": "^1.1.3"
+  }
 }

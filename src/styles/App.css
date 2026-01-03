@@ -10,13 +10,15 @@
     --color-text-primary: #1e293b;
     --color-text-secondary: #475569;
     --color-text-muted: #64748b;
-    --color-primary: #3b82f6;
-    --color-primary-hover: #2563eb;
+    --color-primary: #2563eb;
+    --color-primary-hover: #1d4ed8;
     --color-secondary: #94a3b8;
-    --color-success: #10b981;
-    --color-warning: #f59e0b;
-    --color-danger: #ef4444;
+    --color-success: #059669;
+    --color-warning: #d97706;
+    --color-danger: #dc2626;
     --color-info: #0ea5e9;
+    --color-btn-text: #ffffff;
+    --color-btn-text-inverse: #ffffff;
 
     /* Borders */
     --border-color: #e2e8f0;
@@ -53,13 +55,15 @@
     --color-text-primary: #f1f5f9;
     --color-text-secondary: #cbd5e1;
     --color-text-muted: #94a3b8;
-    --color-primary: #3b82f6;
-    --color-primary-hover: #60a5fa;
+    --color-primary: #60a5fa;
+    --color-primary-hover: #93c5fd;
     --color-secondary: #475569;
-    --color-success: #10b981;
-    --color-warning: #f59e0b;
-    --color-danger: #ef4444;
-    --color-info: #0ea5e9;
+    --color-success: #34d399;
+    --color-warning: #fbbf24;
+    --color-danger: #f87171;
+    --color-info: #38bdf8;
+    --color-btn-text: #0f172a;
+    --color-btn-text-inverse: #0f172a;
 
     /* Borders */
     --border-color: #334155;
@@ -143,6 +147,7 @@ body {
     background-color: var(--color-bg-primary);
     color: var(--color-text-primary);
     line-height: 1.5;
+    padding: var(--space-md);
     transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
@@ -808,7 +813,7 @@ body {
 
 .btn-primary {
     background-color: var(--color-primary);
-    color: white;
+    color: var(--color-btn-text);
     border-color: var(--color-primary);
 }
 
@@ -830,7 +835,7 @@ body {
 
 .btn-danger {
     background-color: var(--color-danger);
-    color: white;
+    color: var(--color-btn-text-inverse);
     border-color: var(--color-danger);
 }
 
@@ -841,7 +846,7 @@ body {
 
 .btn-success {
     background-color: var(--color-success);
-    color: white;
+    color: var(--color-btn-text-inverse);
     border-color: var(--color-success);
 }
 

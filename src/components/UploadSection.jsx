@@ -1,9 +1,9 @@
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { handleImageDrop, handleFileSelect } from '../utils';
 import '../styles/UploadSection.css';
 
-function UploadSection({ onImagesSelected, fileInputRef, isScreenshotMode }) {
+function UploadSection({ onImagesSelected, fileInputRef }) {
     const { t } = useTranslation();
 
     const handleDrop = useCallback((e) => {
@@ -25,6 +25,15 @@ function UploadSection({ onImagesSelected, fileInputRef, isScreenshotMode }) {
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 onClick={() => fileInputRef.current?.click()}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        fileInputRef.current?.click();
+                    }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={t('upload.dropZone.title')}
             >
                 <div className="drop-zone-content">
                     <i className="fas fa-cloud-upload-alt fa-3x"></i>

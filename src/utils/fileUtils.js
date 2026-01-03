@@ -41,6 +41,8 @@ export const calculateUpscaleFactor = (originalWidth, originalHeight, targetWidt
     const heightScale = targetHeight / originalHeight;
     const requiredScale = Math.max(widthScale, heightScale);
 
+    if (requiredScale <= 1) return 1;
+
     const availableScales = AVAILABLE_UPSCALE_FACTORS;
 
     for (const scale of availableScales) {
@@ -133,17 +135,27 @@ export const checkAVIFSupport = async () => {
  * @throws {Error} If no valid file data found
  */
 export const ensureFileObject = async (image) => {
+    if (image instanceof File) return image;
+    if (image instanceof Blob) return image; // Handle Blob directly
+
     if (image.file instanceof File || image.file instanceof Blob) {
         return image.file;
+    }
+
+    if (image.blob instanceof File || image.blob instanceof Blob) {
+        return image.blob;
     }
 
     if (image.url && image.url.startsWith('blob:')) {
         try {
             const response = await fetch(image.url);
+            if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
             const blob = await response.blob();
             return new File([blob], image.name || 'image', { type: blob.type });
-        } catch (error) {
-            throw new Error('Invalid image file');
+        } catch {
+
+            // Failed to fetch blob URL
+            throw new Error(`Invalid image file (blob fetch failed)`);
         }
     }
 
@@ -153,10 +165,19 @@ export const ensureFileObject = async (image) => {
             const blob = await response.blob();
             return new File([blob], image.name || 'image', { type: blob.type });
         } catch (error) {
-            throw new Error('Invalid image file');
+            throw new Error(`Invalid image file (data URL failed): ${error.message}`);
         }
     }
 
+    // Try detecting if it's a proxy object or structural clone that lost prototype (rare but possible)
+    if (image.file && image.file.size && image.file.type) {
+        // It looks like a file but failed instanceof check.
+        // Could happen if File object comes from a different window/frame context.
+        // We can try to cast it.
+        return image.file;
+    }
+
+    // No valid file data found for image
     throw new Error('No valid file data found');
 };
 
@@ -180,7 +201,7 @@ export const createImageObjects = (files) => {
         if (!isTIFF && !isSVG && fileObj.size < PROCESSING_THRESHOLDS.MAX_FILE_SIZE_PREVIEW) {
             try {
                 previewUrl = await fileToDataURL(fileObj);
-            } catch (error) {
+            } catch {
                 previewUrl = URL.createObjectURL(fileObj);
             }
         } else {
@@ -271,7 +292,7 @@ export const checkImageTransparency = async (file) => {
                         svgText.includes('stroke: none');
 
                     resolve(hasTransparency);
-                } catch (error) {
+                } catch {
                     resolve(false);
                 }
             };
@@ -308,7 +329,7 @@ export const checkImageTransparency = async (file) => {
                         }
                     }
                     resolve(false);
-                } catch (error) {
+                } catch {
                     resolve(false);
                 }
             };
@@ -356,7 +377,7 @@ export const checkImageTransparency = async (file) => {
 
                 URL.revokeObjectURL(objectUrl);
                 resolve(false);
-            } catch (error) {
+            } catch {
                 URL.revokeObjectURL(objectUrl);
                 resolve(false);
             }
@@ -442,7 +463,7 @@ export const checkImageTransparencyQuick = async (file) => {
                         }
                     }
                     resolve(false);
-                } catch (error) {
+                } catch {
                     resolve(false);
                 }
             };
@@ -507,7 +528,7 @@ export const checkImageTransparencyDetailed = async (file) => {
                         alphaChannel: false,
                         format: 'svg'
                     });
-                } catch (error) {
+                } catch {
                     resolve({
                         hasTransparency: false,
                         type: 'unknown',
@@ -640,7 +661,7 @@ export const generateSpecialFormatPreview = async (image) => {
  * @param {Function} t - Translation function
  * @returns {Object} Processing summary
  */
-export const generateProcessingSummary = (summaryData, t) => {
+export const generateProcessingSummary = (summaryData) => {
     const summary = {
         mode: summaryData.mode,
         imagesProcessed: summaryData.imagesProcessed,
@@ -691,7 +712,7 @@ export const generateProcessingSummary = (summaryData, t) => {
  * @param {Function} t - Translation function
  * @returns {Object} Processing summary
  */
-export const createProcessingSummary = (result, options, t) => {
+export const createProcessingSummary = (result, options) => {
     const summary = {
         mode: options.templates?.mode || PROCESSING_MODES.CUSTOM,
         imagesProcessed: result.imagesProcessed || 0,

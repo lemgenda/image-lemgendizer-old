@@ -1,4 +1,3 @@
-import { formatFileSize } from '../utils';
 import {
     PROCESSING_MODES,
     ANIMATION_DURATIONS,
@@ -14,7 +13,6 @@ import { TEMPLATE_CATEGORIES_CONST } from '../configs/templateConfigs';
  */
 export const handleProcessingError = (error, t) => {
     const errorMessage = error.message.toLowerCase();
-    const errorStack = error.stack?.toLowerCase() || '';
 
     if (/\bai\b/.test(errorMessage) || errorMessage.includes('model') ||
         errorMessage.includes('tensor') || errorMessage.includes('upscaler')) {

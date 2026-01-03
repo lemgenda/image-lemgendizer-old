@@ -152,7 +152,8 @@ export const RESIZE_DIMENSION_RANGE = {
 
 export const CROP_MIN_SIZE = 50;
 
-export const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\x00-\x1F]/g;
+// eslint-disable-next-line no-control-regex
+export const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\u0000-\u001F]/g;
 
 // ================================
 // UI/Display Constants

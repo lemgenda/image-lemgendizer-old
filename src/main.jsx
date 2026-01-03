@@ -7,9 +7,13 @@ import './styles/App.css';
 
 import '@fortawesome/fontawesome-free/css/all.min.css';
 
+import { ProcessingProvider } from './context/ProcessingContext';
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
+    <ProcessingProvider>
+      <App />
+    </ProcessingProvider>
   </React.StrictMode>
 );

@@ -25,13 +25,6 @@ import {
 } from '../constants';
 
 import {
-    convertTIFFForProcessing,
-    createTIFFPlaceholderFile,
-    ensureFileObject,
-    convertSVGToRaster,
-    resizeSVG,
-    isSVGFile,
-    getSVGDimensions,
     calculateUpscaleFactor,
     calculateSafeDimensions
 } from '../utils';
@@ -181,13 +174,9 @@ export const loadUpscalerForScale = async (scale) => {
         if (!window[modelGlobalName]) throw new Error(`Model ${modelGlobalName} not loaded`);
 
         let upscaler;
-        try {
-            upscaler = new window.Upscaler({
-                model: window[modelGlobalName],
-            });
-        } catch (createError) {
-            throw createError;
-        }
+        upscaler = new window.Upscaler({
+            model: window[modelGlobalName],
+        });
 
         upscalerInstances[scale] = upscaler;
         upscalerUsageCount[scale] = 1;
@@ -195,7 +184,7 @@ export const loadUpscalerForScale = async (scale) => {
         cleanupInProgress = wasCleanupInProgress;
         return upscaler;
 
-    } catch (error) {
+    } catch {
         const fallbackUpscaler = createEnhancedFallbackUpscaler(scale);
         upscalerInstances[scale] = fallbackUpscaler;
         upscalerUsageCount[scale] = 1;
@@ -219,7 +208,7 @@ export const releaseUpscalerForScale = (scale) => {
                 if (upscalerUsageCount[scale] <= 0) {
                     const upscaler = upscalerInstances[scale];
                     if (upscaler && upscaler.dispose) {
-                        try { upscaler.dispose(); } catch (e) { }
+                        try { upscaler.dispose(); } catch { /* ignored */ }
                     }
                     delete upscalerInstances[scale];
                     delete upscalerUsageCount[scale];
@@ -312,7 +301,7 @@ export const upscaleImageWithAI = async (imageFile, scale, originalName) => {
         let upscaler;
         try {
             upscaler = await loadUpscalerForScale(scale);
-        } catch (loadError) {
+        } catch {
             textureManagerFailures++;
             if (textureManagerFailures >= MAX_TEXTURE_FAILURES) aiUpscalingDisabled = true;
             URL.revokeObjectURL(objectUrl);
@@ -323,7 +312,7 @@ export const upscaleImageWithAI = async (imageFile, scale, originalName) => {
         let upscaleResult;
         try {
             upscaleResult = await safeUpscale(upscaler, img, scale);
-        } catch (upscaleError) {
+        } catch {
             textureManagerFailures++;
             if (textureManagerFailures >= MAX_TEXTURE_FAILURES) aiUpscalingDisabled = true;
             URL.revokeObjectURL(objectUrl);
@@ -365,7 +354,7 @@ export const upscaleImageWithAI = async (imageFile, scale, originalName) => {
         cleanupInProgress = wasCleanupInProgress;
         return upscaledFile;
 
-    } catch (error) {
+    } catch {
         textureManagerFailures++;
         if (textureManagerFailures >= MAX_TEXTURE_FAILURES) aiUpscalingDisabled = true;
         cleanupInProgress = wasCleanupInProgress;
@@ -383,8 +372,8 @@ export const upscaleImageWithAI = async (imageFile, scale, originalName) => {
             const safeDimensions = calculateSafeDimensions(img.naturalWidth, img.naturalHeight, scale);
             URL.revokeObjectURL(objectUrl);
             return upscaleImageEnhancedFallback(imageFile, safeDimensions.scale, originalName);
-        } catch (fallbackError) {
-            throw error;
+        } catch {
+            throw new Error('AI upscaling failed');
         }
     }
 };
@@ -426,7 +415,7 @@ export const upscaleImageEnhancedFallback = async (imageFile, scale, originalNam
     ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
     if (scale >= PROCESSING_THRESHOLDS.DEFAULT_SCALE_FACTOR) {
-        applySmartSharpening(canvas, ctx, scale);
+        await applySmartSharpening(canvas, ctx, scale);
     }
 
     URL.revokeObjectURL(objectUrl);
@@ -490,7 +479,7 @@ export const upscaleImageTiled = async (img, scale, originalName, objectUrl) => 
             tempCtx.imageSmoothingQuality = 'high';
 
             tempCtx.drawImage(img, srcX, srcY, srcWidth, srcHeight, 0, 0, tileWidth, tileHeight);
-            applySmartSharpening(tempCanvas, tempCtx, scale);
+            await applySmartSharpening(tempCanvas, tempCtx, scale);
             ctx.drawImage(tempCanvas, tileX, tileY);
         }
     }
@@ -518,43 +507,55 @@ export const upscaleImageTiled = async (img, scale, originalName, objectUrl) => 
  * @param {CanvasRenderingContext2D} ctx - Canvas context
  * @param {number} scale - Scale factor
  */
-const applySmartSharpening = (canvas, ctx, scale) => {
-    try {
-        const width = canvas.width;
-        const height = canvas.height;
+/**
+ * Applies smart sharpening to canvas using a Web Worker
+ * @param {HTMLCanvasElement} canvas - Canvas element
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {number} scale - Scale factor
+ * @returns {Promise<void>}
+ */
+const applySmartSharpening = (canvas, ctx) => {
+    return new Promise((resolve) => {
+        try {
+            const width = canvas.width;
+            const height = canvas.height;
 
-        if (width * height > PROCESSING_THRESHOLDS.MAX_PIXELS_FOR_SMART_SHARPENING) return;
-
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const data = imageData.data;
-        const originalData = new Uint8ClampedArray(data);
-
-        for (let y = 1; y < height - 1; y++) {
-            for (let x = 1; x < width - 1; x++) {
-                const idx = (y * width + x) * 4;
-
-                for (let channel = 0; channel < 3; channel++) {
-                    const channelIdx = idx + channel;
-
-                    const top = originalData[channelIdx - width * 4];
-                    const bottom = originalData[channelIdx + width * 4];
-                    const left = originalData[channelIdx - 4];
-                    const right = originalData[channelIdx + 4];
-                    const center = originalData[channelIdx];
-
-                    const sharpened = Math.min(255, Math.max(0,
-                        center * 1.5 - (top + bottom + left + right) * 0.125
-                    ));
-
-                    data[channelIdx] = sharpened;
-                }
+            if (width * height > PROCESSING_THRESHOLDS.MAX_PIXELS_FOR_SMART_SHARPENING) {
+                resolve();
+                return;
             }
-        }
 
-        ctx.putImageData(imageData, 0, 0);
-    } catch (error) {
-        // Ignore sharpening errors
-    }
+            const imageData = ctx.getImageData(0, 0, width, height);
+
+            // Create worker
+            const worker = new Worker(new URL('../workers/sharpen.worker.js', import.meta.url));
+
+            worker.onmessage = (e) => {
+                if (e.data.processed && e.data.imageData) {
+                    ctx.putImageData(e.data.imageData, 0, 0);
+                }
+                worker.terminate();
+                resolve();
+            };
+
+            worker.onerror = () => {
+
+                worker.terminate();
+                resolve(); // Fail silently to continue processing
+            };
+
+            worker.postMessage({
+                imageData: imageData,
+                width: width,
+                height: height,
+                threshold: PROCESSING_THRESHOLDS.MAX_PIXELS_FOR_SMART_SHARPENING
+            });
+
+        } catch {
+
+            resolve();
+        }
+    });
 };
 
 /**
@@ -563,33 +564,32 @@ const applySmartSharpening = (canvas, ctx, scale) => {
  * @returns {Promise<HTMLCanvasElement>} Canvas element
  */
 const tensorToCanvas = async (tensor) => {
-    return new Promise((resolve) => {
-        const [height, width, channels] = tensor.shape;
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
+    const [height, width, channels] = tensor.shape;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
 
-        const imageData = ctx.createImageData(width, height);
-        const data = tensor.dataSync();
+    const imageData = ctx.createImageData(width, height);
+    const data = await tensor.data(); // Async fetch from GPU to prevent blocking main thread
 
-        for (let i = 0; i < data.length; i += channels) {
-            const pixelIndex = i / channels * 4;
-            imageData.data[pixelIndex] = data[i];
-            imageData.data[pixelIndex + 1] = data[i + 1];
-            imageData.data[pixelIndex + 2] = data[i + 2];
-            if (channels === 4) {
-                imageData.data[pixelIndex + 3] = data[i + 3];
-            } else {
-                imageData.data[pixelIndex + 3] = 255;
-            }
+    for (let i = 0; i < data.length; i += channels) {
+        const pixelIndex = i / channels * 4;
+        imageData.data[pixelIndex] = data[i];
+        imageData.data[pixelIndex + 1] = data[i + 1];
+        imageData.data[pixelIndex + 2] = data[i + 2];
+        if (channels === 4) {
+            imageData.data[pixelIndex + 3] = data[i + 3];
+        } else {
+            imageData.data[pixelIndex + 3] = 255;
         }
+    }
 
-        ctx.putImageData(imageData, 0, 0);
-        resolve(canvas);
+    ctx.putImageData(imageData, 0, 0);
 
-        if (tensor.dispose) tensor.dispose();
-    });
+    if (tensor.dispose) tensor.dispose();
+
+    return canvas;
 };
 
 /**
@@ -618,7 +618,7 @@ const dataURLToCanvas = (dataURL) => {
  * @param {number} scale - Scale factor
  * @returns {Object} Fallback upscaler
  */
-const createEnhancedFallbackUpscaler = (scale) => {
+export const createEnhancedFallbackUpscaler = (scale) => {
     return {
         scale,
         upscale: async (imageElement) => {
@@ -638,7 +638,7 @@ const createEnhancedFallbackUpscaler = (scale) => {
             ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
 
             if (safeDimensions.scale >= PROCESSING_THRESHOLDS.DEFAULT_SCALE_FACTOR) {
-                applySmartSharpening(canvas, ctx, safeDimensions.scale);
+                await applySmartSharpening(canvas, ctx, safeDimensions.scale);
             }
 
             return canvas;
@@ -694,7 +694,7 @@ const loadUpscalerModelScript = (src) => {
  * @param {Object} options - Processing options
  * @returns {Promise<File>} Resized image file
  */
-export const resizeImageWithAI = async (imageFile, targetDimension, options = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }) => {
+export const resizeImageWithAI = async (imageFile, targetDimension) => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(imageFile);
 
@@ -723,9 +723,11 @@ export const resizeImageWithAI = async (imageFile, targetDimension, options = { 
     let sourceFile = imageFile;
 
     if (needsUpscaling) {
+
         const upscaleFactor = calculateUpscaleFactor(img.naturalWidth, img.naturalHeight, newWidth, newHeight);
         if (upscaleFactor > 1) {
             sourceFile = await upscaleImageWithAI(sourceFile, upscaleFactor, imageFile.name);
+
         }
     }
 
@@ -747,9 +749,16 @@ export const resizeImageWithAI = async (imageFile, targetDimension, options = { 
     canvas.height = newHeight;
     ctx.drawImage(finalImg, 0, 0, newWidth, newHeight);
 
+
+
     const resizedBlob = await new Promise(resolve => {
         canvas.toBlob(resolve, MIME_TYPE_MAP.webp, DEFAULT_WEBP_QUALITY);
     });
+
+    if (!resizedBlob) {
+        URL.revokeObjectURL(finalObjectUrl);
+        throw new Error(`Failed to create blob for resized image: ${imageFile.name}`);
+    }
 
     URL.revokeObjectURL(finalObjectUrl);
     const processedFile = new File([resizedBlob], imageFile.name.replace(/\.[^/.]+$/, '.webp'), {
@@ -766,7 +775,7 @@ export const resizeImageWithAI = async (imageFile, targetDimension, options = { 
  * @param {Object} options - Processing options
  * @returns {Promise<File>} Resized image file
  */
-export const resizeImageStandard = async (imageFile, targetDimension, options = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }) => {
+export const resizeImageStandard = async (imageFile, targetDimension) => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(imageFile);
 
@@ -818,7 +827,7 @@ export const cleanupResizeProcessor = () => {
     Object.keys(upscalerInstances).forEach(key => {
         const upscaler = upscalerInstances[key];
         if (upscaler && upscaler.dispose) {
-            try { upscaler.dispose(); } catch (e) { }
+            try { upscaler.dispose(); } catch { /* ignored */ }
         }
     });
 

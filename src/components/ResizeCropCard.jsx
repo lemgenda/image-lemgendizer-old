@@ -91,10 +91,11 @@ const ResizeCropCard = ({
 
             {showResize ? (
                 <div className="form-group">
-                    <label className="form-label">{t('resize.dimension')}</label>
+                    <label className="form-label" htmlFor="resize-dimension-input">{t('resize.dimension')}</label>
                     <div className="number-input-wrapper">
                         <input
                             type="number"
+                            id="resize-dimension-input"
                             className="input-field"
                             value={resizeDimension}
                             onChange={(e) => onOptionChange('resizeDimension', e.target.value)}
@@ -156,10 +157,11 @@ const ResizeCropCard = ({
 
                     <div className="grid grid-cols-2 gap-md">
                         <div className="form-group">
-                            <label className="form-label">{t('crop.width')}</label>
+                            <label className="form-label" htmlFor="crop-width-input">{t('crop.width')}</label>
                             <div className="number-input-wrapper">
                                 <input
                                     type="number"
+                                    id="crop-width-input"
                                     className="input-field"
                                     value={cropWidth}
                                     onChange={(e) => onOptionChange('cropWidth', e.target.value)}
@@ -190,10 +192,11 @@ const ResizeCropCard = ({
                         </div>
 
                         <div className="form-group">
-                            <label className="form-label">{t('crop.height')}</label>
+                            <label className="form-label" htmlFor="crop-height-input">{t('crop.height')}</label>
                             <div className="number-input-wrapper">
                                 <input
                                     type="number"
+                                    id="crop-height-input"
                                     className="input-field"
                                     value={cropHeight}
                                     onChange={(e) => onOptionChange('cropHeight', e.target.value)}
@@ -226,8 +229,9 @@ const ResizeCropCard = ({
 
                     {cropMode === CROP_MODES.STANDARD && (
                         <div className="form-group">
-                            <label className="form-label">{t('crop.position')}</label>
+                            <label className="form-label" htmlFor="crop-position-select">{t('crop.position')}</label>
                             <select
+                                id="crop-position-select"
                                 value={cropPosition}
                                 onChange={(e) => onOptionChange('cropPosition', e.target.value)}
                                 className="select-field"

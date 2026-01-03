@@ -1,7 +1,8 @@
 Image LemGendizer
 =================
 
-A modern web application for batch image processing and optimization. Process images for web and social media templates directly in your browser.
+A modern, accessible, and production-ready web application for batch image processing and optimization. Process images for web and social media templates directly in your browser with AI superpowers.
+
 
 [https://img.shields.io/npm/v/@lemgenda/image-lemgendizer](https://img.shields.io/npm/v/@lemgenda/image-lemgendizer)
 [https://img.shields.io/npm/l/@lemgenda/image-lemgendizer](https://img.shields.io/npm/l/@lemgenda/image-lemgendizer)
@@ -48,6 +49,8 @@ Visit: [**https://lemgenda.github.io/image-lemgendizer-old/**](https://lemgenda
 *   **Internationalization**: English and Croatian language support with auto-detection
 
 *   **Responsive Design**: Works perfectly on desktop, tablet, and mobile
+*   **Accessibility First**: Fully WCAG compliant with high-contrast Dark Mode and screen reader support
+
 
 
 ### 🎯 **Advanced Features**
@@ -344,6 +347,6 @@ This project is licensed under the MIT License - see the [LICENSE](https://lice
 📊 Project Status
 -----------------
 
-**Version**: 2.7.0**Last Updated**: January 2026**Active Development**: Yes**Production Ready**: Yes
+**Version**: 2.8.0**Last Updated**: January 2026**Active Development**: Yes**Production Ready**: Yes
 
 Built with ❤️ by [Lem Treursić](https://github.com/lemgenda)

@@ -17,7 +17,6 @@ import { DEFAULT_PLACEHOLDER_DIMENSIONS, APP_TEMPLATE_CONFIG } from '../configs/
 
 import {
     convertLegacyFormat as legacyConverter,
-    convertTIFFForProcessing,
     createTIFFPlaceholderFile,
     ensureFileObject,
     checkAVIFSupport,
@@ -70,6 +69,7 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
             const isICO = mimeType === 'image/x-icon' || mimeType === 'image/vnd.microsoft.icon' || FILE_EXTENSIONS.ICO.some(ext => fileName.endsWith(ext));
 
             let processedFile;
+            let conversionError = null;
 
             if (isSVG) {
                 // Handle SVG resize
@@ -116,13 +116,11 @@ export const processLemGendaryResize = async (images, dimension, options = { qua
                 // Handle regular or legacy image resize
                 try {
                     let processableFile = imageFile;
-                    let conversionError = null;
-
                     if (isTIFF || isBMP || isGIF || isICO) {
                         try {
                             processableFile = await legacyConverter(imageFile);
-                        } catch (error) {
-                            conversionError = error.message;
+                        } catch {
+                            // conversionError = error.message;
                             if (isTIFF) {
                                 processableFile = await createTIFFPlaceholderFile(imageFile, dimension, dimension);
                             }
@@ -201,18 +199,17 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
             const isSVG = mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext));
 
             let croppedFile;
+            // let conversionError = null;
 
             if (isSVG) {
                 croppedFile = await processSVGCrop(imageFile, width, height);
             } else {
                 let processableFile = imageFile;
-                let conversionError = null;
-
                 if (isTIFF || isBMP || isGIF || isICO) {
                     try {
                         processableFile = await legacyConverter(imageFile);
-                    } catch (error) {
-                        conversionError = error.message;
+                    } catch {
+                        // conversionError = error.message;
                         if (isTIFF) {
                             processableFile = await createTIFFPlaceholderFile(imageFile, width, height);
                         }
@@ -261,11 +258,10 @@ export const processLemGendaryCrop = async (images, width, height, cropPosition 
                         cropPosition: cropPosition
                     });
                     continue;
-                } catch (fallbackError) {
-                }
+                } catch { /* ignored */ }
             }
 
-            const errorFile = await createErrorPlaceholder(imageFile, width, height, 'Crop Error', error.message);
+            const errorFile = await createErrorPlaceholder(image, width, height, 'Crop Error', error.message);
             const optimizedErrorFile = await processLengendaryOptimize(errorFile, options.quality, options.format);
 
             results.push({
@@ -366,7 +362,7 @@ export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUA
                 DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
                 DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
                 format);
-        } catch (svgError) {
+        } catch {
             return await createSVGPlaceholderWithAspectRatio(imageFile,
                 DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
                 DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
@@ -385,7 +381,7 @@ export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUA
     if (isLegacyFormat) {
         try {
             processedFile = await legacyConverter(imageFile);
-        } catch (error) {
+        } catch {
             if (isTIFF) {
                 processedFile = await createTIFFPlaceholderFile(imageFile);
             } else {
@@ -412,7 +408,7 @@ export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUA
 
         try {
             objectUrl = URL.createObjectURL(processedFile);
-        } catch (error) {
+        } catch {
             reject(new Error(PROCESSING_ERRORS.OBJECT_URL_FAILED));
             return;
         }
@@ -489,7 +485,7 @@ export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUA
                 if (targetSize && currentQuality !== undefined && bestBlob && (bestBlob.size / 1024) > targetSize) {
                     const minQuality = 0.1;
                     const steps = 8;
-                    let lastQuality = currentQuality;
+                    // let lastQuality = currentQuality;
 
                     for (let i = 1; i <= steps; i++) {
                         const nextQuality = currentQuality - (i * (currentQuality - minQuality) / steps);
@@ -499,7 +495,7 @@ export const processLengendaryOptimize = async (imageFile, quality = DEFAULT_QUA
                         if (!newBlob) break;
 
                         bestBlob = newBlob;
-                        lastQuality = nextQuality;
+                        // lastQuality = nextQuality;
 
                         if ((newBlob.size / 1024) <= targetSize) {
                             break;

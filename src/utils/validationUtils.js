@@ -11,6 +11,8 @@ import {
     SUPPORTED_INPUT_FORMATS
 } from '../constants';
 
+import { formatFileSize } from './fileUtils';
+
 /**
  * Validates processing options before starting.
  * @param {Object} processingOptions - Processing options to validate
@@ -104,8 +106,11 @@ export const validateProcessingOptions = (processingOptions) => {
         if (!newFileName.trim()) {
             errors.push('New file name cannot be empty when rename is enabled');
         } else {
-            const invalidChars = /[<>:"/\\|?*\x00-\x1F]/g;
-            if (invalidChars.test(newFileName)) {
+            // Invalid Windows filename characters
+            const invalidChars = /[<>:"/\\|?*]/g;
+            // eslint-disable-next-line no-control-regex
+            const controlChars = /[\u0000-\u001F]/g;
+            if (invalidChars.test(newFileName) || controlChars.test(newFileName)) {
                 errors.push('New file name contains invalid characters');
             }
 
@@ -176,10 +181,10 @@ export function validateScreenshotUrlInput(url) {
             message: 'Valid URL',
             cleanUrl: formattedUrl
         };
-    } catch (error) {
+    } catch {
         return {
             isValid: false,
-            message: 'Invalid URL format'
+            errors: ['Failed to validate crop parameters']
         };
     }
 }
@@ -265,7 +270,7 @@ export const validateCropParameters = (width, height, position) => {
         errors.push('Height cannot exceed 10000 pixels');
     }
 
-    const validPositions = getCropPositions();
+    const validPositions = CROP_POSITION_LIST;
     if (!validPositions.includes(position)) {
         errors.push(`Invalid crop position. Must be one of: ${validPositions.join(', ')}`);
     }

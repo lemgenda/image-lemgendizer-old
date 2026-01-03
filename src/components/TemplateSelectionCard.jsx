@@ -134,8 +134,9 @@ const TemplateSelectionCard = ({
                             </div>
                             <div className="space-y-sm">
                                 {categoryTemplates.map(template => (
-                                    <label key={template.id} className="checkbox-wrapper">
+                                    <label key={template.id} className="checkbox-wrapper" htmlFor={`template-${template.id}`} aria-label={template.name}>
                                         <input
+                                            id={`template-${template.id}`}
                                             type="checkbox"
                                             className="checkbox-input"
                                             checked={processingOptions.selectedTemplates.includes(template.id)}
@@ -176,8 +177,13 @@ const TemplateSelectionCard = ({
 
                                 {category.id === 'favicon' && (
                                     <div className="flex flex-col">
-                                        <div className="checkbox-wrapper" onClick={() => onFaviconToggle(!isFaviconSelected)}>
+                                        <label
+                                            className="checkbox-wrapper"
+                                            htmlFor="favicon-toggle"
+                                            aria-label="Toggle Favicon Generation"
+                                        >
                                             <input
+                                                id="favicon-toggle"
                                                 type="checkbox"
                                                 className="checkbox-input"
                                                 checked={isFaviconSelected}
@@ -191,33 +197,41 @@ const TemplateSelectionCard = ({
                                                     <span className="text-muted text-sm">Multiple sizes</span>
                                                 </div>
                                             </span>
-                                        </div>
+                                        </label>
 
                                         {isFaviconSelected && (
                                             <div className="mt-2 pl-8 space-y-2">
-                                                <div className="checkbox-wrapper" onClick={(e) => { e.stopPropagation(); onSingleOptionChange('faviconMode', 'basic'); }}>
+                                                <label
+                                                    className="checkbox-wrapper"
+                                                    htmlFor="favicon-basic"
+                                                >
                                                     <input
+                                                        id="favicon-basic"
                                                         type="radio"
                                                         name="faviconMode"
                                                         className="checkbox-input"
                                                         checked={processingOptions.faviconMode === 'basic'}
-                                                        onChange={() => { }}
+                                                        onChange={() => onSingleOptionChange('faviconMode', 'basic')}
                                                     />
                                                     <span className="checkbox-custom"></span>
                                                     <span className="flex-1 text-sm">Basic Set (Essential Only)</span>
-                                                </div>
+                                                </label>
 
-                                                <div className="checkbox-wrapper" onClick={(e) => { e.stopPropagation(); onSingleOptionChange('faviconMode', 'complete'); }}>
+                                                <label
+                                                    className="checkbox-wrapper"
+                                                    htmlFor="favicon-complete"
+                                                >
                                                     <input
+                                                        id="favicon-complete"
                                                         type="radio"
                                                         name="faviconMode"
                                                         className="checkbox-input"
                                                         checked={processingOptions.faviconMode !== 'basic'}
-                                                        onChange={() => { }}
+                                                        onChange={() => onSingleOptionChange('faviconMode', 'complete')}
                                                     />
                                                     <span className="checkbox-custom"></span>
                                                     <span className="flex-1 text-sm">Complete Set (All Platforms)</span>
-                                                </div>
+                                                </label>
                                             </div>
                                         )}
                                     </div>

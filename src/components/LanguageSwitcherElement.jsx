@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SPACING, BORDER_RADIUS, SHADOWS, TRANSITIONS } from '../constants';
 import {
     getLanguagesWithFlags,
     getCurrentLanguage,
@@ -8,6 +7,7 @@ import {
     getCurrentLanguageObject,
     initializeLanguage
 } from '../utils';
+import '../styles/LanguageSwitcherElement.css';
 
 /**
  * LanguageSwitcherElement component for switching between available languages
@@ -17,13 +17,15 @@ import {
 function LanguageSwitcherElement() {
     const { i18n } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
-    const [currentLanguage, setCurrentLanguage] = useState(getCurrentLanguage());
+    const [currentLanguage, setCurrentLanguage] = useState(() => {
+        const lang = initializeLanguage(i18n); // Access i18n directly
+        return lang || getCurrentLanguage();
+    });
 
     const languages = getLanguagesWithFlags();
 
     useEffect(() => {
-        const lang = initializeLanguage(i18n);
-        setCurrentLanguage(lang);
+        // lang is initialized in useState
     }, [i18n]);
 
     const handleLanguageChange = (langCode) => {
@@ -35,183 +37,48 @@ function LanguageSwitcherElement() {
     const currentLang = getCurrentLanguageObject(currentLanguage);
 
     return (
-        <>
-            <style>{`
-                .language-switcher-container {
-                    position: relative;
-                    display: inline-flex;
-                    align-items: center;
-                }
+        <div className="language-switcher-container">
+            <button
+                className={`language-toggle-btn ${isOpen ? 'open' : ''}`}
+                onClick={() => setIsOpen(!isOpen)}
+                aria-label="Select language"
+                aria-expanded={isOpen}
+            >
+                <span className="language-flag">{currentLang.flag}</span>
+                <span className="language-code">{currentLang.code.toUpperCase()}</span>
+                <i
+                    className={`fas fa-chevron-down language-arrow ${isOpen ? 'open' : ''}`}
+                ></i>
+            </button>
 
-                .language-toggle-btn {
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    padding: 8px ${SPACING.SM};
-                    background: var(--color-bg-secondary);
-                    border: 1px solid var(--border-color);
-                    border-radius: ${BORDER_RADIUS.MD};
-                    color: var(--color-text-primary);
-                    font-size: 14px;
-                    font-weight: 500;
-                    cursor: pointer;
-                    transition: all ${TRANSITIONS.NORMAL} !important;
-                    min-width: 100px;
-                    outline: none;
-                }
+            {isOpen && (
+                <div className="language-dropdown-menu">
+                    {languages.map((lang) => (
+                        <button
+                            key={lang.code}
+                            className={`language-option-btn ${lang.code === currentLanguage ? 'active' : ''}`}
+                            onClick={() => handleLanguageChange(lang.code)}
+                        >
+                            <span className="language-flag">{lang.flag}</span>
+                            <span className="language-name" style={{ flex: '1', textAlign: 'left' }}>
+                                {lang.name}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
 
-                .language-toggle-btn:hover {
-                    background: var(--color-bg-tertiary) !important;
-                    border-color: var(--border-color-hover) !important;
-                }
-
-                .language-toggle-btn.open {
-                    border-radius: ${BORDER_RADIUS.MD} ${BORDER_RADIUS.MD} 0 0 !important;
-                    border-bottom-color: transparent !important;
-                }
-
-                .language-flag {
-                    font-size: 16px;
-                    margin-right: 8px;
-                }
-
-                .language-code {
-                    flex: 1;
-                    margin: 0 8px;
-                }
-
-                .language-arrow {
-                    font-size: 12px;
-                    color: var(--color-text-muted);
-                    transition: transform ${TRANSITIONS.NORMAL} !important;
-                }
-
-                .language-arrow.open {
-                    transform: rotate(180deg) !important;
-                }
-
-                .language-dropdown-menu {
-                    position: absolute;
-                    top: 100%;
-                    right: 0;
-                    background: var(--color-bg-secondary);
-                    border: 1px solid var(--border-color);
-                    border-top: none;
-                    border-radius: 0 0 ${BORDER_RADIUS.MD} ${BORDER_RADIUS.MD};
-                    box-shadow: ${SHADOWS.MD};
-                    z-index: 1001;
-                    min-width: 100px;
-                }
-
-                .language-option-btn {
-                    display: flex;
-                    align-items: center;
-                    width: 100%;
-                    padding: ${SPACING.SM} ${SPACING.MD};
-                    background: transparent;
-                    border: none;
-                    color: var(--color-text-secondary);
-                    font-size: 14px;
-                    cursor: pointer;
-                    transition: all ${TRANSITIONS.NORMAL} !important;
-                }
-
-                .language-option-btn:hover {
-                    background: var(--color-bg-tertiary) !important;
-                    color: var(--color-text-primary) !important;
-                }
-
-                .language-option-btn.active {
-                    background: rgba(59, 130, 246, 0.1) !important;
-                    color: var(--color-primary) !important;
-                    font-weight: 500;
-                }
-
-                .language-option-btn:not(:last-child) {
-                    border-bottom: 1px solid var(--border-color);
-                }
-
-                .language-dropdown-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    z-index: 1000;
-                }
-
-                @media (max-width: 768px) {
-                    .language-toggle-btn {
-                        min-width: 80px !important;
-                        padding: 6px 10px !important;
-                    }
-
-                    .language-code {
-                        display: none !important;
-                    }
-
-                    .language-option-btn .language-name {
-                        display: block !important;
-                    }
-                }
-
-                @media (max-width: 480px) {
-                    .language-toggle-btn {
-                        min-width: 70px !important;
-                        padding: 5px 8px !important;
-                        font-size: 13px !important;
-                    }
-
-                    .language-flag {
-                        font-size: 14px !important;
-                        margin-right: 6px !important;
-                    }
-
-                    .language-arrow {
-                        font-size: 10px !important;
-                    }
-                }
-            `}</style>
-
-            <div className="language-switcher-container">
-                <button
-                    className={`language-toggle-btn ${isOpen ? 'open' : ''}`}
-                    onClick={() => setIsOpen(!isOpen)}
-                    aria-label="Select language"
-                    aria-expanded={isOpen}
-                >
-                    <span className="language-flag">{currentLang.flag}</span>
-                    <span className="language-code">{currentLang.code.toUpperCase()}</span>
-                    <i
-                        className={`fas fa-chevron-down language-arrow ${isOpen ? 'open' : ''}`}
-                    ></i>
-                </button>
-
-                {isOpen && (
-                    <div className="language-dropdown-menu">
-                        {languages.map((lang) => (
-                            <button
-                                key={lang.code}
-                                className={`language-option-btn ${lang.code === currentLanguage ? 'active' : ''}`}
-                                onClick={() => handleLanguageChange(lang.code)}
-                            >
-                                <span className="language-flag">{lang.flag}</span>
-                                <span className="language-name" style={{ flex: '1', textAlign: 'left' }}>
-                                    {lang.name}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                )}
-
-                {isOpen && (
-                    <div
-                        className="language-dropdown-overlay"
-                        onClick={() => setIsOpen(false)}
-                    />
-                )}
-            </div>
-        </>
+            {isOpen && (
+                <div
+                    className="language-dropdown-overlay"
+                    role="button"
+                    tabIndex="0"
+                    aria-label="Close language menu"
+                    onClick={() => setIsOpen(false)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setIsOpen(false); }}
+                />
+            )}
+        </div>
     );
 }
 

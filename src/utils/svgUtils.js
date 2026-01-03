@@ -70,7 +70,7 @@ export const getSVGDimensions = async (svgFile) => {
                 }
 
                 resolve({ width, height, aspectRatio: width / height });
-            } catch (error) {
+            } catch {
                 resolve({
                     width: SVG_CONSTANTS.DEFAULT_WIDTH,
                     height: SVG_CONSTANTS.DEFAULT_HEIGHT,
@@ -154,10 +154,9 @@ export const convertSVGToRaster = async (svgFile, targetWidth, targetHeight, for
                                 originalHeight = parts[3];
                             }
                         }
-                    } catch (dimError) {
-                    }
+                    } catch { /* ignored */ }
 
-                } catch (parseError) {
+                } catch {
                     finalSvgText = SVG_XML_TEMPLATE
                         .replace(/{width}/g, originalWidth)
                         .replace(/{height}/g, originalHeight)
@@ -223,7 +222,7 @@ export const convertSVGToRaster = async (svgFile, targetWidth, targetHeight, for
                         if (svgUrl) URL.revokeObjectURL(svgUrl);
                         resolveLoad();
                     };
-                    img.onerror = (error) => {
+                    img.onerror = () => {
                         clearTimeout(timeout);
                         if (svgUrl) URL.revokeObjectURL(svgUrl);
                         rejectLoad(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));

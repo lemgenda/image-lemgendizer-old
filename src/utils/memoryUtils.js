@@ -14,6 +14,7 @@ let textureManagerFailures = 0;
 let cleanupInProgress = false;
 let aiModelLoading = false;
 
+
 /**
  * Initializes GPU memory monitoring system.
  * @returns {void}
@@ -59,7 +60,7 @@ export const safeCleanupGPUMemory = () => {
                         (!upscalerLastUsed[key] || (now - upscalerLastUsed[key] > UPSCALER_IDLE_TIMEOUT))) {
                         const upscaler = upscalerInstances[key];
                         if (upscaler && upscaler.dispose) {
-                            try { upscaler.dispose(); } catch (e) { }
+                            try { upscaler.dispose(); } catch { /* ignored */ }
                         }
                         delete upscalerInstances[key];
                         delete upscalerUsageCount[key];
@@ -72,7 +73,7 @@ export const safeCleanupGPUMemory = () => {
             }
         }
         currentMemoryUsage = 0;
-    } catch (error) {
+    } catch {
         // Ignore cleanup errors
     } finally {
         cleanupInProgress = false;
@@ -103,7 +104,7 @@ export const cleanupGPUMemory = () => {
             Object.keys(upscalerInstances).forEach(key => {
                 const upscaler = upscalerInstances[key];
                 if (upscaler && upscaler.dispose) {
-                    try { upscaler.dispose(); } catch (e) { }
+                    try { upscaler.dispose(); } catch { /* ignored */ }
                 }
             });
 
@@ -119,10 +120,9 @@ export const cleanupGPUMemory = () => {
         }
 
         currentMemoryUsage = 0;
-        aiUpscalingDisabled = false;
         textureManagerFailures = 0;
         aiModelLoading = false;
-    } catch (error) {
+    } catch {
         // Ignore cleanup errors
     } finally {
         cleanupInProgress = false;
@@ -155,7 +155,7 @@ export const loadAIModel = async () => {
 
         aiModelLoading = false;
         return aiModel;
-    } catch (error) {
+    } catch {
         aiModel = createSimpleAIModel();
         aiModelLoading = false;
         return aiModel;
@@ -236,7 +236,6 @@ export const cleanupAllResources = () => {
         aiModel = null;
     }
 
-    aiUpscalingDisabled = false;
     textureManagerFailures = 0;
     aiModelLoading = false;
 };
@@ -269,7 +268,7 @@ export const cleanupBlobUrls = (imageObjects) => {
             try {
                 URL.revokeObjectURL(image.url);
                 image.url = null;
-            } catch (e) {
+            } catch {
                 // Ignore errors
             }
         }
@@ -278,7 +277,7 @@ export const cleanupBlobUrls = (imageObjects) => {
             try {
                 URL.revokeObjectURL(image.previewData.url);
                 image.previewData.url = null;
-            } catch (e) {
+            } catch {
                 // Ignore errors
             }
         }
@@ -287,7 +286,7 @@ export const cleanupBlobUrls = (imageObjects) => {
             try {
                 const ctx = image.previewData.canvas.getContext('2d');
                 ctx.clearRect(0, 0, image.previewData.canvas.width, image.previewData.canvas.height);
-            } catch (e) {
+            } catch {
                 // Ignore errors
             }
         }

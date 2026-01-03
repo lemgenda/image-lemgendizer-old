@@ -31,7 +31,6 @@ import {
 import {
     processSmartCrop,
     processSimpleSmartCrop,
-    processStandardCrop,
     processSmartCropForLogo
 } from './cropProcessor';
 
@@ -116,15 +115,7 @@ export const getCategoryDisplayName = (categoryId) => {
  * @param {string} categoryId - Category ID
  * @returns {string} Category constant
  */
-const getCategoryConstant = (categoryId) => {
-    switch (categoryId) {
-        case TEMPLATE_CATEGORIES_CONST.WEB: return TEMPLATE_CATEGORIES_CONST.WEB;
-        case TEMPLATE_CATEGORIES_CONST.LOGO: return TEMPLATE_CATEGORIES_CONST.LOGO;
-        case TEMPLATE_CATEGORIES_CONST.FAVICON: return TEMPLATE_CATEGORIES_CONST.FAVICON;
-        case TEMPLATE_CATEGORIES_CONST.SCREENSHOTS: return TEMPLATE_CATEGORIES_CONST.SCREENSHOTS;
-        default: return TEMPLATE_CATEGORIES_CONST.SOCIAL || 'social_media';
-    }
-};
+
 
 /**
  * Creates template error files
@@ -276,7 +267,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                             );
                             wasSmartCropped = true;
                         }
-                    } catch (smartCropError) {
+                    } catch {
                         processedFile = await processSimpleSmartCrop(
                             processedFile,
                             targetWidth,
@@ -286,6 +277,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                         );
                     }
                 } else {
+                    /*
                     const cropResults = await processLemGendaryCrop(
                         [{ file: processedFile, name: image.name || APP_CONFIG.FILE_NAMING.DEFAULT_BASE_NAME }],
                         targetWidth,
@@ -296,6 +288,15 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     if (cropResults.length > 0 && cropResults[0].cropped) {
                         processedFile = cropResults[0].cropped;
                     }
+                    */
+                    // Fallback to standard crop since processLemGendaryCrop is not available
+                    processedFile = await processSimpleSmartCrop(
+                        processedFile,
+                        targetWidth,
+                        targetHeight,
+                        'center',
+                        { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }
+                    );
                 }
             } else {
                 const resizeResults = await processLemGendaryResize(
@@ -335,7 +336,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     isLogo: false,
                     subjectProtected: false
                 });
-            } catch (webpError) { }
+            } catch { /* ignored */ }
 
             try {
                 const jpgFile = await processLengendaryOptimize(processedFile, DEFAULT_JPG_QUALITY, IMAGE_FORMATS.JPG);
@@ -358,7 +359,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     isLogo: false,
                     subjectProtected: false
                 });
-            } catch (jpgError) { }
+            } catch { /* ignored */ }
 
         } else if (templateCategory === 'logo') {
             try {
@@ -382,7 +383,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     isLogo: true,
                     subjectProtected: subjectProtected
                 });
-            } catch (pngError) { }
+            } catch { /* ignored */ }
 
             if (!hasTransparency) {
                 try {
@@ -406,7 +407,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                         isLogo: true,
                         subjectProtected: subjectProtected
                     });
-                } catch (jpgError) { }
+                } catch { /* ignored */ }
             }
         } else if (templateCategory === 'screenshots') {
             try {
@@ -429,7 +430,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     isLogo: false,
                     subjectProtected: false
                 });
-            } catch (jpgError) { }
+            } catch { /* ignored */ }
         } else {
             try {
                 const jpgFile = await processLengendaryOptimize(processedFile, DEFAULT_JPG_QUALITY, IMAGE_FORMATS.JPG);
@@ -451,7 +452,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
                     isLogo: false,
                     subjectProtected: false
                 });
-            } catch (jpgError) { }
+            } catch { /* ignored */ }
         }
 
         return processedImages;
@@ -474,7 +475,7 @@ const processSingleTemplate = async (template, image, imageFile, useSmartCrop, a
  * @param {Object} options - Processing options
  * @returns {Promise<Array<Object>>} Array of processed images
  */
-export const processTemplateImages = async (image, selectedTemplates, useSmartCrop = false, aiModelLoaded = false, options = {}) => {
+export const processTemplateImages = async (image, selectedTemplates, useSmartCrop = false, aiModelLoaded = false) => {
     const processedImages = [];
 
     if (!image || !selectedTemplates || selectedTemplates.length === 0) {
@@ -496,7 +497,7 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
             URL.revokeObjectURL(objectUrl);
             resolve();
         };
-        img.onerror = (err) => {
+        img.onerror = () => {
             URL.revokeObjectURL(objectUrl);
             reject(new Error('Failed to load image'));
         };
@@ -535,8 +536,7 @@ export const processTemplateImages = async (image, selectedTemplates, useSmartCr
             safeCleanupGPUMemory();
         }
 
-    } catch (error) {
-    } finally {
+    } catch { /* ignored */ } finally {
         cleanupInProgress = wasCleanupInProgress;
         setTimeout(safeCleanupGPUMemory, PROCESSING_DELAYS.MEMORY_CLEANUP);
     }
