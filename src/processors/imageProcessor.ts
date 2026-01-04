@@ -11,7 +11,6 @@ import {
     FILE_EXTENSIONS,
     PROCESSING_ERRORS,
     DEFAULT_QUALITY,
-    DEFAULT_JPG_QUALITY,
     PROCESSING_MODES,
     CROP_MODES,
     IMAGE_FORMATS
@@ -23,7 +22,6 @@ import { TemplateConfig } from '../types'; // Check if TemplateConfig is in type
 import {
     createTIFFPlaceholderFile,
     ensureFileObject,
-    checkAVIFSupport,
     checkImageTransparency,
     isSVGFile,
     convertSVGToRaster,
@@ -441,7 +439,6 @@ export const processLengendaryOptimize = async (imageFile: File, quality: number
         return imageFile;
     }
 
-    const supportsAVIF = await checkAVIFSupport();
     const hasTransparency = await checkImageTransparency(processedFile);
 
     const needsWhiteBackground = (format === IMAGE_FORMATS.JPG || format === IMAGE_FORMATS.JPEG) && hasTransparency;

@@ -428,7 +428,8 @@ export const AI_SETTINGS = {
     MAX_OBJECTS: 10,
     MODEL_TYPE: 'lite_mobilenet_v2',
     TENSORFLOW_VERSION: '4.10.0',
-    COCO_SSD_VERSION: '2.2.3'
+    COCO_SSD_VERSION: '2.2.3',
+    WEBGPU_BACKEND_VERSION: '4.11.0'
 } as const;
 
 export const SMART_CROP_CONFIG = {

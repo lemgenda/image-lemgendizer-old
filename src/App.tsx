@@ -1,3 +1,4 @@
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProcessingContext } from './context/ProcessingContext';
 import {
@@ -39,7 +40,6 @@ function App() {
     captureProgress,
     screenshotValidation,
     selectedScreenshotTemplates,
-    /* variables removed */
     images,
     selectedImages,
     modal,
@@ -49,10 +49,8 @@ function App() {
     processingSummary,
     processingOptions,
     fileInputRef,
-    /* variables removed */
     closeModal,
     handleModalInteraction,
-    /* variables removed */
 
     // Handlers
     handleScreenshotUrlChange,
@@ -113,7 +111,7 @@ function App() {
                     { id: PROCESSING_MODES.BATCH_RENAME, label: t('mode.batchRename') || 'Batch Rename', description: t('mode.batchRenameInfo') || 'Advanced file renaming' }
                   ]}
                   activeTab={processingOptions.processingMode}
-                  onTabChange={(id) => toggleProcessingMode(id as ProcessingMode)}
+                  onTabChange={(id: string) => toggleProcessingMode(id as ProcessingMode)}
                 >
                   {null}
                 </TabPanel>

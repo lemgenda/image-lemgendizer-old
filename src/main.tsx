@@ -3,6 +3,10 @@ import ReactDOM from 'react-dom/client';
 import './i18n';
 import App from './App';
 import './styles/App.css';
+import { registerSW } from 'virtual:pwa-register';
+
+// Register PWA service worker
+registerSW({ immediate: true });
 
 import '@fortawesome/fontawesome-free/css/all.min.css';
 

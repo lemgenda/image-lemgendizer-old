@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/client" />
 
 interface ImportMetaEnv {
     readonly VITE_BROWSERLESS_API_TOKEN: string
@@ -6,6 +7,10 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
     readonly env: ImportMetaEnv
+}
+
+interface Navigator {
+    gpu?: any;
 }
 
 declare module 'utif';

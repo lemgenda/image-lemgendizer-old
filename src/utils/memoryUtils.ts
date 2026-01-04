@@ -150,6 +150,24 @@ export const loadAIModel = async (): Promise<any> => {
         if (!window.tf) await loadTensorFlowFromCDN();
         if (!window.tf) throw new Error('TensorFlow.js not available');
 
+        // Try to load and set WebGPU backend
+        try {
+            await loadWebGPUBackendFromCDN();
+            if (window.tf.engine().backendName !== 'webgpu') {
+                await window.tf.setBackend('webgpu');
+                await window.tf.ready();
+            }
+        } catch (webgpuError) {
+            // Fallback to WebGL or CPU is handled automatically by TF.js if setBackend fails
+            // but we want to ensure we at least have WebGL if WebGPU is unavailable
+            try {
+                if (window.tf.engine().backendName !== 'webgl') {
+                    await window.tf.setBackend('webgl');
+                    await window.tf.ready();
+                }
+            } catch { /* Final fallback to CPU */ }
+        }
+
         if (!window.cocoSsd) await loadCocoSsdFromCDN();
         if (window.cocoSsd) {
             aiModel = await window.cocoSsd.load({ base: AI_SETTINGS.MODEL_TYPE });
@@ -197,6 +215,32 @@ const loadCocoSsdFromCDN = (): Promise<void> => {
 
         const script = document.createElement('script');
         script.src = `https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@${AI_SETTINGS.COCO_SSD_VERSION}/dist/coco-ssd.min.js`;
+        script.onload = () => resolve();
+        script.onerror = () => resolve();
+        document.head.appendChild(script);
+    });
+};
+
+/**
+ * Loads WebGPU backend from CDN
+ */
+const loadWebGPUBackendFromCDN = (): Promise<void> => {
+    return new Promise((resolve) => {
+        // Check if WebGPU is supported by the browser
+        if (!navigator.gpu) {
+            resolve();
+            return;
+        }
+
+        const scriptId = 'tf-backend-webgpu';
+        if (document.getElementById(scriptId)) {
+            resolve();
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.id = scriptId;
+        script.src = `https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgpu@${AI_SETTINGS.WEBGPU_BACKEND_VERSION}/dist/tf-backend-webgpu.min.js`;
         script.onload = () => resolve();
         script.onerror = () => resolve();
         document.head.appendChild(script);

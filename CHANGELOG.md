@@ -3,6 +3,23 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.1.0] - 2026-01-04
+----------------------
+
+### New Features
+
+*   **PWA Support**: Added full Progressive Web App support using `vite-plugin-pwa`. The application is now installable and works offline.
+*   **WebGPU Acceleration**: Integrated high-performance WebGPU backend for TensorFlow.js, significantly speeding up AI-powered smart cropping on supported devices.
+*   **Dynamic Backend Switching**: Intelligent fallback logic that transitions from WebGPU to WebGL or CPU based on device capability for 100% availability.
+
+### Improvements & Cleanup
+
+*   **Version 3.1.0 Maintenance**: Comprehensive sweep of the codebase for production readiness.
+*   **Workspace Optimization**: Removed redundant configuration files and legacy helper scripts.
+*   **Code Quality**: Enforced JSDoc documentation across all primary utility and processor files.
+*   **Search Engine Optimization**: Enhanced `index.html` with production-grade meta tags, Open Graph data, and social media previews.
+
+
 [3.0.0] - 2026-01-04
 ----------------------
 

@@ -23,7 +23,7 @@ Visit: [**https://lemgenda.github.io/image-lemgendizer-old/**](https://lemgenda
 *   **Smart Templates**: Pre-defined templates for all social media platforms (Instagram, Facebook, Twitter, LinkedIn, etc.)
 
 *   **AI-Powered Features**: Smart cropping with TensorFlow.js object detection
-
+*   **WebGPU Acceleration**: High-performance GPU-accelerated AI processing for supported hardware
 *   **AI Upscaling**: Enhance image resolution with ESRGAN models
 
 *   **TIFF Support**: Comprehensive TIFF file processing with UTIF library
@@ -47,6 +47,8 @@ Visit: [**https://lemgenda.github.io/image-lemgendizer-old/**](https://lemgenda
 *   **ZIP Export**: Download all processed images in organized folders
 
 *   **Internationalization**: English and Croatian language support with auto-detection
+
+*   **PWA Support**: Installable web app with full offline capabilities
 
 *   **Responsive Design**: Works perfectly on desktop, tablet, and mobile
 *   **Accessibility First**: Fully WCAG compliant with high-contrast Dark Mode and screen reader support
@@ -72,8 +74,6 @@ Visit: [**https://lemgenda.github.io/image-lemgendizer-old/**](https://lemgenda
 *   Create npm package for core image processing
 
 *   Add more AI models for different use cases
-
-*   Add PWA support for offline usage
 
 *   Implement cloud sync capabilities
 
@@ -356,6 +356,9 @@ This project is licensed under the MIT License - see the [LICENSE](https://lice
 📊 Project Status
 -----------------
 
-**Version**: 3.0.0**Last Updated**: January 2026**Active Development**: Yes**Production Ready**: Yes
+**Version**: 3.1.0
+**Last Updated**: January 2026
+**Active Development**: Yes
+**Production Ready**: Yes
 
 Built with ❤️ by [Lem Treursić](https://github.com/lemgenda)
