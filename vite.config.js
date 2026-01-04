@@ -39,7 +39,11 @@ export default defineConfig({
       }
     },
     // Reduce chunk size warning
-    chunkSizeWarningLimit: 1000
+    chunkSizeWarningLimit: 1000,
+    // Worker configuration for WASM compatibility
+    worker: {
+      format: 'es'
+    }
   },
   optimizeDeps: {
     exclude: ['@jsquash/webp', '@jsquash/jpeg', '@jsquash/avif']
