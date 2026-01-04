@@ -137,10 +137,10 @@ The project includes automated GitHub Actions workflow that:
 
 ```
 src/
-├── App.jsx
-├── main.jsx
-├── i18n.js
-├── setupTests.js
+├── App.tsx
+├── main.tsx
+├── i18n.ts
+├── setupTests.ts
 ├── assets/
 ├── components/           # UI Components
 │   ├── AdvancedRenameTab.jsx
@@ -149,15 +149,15 @@ src/
 │   ├── TemplateSelectionCard.jsx
 │   ├── ...
 ├── configs/              # Configuration files
-│   └── templateConfigs.js
+│   └── templateConfigs.ts
 ├── constants/            # Application constants
-│   ├── imageConstants.js
-│   ├── themeConstants.js
+│   ├── imageConstants.ts
+│   ├── themeConstants.ts
 │   └── ...
 ├── context/              # React Context providers
-│   └── ProcessingContext.jsx
+│   └── ProcessingContext.tsx
 ├── helpers/              # Helper functions
-│   └── i18nHelpers.js
+│   └── i18nHelpers.ts
 ├── hooks/                # Custom React hooks
 ├── styles/               # CSS and styling
 │   ├── App.css
@@ -165,16 +165,16 @@ src/
 │   ├── TabPanel.css
 │   └── ...
 ├── utils/                # Utility functions
-│   ├── fileUtils.js
-│   ├── renameUtils.js
-│   ├── generalUtils.js
+│   ├── fileUtils.ts
+│   ├── renameUtils.ts
+│   ├── generalUtils.ts
 │   └── ...
 ├── processors/           # Core processing logic
-│   ├── imageProcessor.js
-│   ├── exportProcessor.js
+│   ├── imageProcessor.ts
+│   ├── exportProcessor.ts
 │   └── ...
 ├── workers/              # Web Workers
-│   └── sharpen.worker.js
+│   └── sharpen.worker.ts
 └── __tests__/            # Tests
     ├── ui-integration/
     └── ...
@@ -184,6 +184,8 @@ src/
 ----------------
 
 ### Core
+
+*   **TypeScript** - Strictly typed for reliability
 
 *   **React 19** - UI library
 
@@ -356,6 +358,6 @@ This project is licensed under the MIT License - see the [LICENSE](https://lice
 📊 Project Status
 -----------------
 
-**Version**: 2.8.0**Last Updated**: January 2026**Active Development**: Yes**Production Ready**: Yes
+**Version**: 3.0.0**Last Updated**: January 2026**Active Development**: Yes**Production Ready**: Yes
 
 Built with ❤️ by [Lem Treursić](https://github.com/lemgenda)
