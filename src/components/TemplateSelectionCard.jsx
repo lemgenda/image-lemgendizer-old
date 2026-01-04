@@ -193,8 +193,8 @@ const TemplateSelectionCard = ({
                                             <span className="checkbox-custom"></span>
                                             <span className="flex-1">
                                                 <div className="flex justify-between items-center">
-                                                    <span className="font-medium">Favicon Set</span>
-                                                    <span className="text-muted text-sm">Multiple sizes</span>
+                                                    <span className="font-medium">{t('templates.faviconSet')}</span>
+                                                    <span className="text-muted text-sm">{t('templates.multipleSizes')}</span>
                                                 </div>
                                             </span>
                                         </label>
@@ -214,7 +214,7 @@ const TemplateSelectionCard = ({
                                                         onChange={() => onSingleOptionChange('faviconMode', 'basic')}
                                                     />
                                                     <span className="checkbox-custom"></span>
-                                                    <span className="flex-1 text-sm">Basic Set (Essential Only)</span>
+                                                    <span className="flex-1 text-sm">{t('templates.basicSet')}</span>
                                                 </label>
 
                                                 <label
@@ -230,7 +230,7 @@ const TemplateSelectionCard = ({
                                                         onChange={() => onSingleOptionChange('faviconMode', 'complete')}
                                                     />
                                                     <span className="checkbox-custom"></span>
-                                                    <span className="flex-1 text-sm">Complete Set (All Platforms)</span>
+                                                    <span className="flex-1 text-sm">{t('templates.completeSet')}</span>
                                                 </label>
                                             </div>
                                         )}

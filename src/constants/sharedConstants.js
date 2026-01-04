@@ -172,7 +172,8 @@ export const AVAILABLE_LANGUAGES = [
 
 export const PROCESSING_MODES = {
     CUSTOM: 'custom',
-    TEMPLATES: 'templates'
+    TEMPLATES: 'templates',
+    BATCH_RENAME: 'batch_rename'
 };
 
 export const CROP_MODES = {

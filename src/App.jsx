@@ -17,6 +17,7 @@ import {
   UploadGallerySection,
   CustomProcessingTab,
   TemplateProcessingTab,
+  AdvancedRenameTab, // Add this line
   TabPanel,
   ErrorBoundary
 } from './components';
@@ -78,6 +79,7 @@ function App() {
     handleDeselectAllInCategory,
     handleOptionChange,
     handleSingleOptionChange,
+    applyRenamePatternToCustom,
     processCustomImages,
     processTemplates,
     handleCaptureScreenshots,
@@ -108,7 +110,8 @@ function App() {
                 <TabPanel
                   tabs={[
                     { id: PROCESSING_MODES.CUSTOM, label: t('mode.custom'), description: t('mode.customInfo') },
-                    { id: PROCESSING_MODES.TEMPLATES, label: t('mode.templates'), description: t('mode.templatesInfo') }
+                    { id: PROCESSING_MODES.TEMPLATES, label: t('mode.templates'), description: t('mode.templatesInfo') },
+                    { id: PROCESSING_MODES.BATCH_RENAME, label: t('mode.batchRename') || 'Batch Rename', description: t('mode.batchRenameInfo') || 'Advanced file renaming' }
                   ]}
                   activeTab={processingOptions.processingMode}
                   onTabChange={(id) => toggleProcessingMode(id)}
@@ -163,6 +166,17 @@ function App() {
                       onProcessTemplates={processTemplates}
                       formatFileSize={formatFileSize}
                       t={t}
+                    />
+                  )}
+
+                  {processingOptions.processingMode === PROCESSING_MODES.BATCH_RENAME && (
+                    <AdvancedRenameTab
+                      processingOptions={processingOptions}
+                      selectedImagesForProcessing={selectedImagesForProcessing}
+                      onOptionChange={handleOptionChange}
+                      onApplyToCustom={applyRenamePatternToCustom}
+                      onProcess={processCustomImages}
+                      isLoading={isLoading}
                     />
                   )}
                 </div>

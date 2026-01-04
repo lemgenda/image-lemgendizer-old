@@ -73,6 +73,7 @@
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    color-scheme: dark;
 }
 
 /* ==========================================================================
@@ -809,28 +810,36 @@ body {
 .btn-lg {
     padding: var(--space-md) var(--space-lg);
     font-size: 1rem;
+    margin-bottom: var(--space-md);
 }
 
 .btn-primary {
     background-color: var(--color-primary);
     color: var(--color-btn-text);
     border-color: var(--color-primary);
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2), 0 2px 4px -1px rgba(37, 99, 235, 0.1);
 }
 
 .btn-primary:hover:not(:disabled) {
     background-color: var(--color-primary-hover);
     border-color: var(--color-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.1);
 }
 
 .btn-secondary {
     background-color: var(--color-bg-tertiary);
     color: var(--color-text-secondary);
     border-color: var(--border-color);
+    box-shadow: var(--shadow-sm);
 }
 
 .btn-secondary:hover:not(:disabled) {
     background-color: var(--color-bg-tertiary);
     border-color: var(--border-color-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+    color: var(--color-text-primary);
 }
 
 .btn-danger {
@@ -881,6 +890,27 @@ body {
     align-items: center;
     justify-content: center;
     margin-left: var(--space-xs);
+}
+
+/* General Badge Styles */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 9999px;
+    transition: all var(--transition-fast);
+}
+
+.badge-primary {
+    background-color: var(--color-primary);
+    color: var(--color-btn-text);
+}
+
+.badge-secondary {
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text-secondary);
 }
 
 /* ==========================================================================
@@ -937,6 +967,16 @@ body {
     outline: none;
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.select-field option {
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .select-field option {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
 }
 
 .form-helper {
@@ -1236,6 +1276,7 @@ body {
     .btn-lg {
         padding: var(--space-sm) var(--space-md);
         font-size: 0.875rem;
+        margin-bottom: var(--space-md);
     }
 }
 

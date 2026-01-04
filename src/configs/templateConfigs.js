@@ -1417,7 +1417,8 @@ export const EXPORT_FOLDERS = {
     LOGO_IMAGES: 'LogoImages',
     SOCIAL_MEDIA_IMAGES: 'SocialMediaImages',
     FAVICON_SET: 'FaviconSet',
-    SCREENSHOTS: 'Screenshots'
+    SCREENSHOTS: 'Screenshots',
+    RENAMED_IMAGES: 'RenamedImages'
 };
 
 // ================================

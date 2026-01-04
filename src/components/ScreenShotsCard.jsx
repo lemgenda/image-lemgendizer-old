@@ -197,7 +197,7 @@ const ScreenShotsCard = ({
                                 className="test-url-button"
                                 onClick={handleTestUrl}
                                 type="button"
-                                title="Open URL in new tab (noopener, noreferrer)"
+                                title={t('screenshots.openInNewTab')}
                                 disabled={!validation?.isValid || !url.trim() || isCapturing}
                             >
                                 <i className="fa-solid fa-arrow-up-right-from-square"></i>

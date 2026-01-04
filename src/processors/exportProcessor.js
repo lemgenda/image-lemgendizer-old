@@ -63,7 +63,7 @@ export const generateExportSettings = (mode, additionalSettings = {}) => {
         mergedSettings[key] = additionalSettings[key];
     }
 
-    if (mode === PROCESSING_MODES.CUSTOM) {
+    if (mode === PROCESSING_MODES.CUSTOM || mode === PROCESSING_MODES.BATCH_RENAME) {
         return {
             ...mergedSettings,
             includeOriginal: true,
@@ -88,7 +88,7 @@ export const generateExportSettings = (mode, additionalSettings = {}) => {
  * @returns {Array<string>} Array of folder names
  */
 export const getExportFolderStructure = (mode, settings = {}) => {
-    if (mode === PROCESSING_MODES.CUSTOM) {
+    if (mode === PROCESSING_MODES.CUSTOM || mode === PROCESSING_MODES.BATCH_RENAME) {
         return [EXPORT_FOLDERS.ORIGINAL_IMAGES, EXPORT_FOLDERS.OPTIMIZED_IMAGES];
     } else if (mode === PROCESSING_MODES.TEMPLATES) {
         const folders = [
@@ -307,9 +307,18 @@ export const createExportZip = async (originalImages, processedImages, settings,
 
     let faviconFilesCount = 0;
 
-    if (mode === PROCESSING_MODES.CUSTOM && validProcessedImages.length > 0) {
-        // In custom mode, we always include processed images if they exist
-        // The filtering happens at the processing stage, not here
+    if (mode === PROCESSING_MODES.BATCH_RENAME && validProcessedImages.length > 0) {
+        const renamedFolderName = t ? t('export.folders.renamed') : EXPORT_FOLDERS.RENAMED_IMAGES;
+        const renamedFolder = zip.folder(renamedFolderName);
+
+        for (const image of validProcessedImages) {
+            try {
+                renamedFolder.file(image.name, image.file || image.blob);
+            } catch {
+                // Ignore error
+            }
+        }
+    } else if (mode === PROCESSING_MODES.CUSTOM && validProcessedImages.length > 0) {
         const groupedByFormat = organizeImagesByFormat(validProcessedImages);
         const optimizedFolderName = t ? t('export.folders.optimized') : EXPORT_FOLDERS.OPTIMIZED_IMAGES;
         const optimizedFolder = zip.folder(optimizedFolderName);

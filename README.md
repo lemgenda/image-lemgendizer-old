@@ -138,37 +138,46 @@ The project includes automated GitHub Actions workflow that:
 ```
 src/
 ├── App.jsx
-├── l18n.js
 ├── main.jsx
-├── configs/
+├── i18n.js
+├── setupTests.js
+├── assets/
+├── components/           # UI Components
+│   ├── AdvancedRenameTab.jsx
+│   ├── CustomProcessingTab.jsx
+│   ├── TemplateImageSection.jsx
+│   ├── TemplateSelectionCard.jsx
+│   ├── ...
+├── configs/              # Configuration files
 │   └── templateConfigs.js
-├── constants/
-│   └── sharedConstants.js
-├── helpers/
-│   └── l18nHelper.js
-├── utils/
-│   ├── index.js
+├── constants/            # Application constants
+│   ├── imageConstants.js
+│   ├── themeConstants.js
+│   └── ...
+├── context/              # React Context providers
+│   └── ProcessingContext.jsx
+├── helpers/              # Helper functions
+│   └── i18nHelpers.js
+├── hooks/                # Custom React hooks
+├── styles/               # CSS and styling
+│   ├── App.css
+│   ├── TemplateImageSection.css
+│   ├── TabPanel.css
+│   └── ...
+├── utils/                # Utility functions
 │   ├── fileUtils.js
-│   ├── languageUtils.js
-│   ├── validationUtils.js
-│   ├── templateUtils.js
-│   ├── memoryUtils.js
-│   └── generalUtils.js
-├── processors/
-│   ├── index.js
-│   ├── imageProcessor.js      # Core image processing logic
-│   ├── exportProcessor.js     # Export/ZIP processing logic
-│   └── templateProcessor.js   # Template-specific processing
-└── components/
-    ├── index.js
-    ├── Footer.js
-    ├── Header.js
-    ├── ImageUploader.js
-    ├── LanguageSwitcher.jsx
-    ├── LemGendaIcon.js
-    ├── LemGendaLogo.js
-    ├── Modal.js
-    └── RangeSlider.jsx
+│   ├── renameUtils.js
+│   ├── generalUtils.js
+│   └── ...
+├── processors/           # Core processing logic
+│   ├── imageProcessor.js
+│   ├── exportProcessor.js
+│   └── ...
+├── workers/              # Web Workers
+│   └── sharpen.worker.js
+└── __tests__/            # Tests
+    ├── ui-integration/
+    └── ...
 ```
 
 🛠️ Technologies

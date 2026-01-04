@@ -1,3 +1,5 @@
+import React from 'react';
+import '../styles/TemplateImageSection.css';
 import {
   calculateTotalTemplateFiles
 } from '../processors';

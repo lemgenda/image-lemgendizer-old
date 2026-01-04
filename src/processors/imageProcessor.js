@@ -574,7 +574,9 @@ export const getProcessingConfiguration = (processingOptions) => {
         templates: {
             selected: processingOptions.selectedTemplates || [],
             mode: processingOptions.processingMode || PROCESSING_MODES.CUSTOM
-        }
+        },
+        batchRename: processingOptions.batchRename || null,
+        processingMode: processingOptions.processingMode
     };
 
     return config;

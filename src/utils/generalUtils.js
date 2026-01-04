@@ -6,6 +6,7 @@ import {
     processLengendaryOptimize,
     processTemplateImages
 } from '../processors';
+import { generateNewFileName } from './renameUtils';
 import { safeCleanupGPUMemory } from './memoryUtils';
 import {
     URL_CONSTANTS,
@@ -143,6 +144,18 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
     for (let i = 0; i < images.length; i++) {
         const image = images[i];
 
+        // 0. Bypass for Batch Rename Mode
+        if (processingConfig.processingMode === PROCESSING_MODES.BATCH_RENAME) {
+            const fileName = generateNewFileName(image.name, i, processingConfig.batchRename);
+            processedImages.push({
+                ...image,
+                name: fileName,
+                processed: true,
+                isOriginal: true // Preserving original data
+            });
+            continue;
+        }
+
         let processedFile = image.file || image.blob;
 
         try {
@@ -235,10 +248,40 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
                     );
 
                     let fileName = image.name;
-                    if (processingConfig.output?.rename && processingConfig.output?.newFileName) {
-                        const ext = format === 'original' ?
+                    if (processingConfig.processingMode === PROCESSING_MODES.BATCH_RENAME && processingConfig.batchRename) {
+                        fileName = generateNewFileName(image.name, i, processingConfig.batchRename);
+
+                        // If format is changed (not original), ensure extension matches target format
+                        if (format !== IMAGE_FORMATS.ORIGINAL) {
+                            const nameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
+                            fileName = `${nameWithoutExt}.${format}`;
+                        }
+                    } else if (processingConfig.output?.rename && processingConfig.output?.newFileName) {
+                        const targetExt = format === 'original' ?
                             fileName.split('.').pop() : format;
-                        fileName = `${processingConfig.output.newFileName}-${String(i + 1).padStart(2, '0')}.${ext}`;
+
+                        // Construct a virtual name with the target extension so generateNewFileName
+                        // handles the extension correctly (it expects the input name to have the ext).
+                        const nameWithoutExt = image.name.replace(/\.[^/.]+$/, "");
+                        const virtualName = `${nameWithoutExt}.${targetExt}`;
+
+                        let pattern = processingConfig.output.newFileName;
+
+                        // Legacy support: If pattern has no tokens, append counter to prevent overwrites
+                        // and match previous behavior (MyFile -> MyFile-01)
+                        if (!/\{[^}]+\}/.test(pattern)) {
+                            pattern = `${pattern}-{counter}`;
+                        }
+
+                        const renameOptions = {
+                            ...(processingConfig.batchRename || {}),
+                            pattern: pattern,
+                            // Ensure we use the target extension logic
+                            // If user explicitly provided extension in pattern, that will be used.
+                            // Otherwise generateNewFileName appends it.
+                        };
+
+                        fileName = generateNewFileName(virtualName, i, renameOptions);
                     } else if (!fileName.includes(`.${format}`)) {
                         let suffix = '';
                         if (processingConfig.resize?.enabled) {
@@ -287,7 +330,6 @@ export const orchestrateCustomProcessing = async (images, processingConfig, aiMo
         } finally {
             // Memory management - cleanup GPU tensors every few images
             if (i % 3 === 0) {
-                // console.log('[Debug] Triggering safe GPU cleanup');
                 safeCleanupGPUMemory();
             }
         }

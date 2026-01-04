@@ -3,6 +3,29 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[2.9.0] - 2026-01-04
+----------------------
+
+### Major Changes
+
+*   **Integrated Batch Rename**: Custom Processing now fully supports advanced batch rename patterns (Find/Replace, Casing, Tokens) directly, sharing logic with the Batch Rename tab.
+*   **CSS Refactoring**: Extracted component styles (e.g., `TemplateImageSection`) into modular CSS files for better maintainability.
+*   **Project Cleanup**:
+    *   Removed unused helper files and temporary logs (`lint-results.txt`, `*.log`).
+    *   Removed `console.log` and `console.warn` statements from utility and processor files for a cleaner production build.
+    *   Updated `README.md` with current file structure and feature set.
+
+### Features
+
+*   **Advanced Renaming in Custom Mode**: Users can now apply complex rename patterns (e.g., `{name}-{counter}` with specific casing or replacements) when processing custom images.
+*   **Legacy Rename Support**: Automatic fallback for simple rename patterns (appending `{counter}` if usage is ambiguous) to prevent file overwrites.
+
+### Technical Improvements
+
+*   **Unit Tests**: Added dedicated unit tests for `orchestrateCustomProcessing` to verify renaming logic.
+*   **Documentation**: Updated JSDocs and ensured consistency in utility functions.
+*   **CI/CD**: Verified linting and build processes for the new version.
+
 [2.8.1] - 2026-01-04
 ----------------------
 

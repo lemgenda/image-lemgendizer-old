@@ -14,6 +14,7 @@ export { default as FormatSelectionCard } from './FormatSelectionCard';
 export { default as QualityControlsCard } from './QualityControlsCard';
 export { default as ResizeCropCard } from './ResizeCropCard';
 export { default as TemplateSelectionCard } from './TemplateSelectionCard';
-export { default as CustomProcessingTab } from './CustomProcessingTab';
 export { default as TemplateProcessingTab } from './TemplateProcessingTab';
+export { default as CustomProcessingTab } from './CustomProcessingTab';
+export { default as AdvancedRenameTab } from './AdvancedRenameTab'; // Add this line
 export { default as ErrorBoundary } from './ErrorBoundary';

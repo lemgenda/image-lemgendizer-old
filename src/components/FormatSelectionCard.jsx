@@ -133,9 +133,10 @@ const FormatSelectionCard = ({
 
             {rename && (
                 <div className="form-group">
-                    <label className="form-label">{t('output.newFileName')}</label>
+                    <label htmlFor="newFileName" className="form-label">{t('output.newFileName')}</label>
                     <input
                         type="text"
+                        id="newFileName"
                         className="input-field"
                         value={newFileName}
                         onChange={(e) => onOptionChange('output', 'newFileName', e.target.value)}

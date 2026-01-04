@@ -315,10 +315,10 @@ function UploadGallerySection({
                                             {!showRealPreview && !imageLoading && (
                                                 <div className="gallery-image-placeholder">
                                                     <div className="gallery-placeholder-icon">
-                                                        {image.isTIFF ? 'TIFF' : image.isSVG ? 'SVG' : 'IMG'}
+                                                        {image.isTIFF ? t('common.format.tiff') : image.isSVG ? t('common.format.svg') : t('common.image_one').toUpperCase()}
                                                     </div>
                                                     <div className="gallery-placeholder-text">
-                                                        {image.isTIFF ? 'TIFF' : image.isSVG ? 'SVG' : 'IMAGE'}
+                                                        {image.isTIFF ? t('common.format.tiff') : image.isSVG ? t('common.format.svg') : t('common.image_one').toUpperCase()}
                                                     </div>
                                                 </div>
                                             )}
@@ -327,7 +327,7 @@ function UploadGallerySection({
 
                                     {(image.isTIFF || image.isSVG) && !imageLoading && (
                                         <div className="gallery-special-format-indicator">
-                                            {image.isTIFF ? 'TIFF' : 'SVG'}
+                                            {image.isTIFF ? t('common.format.tiff') : t('common.format.svg')}
                                         </div>
                                     )}
                                 </div>
@@ -338,8 +338,8 @@ function UploadGallerySection({
                                     </span>
                                     <span className="gallery-image-size">
                                         {formatFileSize(image.size)} • {image.originalFormat?.toUpperCase() || image.type.split('/')[1].toUpperCase()}
-                                        {image.isTIFF && <span className="gallery-image-format-badge ml-xs">TIFF</span>}
-                                        {image.isSVG && <span className="gallery-image-format-badge ml-xs">SVG</span>}
+                                        {image.isTIFF && <span className="gallery-image-format-badge ml-xs">{t('common.format.tiff')}</span>}
+                                        {image.isSVG && <span className="gallery-image-format-badge ml-xs">{t('common.format.svg')}</span>}
                                     </span>
                                 </div>
                             </button>

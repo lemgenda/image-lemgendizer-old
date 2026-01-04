@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react'
 
 // Get base URL from environment or use default
 const base = process.env.VITE_BASE_URL || './'
-console.log('Vite config loaded');
 
 export default defineConfig({
   plugins: [react()],

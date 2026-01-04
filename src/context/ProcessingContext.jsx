@@ -110,6 +110,17 @@ export const ProcessingProvider = ({ children }) => {
         output: {
             ...DEFAULT_PROCESSING_CONFIG.output,
             formats: [IMAGE_FORMATS.WEBP]
+        },
+        batchRename: {
+            pattern: '{name}',
+            find: '',
+            replace: '',
+            useRegex: false,
+            casing: 'original',
+            startSequence: 1,
+            stepSequence: 1,
+            zerosPadding: 3,
+            dateFormat: 'YYYY-MM-DD'
         }
     });
     // userInteractedWithModal state removed
@@ -386,9 +397,11 @@ export const ProcessingProvider = ({ children }) => {
 
             setImages(prev => [...prev, ...enhancedImages]);
 
-            if (processingOptions.processingMode === PROCESSING_MODES.CUSTOM) {
-                if (selectedImages.length === 0) {
-                    setSelectedImages(enhancedImages.map(img => img.id));
+            if (processingOptions.processingMode === PROCESSING_MODES.CUSTOM ||
+                processingOptions.processingMode === PROCESSING_MODES.BATCH_RENAME) {
+                if (selectedImages.length === 0 || processingOptions.processingMode === PROCESSING_MODES.BATCH_RENAME) {
+                    const allNewIds = enhancedImages.map(img => img.id);
+                    setSelectedImages(prev => [...new Set([...prev, ...allNewIds])]);
                 } else {
                     setSelectedImages(prev => [...prev, ...enhancedImages.map(img => img.id)]);
                 }
@@ -570,7 +583,7 @@ export const ProcessingProvider = ({ children }) => {
     };
 
     const toggleProcessingMode = (mode) => {
-        const newMode = mode === PROCESSING_MODES.TEMPLATES ? PROCESSING_MODES.TEMPLATES : PROCESSING_MODES.CUSTOM;
+        const newMode = mode;
 
         if (newMode === PROCESSING_MODES.TEMPLATES) {
             let firstImageId = null;
@@ -590,12 +603,20 @@ export const ProcessingProvider = ({ children }) => {
 
             if (firstImageId) setSelectedImages([firstImageId]);
         } else {
+            // CUSTOM or BATCH_RENAME
             setProcessingOptions(prev => ({
                 ...prev,
                 processingMode: newMode,
-                showTemplates: newMode === PROCESSING_MODES.TEMPLATES,
+                showTemplates: false,
                 templateSelectedImage: null
             }));
+
+            if (newMode === PROCESSING_MODES.BATCH_RENAME) {
+                setSelectedImages(images.map(img => img.id));
+            }
+
+            // For Custom or Rename, checking if we need to restore multiple selection
+            // Logic currently assumes we keep selection as is if not Templates
         }
     };
 
@@ -747,7 +768,7 @@ export const ProcessingProvider = ({ children }) => {
                     selectedImagesForProcessing,
                     successfulImages,
                     settings,
-                    PROCESSING_MODES.CUSTOM,
+                    processingOptions.processingMode,
                     t
                 );
 
@@ -1077,6 +1098,20 @@ export const ProcessingProvider = ({ children }) => {
         }
     };
 
+    const applyRenamePatternToCustom = () => {
+        setProcessingOptions(prev => ({
+            ...prev,
+            processingMode: PROCESSING_MODES.CUSTOM,
+            output: {
+                ...prev.output,
+                rename: true,
+                newFileName: prev.batchRename.pattern
+            },
+            showTemplates: false
+        }));
+        setSelectedImages(images.map(img => img.id));
+    };
+
     // Derived State
     const selectedImagesForProcessing = getSelectedImagesForProcessing(
         images,
@@ -1142,6 +1177,7 @@ export const ProcessingProvider = ({ children }) => {
         handleDeselectAllInCategory,
         handleOptionChange,
         handleSingleOptionChange,
+        applyRenamePatternToCustom,
         processCustomImages,
         processTemplates,
         incrementValue,
