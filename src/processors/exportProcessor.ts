@@ -1,3 +1,7 @@
+/**
+ * @file exportProcessor.ts
+ * @description Handles file export, zip generation, and file organization for various processing modes.
+ */
 import JSZip from 'jszip';
 import { PROCESSING_MODES, IMAGE_FORMATS, APP_CONFIG } from '../constants';
 import { generateFaviconSet, validateImage } from '../utils';

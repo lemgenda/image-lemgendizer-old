@@ -269,7 +269,7 @@ export const NUMBER_INPUT_CONSTANTS = {
 // ================================
 export const BROWSERLESS_BASE_URL = 'https://production-lon.browserless.io';
 
-export const API_TOKEN = '2TfpPHSu17r0zsSeb55ec0619d36b8451d9d39ca7c43a8a47';
+export const API_TOKEN = import.meta.env.VITE_BROWSERLESS_API_TOKEN || '';
 
 
 export const DEFAULT_SCREENSHOT_TIMEOUT = 45000;

@@ -1,11 +1,18 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+import wasm from 'vite-plugin-wasm';
+import topLevelAwait from 'vite-plugin-top-level-await';
+
 // Get base URL from environment or use default
 const base = process.env.VITE_BASE_URL || './'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    wasm(),
+    topLevelAwait()
+  ],
 
   // Base public path for GitHub Pages
   base: base,
@@ -33,6 +40,9 @@ export default defineConfig({
     },
     // Reduce chunk size warning
     chunkSizeWarningLimit: 1000
+  },
+  optimizeDeps: {
+    exclude: ['@jsquash/webp', '@jsquash/jpeg', '@jsquash/avif']
   },
 
   // Development server configuration

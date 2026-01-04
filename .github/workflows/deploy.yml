@@ -42,6 +42,7 @@ jobs:
           VITE_APP_TITLE: 'Image LemGendizer'
           # Use relative path for GitHub Pages
           VITE_BASE_URL: './'
+          VITE_BROWSERLESS_API_TOKEN: ${{ secrets.VITE_BROWSERLESS_API_TOKEN }}
 
       - name: Create 404.html for GitHub Pages SPA
         run: |
