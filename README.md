@@ -73,8 +73,6 @@ Visit: [**https://lemgenda.github.io/image-lemgendizer-old/**](https://lemgenda
 
 *   Add more AI models for different use cases
 
-*   [x] Implement WebAssembly for performance-critical operations
-
 *   Add PWA support for offline usage
 
 *   Implement cloud sync capabilities

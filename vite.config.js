@@ -1,18 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-import wasm from 'vite-plugin-wasm';
-import topLevelAwait from 'vite-plugin-top-level-await';
-
 // Get base URL from environment or use default
 const base = process.env.VITE_BASE_URL || './'
 
 export default defineConfig({
-  plugins: [
-    react(),
-    wasm(),
-    topLevelAwait()
-  ],
+  plugins: [react()],
 
   // Base public path for GitHub Pages
   base: base,
@@ -25,6 +18,7 @@ export default defineConfig({
     target: 'es2020',
     emptyOutDir: true,
     cssCodeSplit: true,
+    assetsInlineLimit: 0,
     rollupOptions: {
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
@@ -39,14 +33,7 @@ export default defineConfig({
       }
     },
     // Reduce chunk size warning
-    chunkSizeWarningLimit: 1000,
-    // Worker configuration for WASM compatibility
-    worker: {
-      format: 'es'
-    }
-  },
-  optimizeDeps: {
-    exclude: ['@jsquash/webp', '@jsquash/jpeg', '@jsquash/avif']
+    chunkSizeWarningLimit: 1000
   },
 
   // Development server configuration
