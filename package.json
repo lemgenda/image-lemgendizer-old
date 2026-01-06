@@ -1,6 +1,6 @@
 {
   "name": "image-lemgendizer",
-  "version": "3.1.0",
+  "version": "3.2.1",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -29,8 +29,16 @@
     "@fortawesome/free-solid-svg-icons": "^7.1.0",
     "@fortawesome/react-fontawesome": "^3.1.1",
     "@tensorflow-models/coco-ssd": "^2.2.3",
-    "@tensorflow/tfjs": "~4.11.0",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-webgpu": "^4.22.0",
     "@upscalerjs/esrgan-slim": "^1.0.0-beta.12",
+    "@upscalerjs/maxim-deblurring": "^0.1.0",
+    "@upscalerjs/maxim-dehazing-indoor": "^0.1.0",
+    "@upscalerjs/maxim-dehazing-outdoor": "^0.1.0",
+    "@upscalerjs/maxim-denoising": "^0.1.0",
+    "@upscalerjs/maxim-deraining": "^0.1.0",
+    "@upscalerjs/maxim-enhancement": "^0.1.0",
+    "@upscalerjs/maxim-retouching": "^0.1.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.18.2",
@@ -72,6 +80,7 @@
     "husky": "^9.1.7",
     "jsdom": "^27.4.0",
     "lint-staged": "^16.2.7",
+    "patch-package": "^8.0.1",
     "terser": "^5.44.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.0",
@@ -81,6 +90,7 @@
   },
   "overrides": {
     "sourcemap-codec": "npm:@jridgewell/sourcemap-codec",
-    "source-map": "^0.7.4"
+    "source-map": "^0.7.4",
+    "@tensorflow/tfjs": "^4.22.0"
   }
 }

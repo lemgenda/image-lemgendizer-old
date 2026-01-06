@@ -239,8 +239,54 @@ export const DEFAULT_PROCESSING_CONFIG = {
     faviconSiteName: 'My Website',
     faviconThemeColor: '#ffffff',
     faviconBackgroundColor: '#ffffff',
-    faviconMode: 'basic'
+    faviconMode: 'basic',
+    aiQuality: {
+        deblur: false,
+        dehazeIndoor: false,
+        dehazeOutdoor: false,
+        denoise: false,
+        derain: false,
+        lowLight: false,
+        retouch: false,
+        detailReconstruction: false,
+        colorCorrection: false
+    }
 };
+
+export const AI_QUALITY_DEFAULTS = {
+    deblur: false,
+    dehazeIndoor: false,
+    dehazeOutdoor: false,
+    denoise: false,
+    derain: false,
+    lowLight: false,
+    retouch: false,
+    detailReconstruction: false,
+    colorCorrection: false
+};
+
+export const MAXIM_MODEL_URLS = {
+    DEBLUR: 'https://cdn.jsdelivr.net/npm/@upscalerjs/maxim-deblurring@0.1.0/models/model.json',
+    DEHAZE_INDOOR: 'https://cdn.jsdelivr.net/npm/@upscalerjs/maxim-dehazing-indoor@0.1.0/models/model.json',
+    DEHAZE_OUTDOOR: 'https://cdn.jsdelivr.net/npm/@upscalerjs/maxim-dehazing-outdoor@0.1.0/models/model.json',
+    DENOISE: 'https://cdn.jsdelivr.net/npm/@upscalerjs/maxim-denoising@0.1.0/models/model.json',
+    DERAIN: 'https://cdn.jsdelivr.net/npm/@upscalerjs/maxim-deraining@0.1.0/models/model.json',
+    ENHANCEMENT: 'https://cdn.jsdelivr.net/npm/@upscalerjs/maxim-enhancement@0.1.0/models/model.json',
+    RETOUCHING: 'https://cdn.jsdelivr.net/npm/@upscalerjs/maxim-retouching@0.1.0/models/model.json'
+};
+
+export const UPSCALER_CDN_URLS = {
+    UPSCALER: 'https://cdn.jsdelivr.net/npm/upscaler@1.0.0-beta.19/dist/browser/umd/upscaler.min.js',
+    ESRGAN_SLIM_2X: 'https://cdn.jsdelivr.net/npm/@upscalerjs/esrgan-slim@1.0.0-beta.12/dist/umd/models/esrgan-slim/src/x2/index.min.js',
+    ESRGAN_SLIM_3X: 'https://cdn.jsdelivr.net/npm/@upscalerjs/esrgan-slim@1.0.0-beta.12/dist/umd/models/esrgan-slim/src/x3/index.min.js',
+    ESRGAN_SLIM_4X: 'https://cdn.jsdelivr.net/npm/@upscalerjs/esrgan-slim@1.0.0-beta.12/dist/umd/models/esrgan-slim/src/x4/index.min.js'
+};
+
+// ================================
+// AI Backend Configuration
+// ================================
+export const BACKEND_BLACKLIST_KEY = 'tfjs_backend_blacklist';
+export const BACKEND_BLACKLIST_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
 export const EXPORT_SETTINGS = {
     CUSTOM: 'custom',
@@ -305,7 +351,15 @@ export const OPERATION_NAMES = {
     AUTO_UPSCALED: 'Auto-upscaled',
     TEMPLATES_APPLIED: 'Templates Applied',
     FAVICONS_GENERATED: 'Favicons Generated',
-    SCREENSHOTS_GENERATED: 'Screenshots Generated'
+    SCREENSHOTS_GENERATED: 'Screenshots Generated',
+    AI_DEBLURRED: 'AI Deblurred',
+    AI_DEHAZED: 'AI Dehazed',
+    AI_DENOISED: 'AI Denoised',
+    AI_DERAINED: 'AI Derained',
+    AI_LOW_LIGHT_ENHANCED: 'AI Low-Light Enhanced',
+    AI_RETOUCHED: 'AI Retouched',
+    AI_DETAIL_RECONSTRUCTED: 'AI Detail Reconstructed',
+    AI_COLOR_CORRECTED: 'AI Color Corrected'
 };
 
 // ================================

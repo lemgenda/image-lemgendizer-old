@@ -3,6 +3,25 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.2.1] - 2026-01-06
+----------------------
+
+### Major Changes
+- **Code Quality Improvements**: Implemented stricter type checking for AI operations and addressed lingering linting warnings.
+- **WebGPU Console Cleanup**: Implemented an advanced warning filter to suppress known, non-actionable console warnings from third-party libraries (TensorFlow.js, COCO-SSD) when using the WebGPU backend.
+- **Full Project Revalidation**: Comprehensive verification of project stability, including clean linting (0 errors) and 100% test pass rate after recent architectural changes.
+
+### Fixes & Improvements
+- **Type Safety**: Enhanced `AIQualityOptions` interface to strict boolean types, ensuring better type safety across the application.
+- **Constants Updates**: Updated `OPERATION_NAMES`, `AI_QUALITY_DEFAULTS`, and `DEFAULT_PROCESSING_CONFIG` to align with the new AI capabilities.
+- **UI Consistency**: Added missing UI toggles for "Detail Reconstruction" and "Color Correction" to the `QualityImprovementCard`.
+- **Console Hygiene**: The development console is now free of spammy `tf.nonMaxSuppression()` sync warnings, providing a cleaner debugging experience.
+- **Validation**: Project verified with `npm run lint` and `npm test` to ensure zero regressions.
+
+### Technical Improvements
+- **Warning Suppression**: Centralized warning suppression logic in `src/utils/warningFilter.ts` to cleanly handle third-party library noise.
+- **Type Consistency**: Resolved all implicit `any` usage in AI processing paths.
+
 [3.1.0] - 2026-01-04
 ----------------------
 

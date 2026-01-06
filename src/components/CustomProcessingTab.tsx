@@ -1,4 +1,4 @@
-import { QualityControlsCard, ResizeCropCard, FormatSelectionCard } from './index';
+import { QualityControlsCard, ResizeCropCard, FormatSelectionCard, QualityImprovementCard } from './index';
 import { CROP_MODES } from '../constants';
 import type { ProcessingOptions, ImageFile } from '../types';
 
@@ -41,10 +41,11 @@ const CustomProcessingTab = ({
     onProcess,
     t
 }: CustomProcessingTabProps) => {
+    const anyAIQualityEnabled = processingOptions.aiQuality && Object.values(processingOptions.aiQuality).some(v => v === true);
     const isProcessDisabled =
         selectedImagesForProcessing.length === 0 ||
         isLoading ||
-        (processingOptions.cropMode === CROP_MODES.SMART && aiLoading) ||
+        ((processingOptions.cropMode === CROP_MODES.SMART || anyAIQualityEnabled) && aiLoading) ||
         !processingOptions.output.formats ||
         processingOptions.output.formats.length === 0;
 
@@ -82,6 +83,22 @@ const CustomProcessingTab = ({
                         onOptionChange={(key, value) => onSingleOptionChange(key as keyof ProcessingOptions, value)}
                         t={t}
                     />
+
+                <QualityImprovementCard
+                    options={processingOptions.aiQuality || {
+                        deblur: false,
+                        dehazeIndoor: false,
+                        dehazeOutdoor: false,
+                        denoise: false,
+                        derain: false,
+                        lowLight: false,
+                        retouch: false,
+                        detailReconstruction: false,
+                        colorCorrection: false
+                    }}
+                    onOptionChange={onOptionChange}
+                    t={t}
+                />
             </div>
 
             <div className="text-center">
@@ -94,7 +111,7 @@ const CustomProcessingTab = ({
                         <>
                             <i className="fas fa-spinner fa-spin"></i> {t('button.processing')}
                         </>
-                    ) : processingOptions.cropMode === CROP_MODES.SMART && aiLoading ? (
+                    ) : (processingOptions.cropMode === CROP_MODES.SMART || anyAIQualityEnabled) && aiLoading ? (
                         <>
                             <i className="fas fa-spinner fa-spin"></i> {t('button.loadingAI')}
                         </>

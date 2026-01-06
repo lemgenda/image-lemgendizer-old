@@ -70,6 +70,18 @@ export interface ResizeOptions {
     cropPosition?: string;
 }
 
+export interface AIQualityOptions {
+    deblur: boolean;
+    dehazeIndoor: boolean;
+    dehazeOutdoor: boolean;
+    denoise: boolean;
+    derain: boolean;
+    lowLight: boolean;
+    retouch: boolean;
+    detailReconstruction: boolean;
+    colorCorrection: boolean;
+}
+
 export interface CompressionOptions {
     quality: number;
     fileSize: string;
@@ -97,6 +109,7 @@ export interface ProcessingOptions {
     faviconBackgroundColor?: string;
     smartCrop: boolean;
     batchRename?: BatchRenameOptions;
+    aiQuality?: AIQualityOptions;
 }
 
 // Template System
