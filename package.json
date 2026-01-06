@@ -17,7 +17,8 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "prepare": "husky",
-    "lint-staged": "lint-staged"
+    "lint-staged": "lint-staged",
+    "postinstall": "node scripts/copy-models.js"
   },
   "lint-staged": {
     "*.{js,jsx}": [

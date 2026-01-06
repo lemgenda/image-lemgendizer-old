@@ -193,6 +193,16 @@ export const loadUpscalerModel = async (modelType: '2x' | '3x' | '4x' = '2x') =>
 export const loadMaximModel = async (modelUrl: string) => {
     // Helper to get local path from CDN URL
     const getLocalPath = (url: string) => {
+        // Map URL keywords to local directory names
+        if (url.includes('maxim-deblurring')) return '/models/maxim/deblurring/model.json';
+        if (url.includes('maxim-dehazing-indoor')) return '/models/maxim/dehazing-indoor/model.json';
+        if (url.includes('maxim-dehazing-outdoor')) return '/models/maxim/dehazing-outdoor/model.json';
+        if (url.includes('maxim-denoising')) return '/models/maxim/denoising/model.json';
+        if (url.includes('maxim-deraining')) return '/models/maxim/deraining/model.json';
+        if (url.includes('maxim-enhancement')) return '/models/maxim/enhancement/model.json';
+        if (url.includes('maxim-retouching')) return '/models/maxim/retouching/model.json';
+
+        // Fallback default
         const filename = url.split('/').pop();
         return `/models/maxim/${filename}`;
     };
