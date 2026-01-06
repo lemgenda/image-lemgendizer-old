@@ -9,6 +9,14 @@ interface UploadSectionProps {
     isScreenshotMode?: boolean;
 }
 
+/**
+ * Component for uploading images via drag-and-drop or file selection.
+ *
+ * @param {UploadSectionProps} props - Component props
+ * @param {Function} props.onImagesSelected - Callback when images are selected
+ * @param {React.RefObject<HTMLInputElement>} props.fileInputRef - Ref to the hidden file input
+ * @param {boolean} [props.isScreenshotMode] - Whether to show screenshot-specific UI
+ */
 function UploadSection({ onImagesSelected, fileInputRef, isScreenshotMode }: UploadSectionProps) {
     const { t } = useTranslation();
 

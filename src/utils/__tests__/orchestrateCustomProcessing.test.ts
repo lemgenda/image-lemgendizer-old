@@ -51,7 +51,13 @@ describe('orchestrateCustomProcessing', () => {
             compression: { quality: 80, fileSize: '100' }
         };
 
-        const results = await orchestrateCustomProcessing(images, processingConfig as ProcessingOptions, false);
+        const results = await orchestrateCustomProcessing(
+            images,
+            processingConfig as ProcessingOptions,
+            false,
+            vi.fn(),
+            (key: string) => key
+        );
 
         expect(results).toHaveLength(1);
         expect(results[0].name).toBe('NEWNAME-010.WEBP');
@@ -91,7 +97,13 @@ describe('orchestrateCustomProcessing', () => {
             compression: { quality: 80, fileSize: '100' }
         };
 
-        const results = await orchestrateCustomProcessing(images, processingConfig as ProcessingOptions, false);
+        const results = await orchestrateCustomProcessing(
+            images,
+            processingConfig as ProcessingOptions,
+            false,
+            vi.fn(),
+            (key: string) => key
+        );
 
         expect(results[0].name).toBe('prefix_01_suffix.webp');
     });
@@ -121,7 +133,13 @@ describe('orchestrateCustomProcessing', () => {
             compression: { quality: 80, fileSize: '100' }
         };
 
-        const results = await orchestrateCustomProcessing(images, processingConfig as ProcessingOptions, false);
+        const results = await orchestrateCustomProcessing(
+            images,
+            processingConfig as ProcessingOptions,
+            false,
+            vi.fn(),
+            (key: string) => key
+        );
 
         // Should append -{counter} automatically -> Simple-001 (default padding 3, start 1)
         expect(results[0].name).toBe('Simple-001.webp');

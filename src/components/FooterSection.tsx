@@ -1,7 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import LemGendaLogoElement from './LemGendaLogoElement';
 import '../styles/FooterSection.css';
-
+/**
+ * Footer component for the application.
+ * Displays version info, privacy assurances, and links to LemGenda.
+ */
 function FooterSection() {
     const { t } = useTranslation();
 

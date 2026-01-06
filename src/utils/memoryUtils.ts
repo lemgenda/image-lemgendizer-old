@@ -172,22 +172,36 @@ export const loadAIModel = async (): Promise<any> => {
         if (!window.cocoSsd) {
             try {
                 const cocoSsd = await import('@tensorflow-models/coco-ssd');
-                window.cocoSsd = cocoSsd;
+                // Check if the imported module is valid (has load function)
+                if (cocoSsd && (typeof cocoSsd.load === 'function' || (cocoSsd.default && typeof cocoSsd.default.load === 'function'))) {
+                    window.cocoSsd = cocoSsd;
+                }
             } catch (e) {
-                console.error('Failed to load COCO-SSD locally', e);
                 await loadCocoSsdFromCDN();
             }
         }
         if (window.cocoSsd) {
-            aiModel = await window.cocoSsd.load({ base: AI_SETTINGS.MODEL_TYPE });
-            if (aiModel) aiModel.modelType = 'coco-ssd';
+            // Handle both ES module default export and standard export
+            const cocoParams = { base: AI_SETTINGS.MODEL_TYPE };
+
+            if (typeof window.cocoSsd.load === 'function') {
+                 aiModel = await window.cocoSsd.load(cocoParams);
+            } else if (window.cocoSsd.default && typeof window.cocoSsd.default.load === 'function') {
+                 aiModel = await window.cocoSsd.default.load(cocoParams);
+            } else {
+                 throw new Error(`COCO-SSD object found but 'load' is missing.`);
+            }
+
+            if (aiModel) {
+                aiModel.modelType = 'coco-ssd';
+            }
         } else {
             throw new Error('COCO-SSD not available');
         }
 
         aiModelLoading = false;
         return aiModel;
-    } catch {
+    } catch (error) {
         aiModel = createSimpleAIModel();
         aiModelLoading = false;
         return aiModel;
@@ -205,7 +219,6 @@ const loadTensorFlow = async (): Promise<void> => {
         const tf = await import('@tensorflow/tfjs');
         window.tf = tf;
     } catch (e) {
-        console.error('Failed to load TensorFlow.js locally', e);
         // Fallback to CDN if local load fails
         await loadTensorFlowFromCDN();
     }
@@ -262,7 +275,7 @@ const loadWebGPUBackend = async (): Promise<void> => {
     try {
         await import('@tensorflow/tfjs-backend-webgpu');
     } catch (e) {
-        console.warn('Failed to load WebGPU backend', e);
+        // Ignore
     }
 };
 

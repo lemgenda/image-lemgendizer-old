@@ -701,9 +701,9 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
  * @param {File} imageFile - Image file
  * @param {number} targetDimension - Target dimension
  * @param {Object} options - Processing options
- * @returns {Promise<File>} Resized image file
+ * @returns {Promise<{ file: File, upscaled: boolean }>} Resized image file with status
  */
-export const resizeImageWithAI = async (imageFile: File, targetDimension: number, _options?: any): Promise<File> => {
+export const resizeImageWithAI = async (imageFile: File, targetDimension: number, _options?: any): Promise<{ file: File, upscaled: boolean }> => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(imageFile);
 
@@ -730,11 +730,13 @@ export const resizeImageWithAI = async (imageFile: File, targetDimension: number
 
     const needsUpscaling = newWidth > img.naturalWidth || newHeight > img.naturalHeight;
     let sourceFile = imageFile;
+    let wasUpscaled = false;
 
     if (needsUpscaling) {
         const upscaleFactor = calculateUpscaleFactor(img.naturalWidth, img.naturalHeight, newWidth, newHeight);
         if (upscaleFactor > 1) {
             sourceFile = await upscaleImageWithAI(sourceFile, upscaleFactor, imageFile.name);
+            wasUpscaled = true;
         }
     }
 
@@ -772,7 +774,7 @@ export const resizeImageWithAI = async (imageFile: File, targetDimension: number
         type: MIME_TYPE_MAP.webp
     });
 
-    return processedFile;
+    return { file: processedFile, upscaled: wasUpscaled };
 };
 
 /**

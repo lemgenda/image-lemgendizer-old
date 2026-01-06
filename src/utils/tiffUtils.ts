@@ -20,6 +20,12 @@ import { APP_TEMPLATE_CONFIG, DEFAULT_PLACEHOLDER_DIMENSIONS } from '../configs/
 import UTIF from 'utif';
 
 // Initialize window.UTIF if it doesn't exist (though import usually doesn't set global)
+declare global {
+    interface Window {
+        UTIF: any;
+    }
+}
+
 if (typeof window !== 'undefined' && !window.UTIF) {
     (window as any).UTIF = UTIF;
 }

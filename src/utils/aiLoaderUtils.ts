@@ -1,6 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-webgpu';
-import '@tensorflow/tfjs-backend-webgl';
 import Upscaler from 'upscaler';
 // @ts-ignore
 import esrganSlim2x from '@upscalerjs/esrgan-slim/2x';
@@ -34,7 +33,6 @@ try {
 }
 
 const blacklistBackend = (backend: string) => {
-    console.warn(`[AI] Blacklisting unstable backend: ${backend}`);
     BACKEND_BLACKLIST[backend] = true;
     try {
         localStorage.setItem(BACKEND_BLACKLIST_KEY, JSON.stringify({
@@ -64,7 +62,6 @@ export const initializeTensorFlow = async (): Promise<string> => {
         if (BACKEND_BLACKLIST[backend]) continue;
 
         try {
-            console.log(`[AI] Attempting to initialize ${backend} backend...`);
 
             // [Antigravity Perf] Aggressively batch commands for MAXIM's 28k kernels
             if (backend === 'webgpu') {
@@ -83,10 +80,9 @@ export const initializeTensorFlow = async (): Promise<string> => {
                     try {
                         const adapter = await navigator.gpu.requestAdapter();
                         // adapter.info is the standard property, requestAdapterInfo is deprecated/removed
-                        const info = (adapter as any).info || await (adapter as any).requestAdapterInfo();
-                        console.log(`[AI] WebGPU Adapter Info: Vendor=${info?.vendor}, Arch=${info?.architecture}, Device=${info?.device}, Desc=${info?.description}`);
+                        await (adapter as any).requestAdapterInfo();
                     } catch (e) {
-                        console.warn('[AI] Could not retrieve WebGPU adapter info', e);
+                         // Ignore adapter info errors
                     }
                 }
 
@@ -97,11 +93,9 @@ export const initializeTensorFlow = async (): Promise<string> => {
                 testTensor.dispose();
                 result.dispose();
 
-                console.log(`[AI] Successfully initialized ${backend} backend`);
                 return backend;
             }
         } catch (e) {
-            console.warn(`[AI] Failed to initialize ${backend} backend:`, e);
             if (backend !== 'cpu') {
                 blacklistBackend(backend);
             }
@@ -109,24 +103,24 @@ export const initializeTensorFlow = async (): Promise<string> => {
     }
 
     // Fallback to CPU is implicit if loop finishes, but explicit here for clarity
-    console.warn('[AI] All GPU backends failed, falling back to CPU');
+    // Fallback to CPU is implicit if loop finishes, but explicit here for clarity
     await tf.setBackend('cpu');
     return 'cpu';
 };
+
+import { AI_SETTINGS } from '../constants/aiConstants';
 
 /**
  * Loads the COCO-SSD model.
  */
 export const loadCocoSsdModel = async () => {
     try {
-        console.log('[AI] Loading COCO-SSD model...');
+        const modelType = AI_SETTINGS.MODEL_TYPE || 'lite_mobilenet_v2';
         // We use dynamic import for the model to avoid bundling issues
         const cocoSsd = await import('@tensorflow-models/coco-ssd');
-        const model = await cocoSsd.load();
-        console.log('[AI] COCO-SSD model loaded successfully');
+        const model = await cocoSsd.load({ base: modelType as any });
         return model;
     } catch (error) {
-        console.error('[AI] Failed to load COCO-SSD model:', error);
         throw error;
     }
 };
@@ -156,7 +150,6 @@ export const loadUpscalerModel = async (modelType: '2x' | '3x' | '4x' = '2x') =>
 
     // Strategy 1: Try CDN
     try {
-        console.log(`[AI] Loading Upscaler model (${modelType}) from CDN...`);
         // Override the path to use the CDN URL specifically
         const cdnConfig = {
             ...modelConfig,
@@ -168,7 +161,7 @@ export const loadUpscalerModel = async (modelType: '2x' | '3x' | '4x' = '2x') =>
         await upscaler.getModel(); // Warmup to verify loading
         return upscaler;
     } catch (cdnError) {
-        console.warn(`[AI] CDN load failed for Upscaler (${modelType}), trying local fallback...`, cdnError);
+        // CDN load failed, trying local fallback
     }
 
     // Strategy 2: Local Fallback
@@ -178,10 +171,8 @@ export const loadUpscalerModel = async (modelType: '2x' | '3x' | '4x' = '2x') =>
             model: modelConfig
         });
         await upscaler.getModel();
-        console.log(`[AI] Loaded Upscaler model (${modelType}) from local fallback`);
         return upscaler;
     } catch (localError) {
-        console.error(`[AI] All loading strategies failed for Upscaler (${modelType})`, localError);
         throw new Error(`Failed to load Upscaler model ${modelType}`);
     }
 };
@@ -209,21 +200,18 @@ export const loadMaximModel = async (modelUrl: string) => {
 
     // Strategy 1: CDN
     try {
-        console.log(`[AI] Loading MAXIM model from ${modelUrl}...`);
         const model = await tf.loadGraphModel(modelUrl);
         return model;
     } catch (cdnError) {
-        console.warn(`[AI] CDN load failed for MAXIM model, trying local fallback...`, cdnError);
+        // CDN load failed, trying local fallback
     }
 
     // Strategy 2: Local Fallback
     try {
         const localPath = getLocalPath(modelUrl);
-        console.log(`[AI] Loading MAXIM model from local fallback: ${localPath}`);
         const model = await tf.loadGraphModel(localPath);
         return model;
     } catch (localError) {
-        console.error(`[AI] All loading strategies failed for MAXIM model`, localError);
         throw new Error(`Failed to load MAXIM model`);
     }
 };

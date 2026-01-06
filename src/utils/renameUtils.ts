@@ -65,10 +65,7 @@ export const generateNewFileName = (
     // Token: {fullname}
     newName = newName.replace(/{fullname}/g, originalName);
 
-    // Token: {ext}
-    // If pattern contains {ext}, we use it. If not, we append it at the end automatically later?
-    // Usually batch renamers append extension automatically if not present, or user specifies it.
-    // Let's assume user might put {ext} in middle.
+    // If pattern contains {ext}, we use it.
     newName = newName.replace(/{ext}/g, ext);
 
     // Token: {counter}

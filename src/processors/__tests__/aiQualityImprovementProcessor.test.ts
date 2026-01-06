@@ -1,6 +1,6 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as tf from '@tensorflow/tfjs';
-import { processAiQualityImprovement } from '../aiQualityImprovementProcessor';
+import { processAiQualityImprovement, clearModelCacheForTesting } from '../aiQualityImprovementProcessor';
 import { MAXIM_MODEL_URLS } from '../../constants/sharedConstants';
 import * as aiLoaderUtils from '../../utils/aiLoaderUtils';
 
@@ -11,7 +11,8 @@ vi.mock('@tensorflow/tfjs', async () => {
             fromPixels: vi.fn(),
             toPixels: vi.fn()
         },
-        loadGraphModel: vi.fn()
+        loadGraphModel: vi.fn(),
+        tidy: (fn: any) => fn()
     };
 });
 
@@ -26,6 +27,8 @@ describe('aiQualityImprovementProcessor', () => {
     let mockModel: any;
 
     beforeEach(() => {
+        clearModelCacheForTesting(); // Ensure clean cache
+
         // Setup mock canvas
         mockCanvas = document.createElement('canvas');
         mockCanvas.width = 100;
@@ -33,6 +36,7 @@ describe('aiQualityImprovementProcessor', () => {
 
         // Setup mock tensor
         mockTensor = {
+            shape: [100, 100, 3], // Added shape
             expandDims: vi.fn().mockReturnThis(),
             toFloat: vi.fn().mockReturnThis(),
             div: vi.fn().mockReturnThis(),
@@ -61,7 +65,7 @@ describe('aiQualityImprovementProcessor', () => {
         const options = { deblur: false, denoise: false }; // all false
         const onProgress = vi.fn();
 
-        const result = await processAiQualityImprovement(mockCanvas, options, onProgress);
+        const result = await processAiQualityImprovement(mockCanvas, options, onProgress, (key: string) => key);
 
         expect(result).toBe(mockCanvas);
         expect(onProgress).not.toHaveBeenCalled();
@@ -71,7 +75,7 @@ describe('aiQualityImprovementProcessor', () => {
         const options = { deblur: true };
         const onProgress = vi.fn();
 
-        await processAiQualityImprovement(mockCanvas, options, onProgress);
+        await processAiQualityImprovement(mockCanvas, options, onProgress, (key: string) => key);
 
         expect(aiLoaderUtils.loadMaximModel).toHaveBeenCalledWith(MAXIM_MODEL_URLS.DEBLUR);
         expect(onProgress).toHaveBeenCalled();
@@ -81,13 +85,13 @@ describe('aiQualityImprovementProcessor', () => {
         const options = { denoise: true };
         const onProgress = vi.fn();
 
-        await processAiQualityImprovement(mockCanvas, options, onProgress);
+        await processAiQualityImprovement(mockCanvas, options, onProgress, (key: string) => key);
 
         expect(tf.browser.fromPixels).toHaveBeenCalledWith(mockCanvas);
         expect(mockModel.predict).toHaveBeenCalled();
         expect(tf.browser.toPixels).toHaveBeenCalled();
         expect(mockTensor.dispose).toHaveBeenCalled();
-        expect(mockModel.dispose).toHaveBeenCalled();
+        // expect(mockModel.dispose).toHaveBeenCalled(); // Model should NOT be disposed due to caching
     });
 
     it('should handle errors gracefully', async () => {
@@ -97,7 +101,30 @@ describe('aiQualityImprovementProcessor', () => {
 
         (aiLoaderUtils.loadMaximModel as any).mockRejectedValue(error);
 
-        await expect(processAiQualityImprovement(mockCanvas, options, onProgress))
+        await expect(processAiQualityImprovement(mockCanvas, options, onProgress, (key: string) => key))
             .rejects.toThrow('Model load failed');
+    });
+
+    it('should use tiling for large images', async () => {
+        const options = { denoise: true };
+        const onProgress = vi.fn();
+
+        // Setup large canvas (> 1024)
+        mockCanvas.width = 2000;
+        mockCanvas.height = 2000;
+        // Mock tensor shape to match
+        mockTensor.shape = [2000, 2000, 3];
+
+        await processAiQualityImprovement(mockCanvas, options, onProgress, (key: string) => key);
+
+        // Verify it ran through successfully (mocking makes actual tiling verification hard
+        // without spying on internal processWithTiling, but we ensure no crash and model called)
+        expect(mockModel.predict).toHaveBeenCalled();
+        // Tiling calls predict for each tile. 2000x2000 with 1024 size ~ 4 tiles.
+        // We expect multiple calls or at least one if we don't spy nicely.
+        // Actually, with the current mocks, processWithTiling calls tf.browser.fromPixels(tileData)
+        // which returns mockTensor, then mockModel.predict(mockTensor).
+        // So predict should be called multiple times.
+        expect(mockModel.predict.mock.calls.length).toBeGreaterThan(1);
     });
 });

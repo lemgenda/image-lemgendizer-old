@@ -3,7 +3,10 @@ import LanguageSwitcherElement from './LanguageSwitcherElement';
 import LemGendaIconElement from './LemGendaIconElement';
 import ThemeSwitcherElement from './ThemeSwitcherElement';
 import '../styles/HeaderSection.css';
-
+/**
+ * Header component for the application.
+ * Displays the logo, title, theme switcher, and language switcher.
+ */
 function HeaderSection() {
     const { t } = useTranslation();
 

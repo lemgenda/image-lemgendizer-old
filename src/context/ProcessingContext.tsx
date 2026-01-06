@@ -41,7 +41,6 @@ import {
 import {
     PROCESSING_MODES,
     COMPRESSION_QUALITY_RANGE,
-    CROP_MODES,
     ALL_OUTPUT_FORMATS,
     DEFAULT_PROCESSING_CONFIG,
     MODAL_TYPES,
@@ -140,6 +139,7 @@ interface ProcessingContextValue {
     showModal: (title: string, message: string, type?: any, showProgress?: boolean) => void;
     showSummaryModal: (summary: ProcessingSummary) => void;
     setProcessingOptions: React.Dispatch<React.SetStateAction<ProcessingOptions>>;
+    isAppInitializing: boolean;
 }
 
 interface ProcessingProviderProps {
@@ -157,6 +157,13 @@ export const useProcessingContext = (): ProcessingContextValue => {
     return context;
 };
 
+/**
+ * Provider component for the ProcessingContext.
+ * Manages global application state for image processing, uploads, settings, and UI modals.
+ *
+ * @param {ProcessingProviderProps} props - Component props
+ * @param {ReactNode} props.children - Child components
+ */
 export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
     const { t } = useTranslation();
     const [isScreenshotMode, setIsScreenshotMode] = useState(false);
@@ -221,6 +228,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
     // userInteractedWithModal state removed
 
 
+    const [isAppInitializing, setIsAppInitializing] = useState(true);
+
     // Refs
     const autoCloseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -284,51 +293,36 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         }
     }, [closeModal]);
 
+    // Force load AI model on startup
     useEffect(() => {
-        const loadAIModelIfNeeded = async () => {
-            const needsAI = (processingOptions.cropMode === CROP_MODES.SMART && !aiModelLoaded) ||
-                (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && !aiModelLoaded);
-
-            if (!needsAI) return;
+        const initAIModel = async () => {
+            // If already loaded or currently loading (though this runs on mount, so likely not)
+            if (aiModelLoaded) {
+                 setIsAppInitializing(false);
+                 return;
+            }
 
             try {
                 setAiLoading(true);
 
-                // Note: assuming path is correct relative to context folder.
-                // Context is in src/context. utils is in src/utils.
-                // So import should be from '../utils/memoryUtils'.
-                // But in App.jsx it was './utils/memoryUtils'.
                 const { loadAIModel } = await import('../utils/memoryUtils');
+                // Artificial delay for UX if loading is too fast, ensuring spinner is seen briefly?
+                // No, user wants it to stay *until* loaded. Speed is good.
                 const model = await loadAIModel();
 
                 if (model && (model.modelType || typeof model.detect === 'function')) {
                     setAiModelLoaded(true);
-                    setAiLoading(false);
-                } else {
-                    throw new Error('AI model failed to load');
                 }
-            } catch {
-
+            } catch (e) {
+                // We don't block the app forever on failure, we let them in without AI
+            } finally {
                 setAiLoading(false);
-                setAiModelLoaded(false);
-
-                if (processingOptions.cropMode === CROP_MODES.SMART) {
-                    setProcessingOptions(prev => ({
-                        ...prev,
-                        cropMode: CROP_MODES.STANDARD
-                    }));
-                }
-
-                showModal(
-                    t('message.warning'),
-                    t('message.aiModelFailed'),
-                    MODAL_TYPES.WARNING
-                );
+                setIsAppInitializing(false);
             }
         };
 
-        loadAIModelIfNeeded();
-    }, [processingOptions.cropMode, processingOptions.processingMode, t, aiModelLoaded, showModal]);
+        initAIModel();
+    }, []); // Empty dependency array = run once on mount
 
     // Track current images for cleanup on unmount
     const imagesRef = useRef(images);
@@ -810,7 +804,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                 processedImages = await orchestrateCustomProcessing(
                     selectedImagesForProcessing,
                     processingConfig,
-                    aiModelLoaded
+                    aiModelLoaded,
+                    updateProcessingModal,
+                    t
                 );
 
                 if (!processedImages || processedImages.length === 0) {
@@ -1249,6 +1245,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         showModal,
         closeModal,
         handleModalInteraction,
+        isAppInitializing,
         showSummaryModal,
 
         // Setters (we might expose these or wrap them in handlers)

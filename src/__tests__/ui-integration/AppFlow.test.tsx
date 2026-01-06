@@ -20,10 +20,15 @@ describe('App Flow Integration', () => {
         renderWithProvider(<App />);
 
         // Wait for AI loading to finish if it's showing
-        const loading = screen.queryByText(/Loading AI model/i);
-        if (loading) {
-            await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 2000 });
-        }
+        // Wait for app initialization
+        await waitForElementToBeRemoved(() => screen.queryByText(/Initializing Application/i), { timeout: 5000 }).catch(() => {
+            // If it's already gone or wasn't found (unlikely), checking for AI loading
+            const loading = screen.queryByText(/Loading AI model/i);
+            if (loading) {
+                return waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 2000 });
+            }
+            return Promise.resolve();
+        });
 
         // Check for major sections
         expect(screen.getByRole('heading', { name: /Image LemGendizer/i })).toBeInTheDocument();
@@ -33,6 +38,9 @@ describe('App Flow Integration', () => {
 
     it('toggles between Custom and Template processing tabs after upload', async () => {
         const { container } = renderWithProvider(<App />);
+
+        // Wait for app initialization
+        await waitForElementToBeRemoved(() => screen.queryByText(/Initializing Application/i), { timeout: 5000 }).catch(() => {});
 
         // Wait for AI loading
         const loading = screen.queryByText(/Loading AI model/i);
@@ -66,6 +74,9 @@ describe('App Flow Integration', () => {
 
     it('can open the upload dialog', async () => {
         renderWithProvider(<App />);
+
+        // Wait for app initialization
+        await waitForElementToBeRemoved(() => screen.queryByText(/Initializing Application/i), { timeout: 5000 }).catch(() => {});
 
         // Wait for AI loading
         const loading = screen.queryByText(/Loading AI model/i);

@@ -20,6 +20,9 @@ describe('Batch Rename Flow Integration', () => {
         const { container } = renderWithProvider(<App />);
 
         // Wait for AI loading to finish
+        // Wait for app initialization
+        await waitForElementToBeRemoved(() => screen.queryByText(/Initializing Application/i), { timeout: 10000 }).catch(() => {});
+
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
             await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 10000 });

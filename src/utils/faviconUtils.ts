@@ -67,7 +67,7 @@ export const generateFaviconSet = async (
 
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     ${targetSizes
-            .filter(size => size.name.includes('favicon') && !size.name.includes('64x64'))
+            .filter(size => size.name.includes('favicon'))
             .map(size => `<link rel="icon" type="image/png" sizes="${size.width}x${size.height}" href="/${size.name}.png">`)
             .join('\n    ')}
 

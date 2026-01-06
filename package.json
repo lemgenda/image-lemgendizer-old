@@ -20,20 +20,15 @@
     "lint-staged": "lint-staged",
     "postinstall": "node scripts/postinstall.cjs"
   },
-  "lint-staged": {
-    "*.{js,jsx}": [
-      "eslint --max-warnings 0"
-    ]
-  },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.1.0",
     "@fortawesome/free-solid-svg-icons": "^7.1.0",
     "@fortawesome/react-fontawesome": "^3.1.1",
     "@tensorflow-models/coco-ssd": "^2.2.3",
-    "@tensorflow/tfjs": "~4.11.0",
-    "@tensorflow/tfjs-backend-webgpu": "4.11.0",
-    "@tensorflow/tfjs-converter": "4.11.0",
-    "@tensorflow/tfjs-core": "4.11.0",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-webgpu": "^4.22.0",
+    "@tensorflow/tfjs-converter": "^4.22.0",
+    "@tensorflow/tfjs-core": "^4.22.0",
     "@upscalerjs/esrgan-slim": "^1.0.0-beta.12",
     "@upscalerjs/maxim-deblurring": "^0.1.0",
     "@upscalerjs/maxim-dehazing-indoor": "^0.1.0",

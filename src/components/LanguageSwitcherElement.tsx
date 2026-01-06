@@ -18,16 +18,16 @@ import '../styles/LanguageSwitcherElement.css';
 function LanguageSwitcherElement() {
     const { i18n } = useTranslation();
     const [isOpen, setIsOpen] = useState<boolean>(false);
-    const [currentLanguage, setCurrentLanguage] = useState<string>(() => {
-        const lang = initializeLanguage(i18n);
-        return lang || getCurrentLanguage();
-    });
-
-    const languages: LanguageInfo[] = getLanguagesWithFlags();
+    const [currentLanguage, setCurrentLanguage] = useState<string>(getCurrentLanguage());
 
     useEffect(() => {
-        // lang is initialized in useState
+        const lang = initializeLanguage(i18n);
+        if (lang) {
+            setCurrentLanguage(lang);
+        }
     }, [i18n]);
+
+    const languages: LanguageInfo[] = getLanguagesWithFlags();
 
     const handleLanguageChange = (langCode: string): void => {
         setCurrentLanguage(langCode);

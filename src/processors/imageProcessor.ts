@@ -149,7 +149,9 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
                         }
                     }
 
-                    processedFile = await (resizeImageWithAI as any)(processableFile, dimension, options);
+                    const resizeResult = await (resizeImageWithAI as any)(processableFile, dimension, options);
+                    processedFile = resizeResult.file;
+                    const wasUpscaled = resizeResult.upscaled;
 
                     results.push({
                         original: { ...image, file: imageFile },
@@ -161,7 +163,8 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
                         optimized: true,
                         aspectRatioPreserved: true,
                         error: conversionError,
-                        format: options.format || IMAGE_FORMATS.WEBP
+                        format: options.format || IMAGE_FORMATS.WEBP,
+                        upscaled: wasUpscaled
                     });
 
                 } catch (error: any) {
@@ -231,10 +234,14 @@ export const processLemGendaryCrop = async (
 
 
             let croppedFile: File;
-            // let conversionError = null;
+            let wasUpscaled = false;
+            let wasAiCropped = false;
 
             if (isSVG) {
-                croppedFile = await (processSVGCrop as any)(imageFile, width, height);
+                const result = await (processSVGCrop as any)(imageFile, width, height);
+                croppedFile = result.file;
+                wasUpscaled = result.upscaled;
+                wasAiCropped = result.aiCropped;
             } else {
                 let processableFile = imageFile;
                 if (isTIFF) {
@@ -254,13 +261,21 @@ export const processLemGendaryCrop = async (
                 }
 
                 if (options.cropMode === CROP_MODES.SMART) {
-                    croppedFile = await (processSmartCrop as any)(processableFile, width, height, {
+                    const result = await (processSmartCrop as any)(processableFile, width, height, {
                         ...options,
                         cropMode: CROP_MODES.SMART,
                         cropPosition
                     });
+                    croppedFile = result.file;
+                    wasUpscaled = result.upscaled;
+                    wasAiCropped = result.aiCropped;
                 } else {
-                    croppedFile = await (processStandardCrop as any)(processableFile, width, height, cropPosition, options);
+                    // Note: processStandardCrop takes 4 arguments in its old call here, but its signature in cropProcessor is (imageFile, width, height, options)
+                    // I need to be careful with the arguments.
+                    const result = await (processStandardCrop as any)(processableFile, width, height, { ...options, cropPosition });
+                    croppedFile = result.file;
+                    wasUpscaled = result.upscaled;
+                    wasAiCropped = result.aiCropped;
                 }
             }
 
@@ -275,14 +290,17 @@ export const processLemGendaryCrop = async (
                 optimized: true,
                 cropMode: options.cropMode || CROP_MODES.STANDARD,
                 cropPosition: cropPosition,
-                format: options.format || IMAGE_FORMATS.WEBP
+                format: options.format || IMAGE_FORMATS.WEBP,
+                upscaled: wasUpscaled,
+                aiCropped: wasAiCropped
             });
 
         } catch (error: any) {
             if (image.file?.type === 'image/svg+xml') {
                 try {
                     const rasterFile = await convertSVGToRaster(image.file, width, height, IMAGE_FORMATS.PNG);
-                    const croppedFile = await (processStandardCrop as any)(rasterFile, width, height, cropPosition, options);
+                    const result = await (processStandardCrop as any)(rasterFile, width, height, { ...options, cropPosition });
+                    const croppedFile = result.file;
                     const optimizedFile = await processLengendaryOptimize(croppedFile, options.quality, options.format);
 
                     results.push({
@@ -293,7 +311,9 @@ export const processLemGendaryCrop = async (
                         isTIFF: false,
                         optimized: true,
                         cropMode: options.cropMode || CROP_MODES.STANDARD,
-                        cropPosition: cropPosition
+                        cropPosition: cropPosition,
+                        upscaled: result.upscaled,
+                        aiCropped: result.aiCropped
                     });
                     continue;
                 } catch { /* ignored */ }
@@ -333,11 +353,15 @@ export const processImagesForTemplates = async (images: any[], templates: Templa
         for (const template of templates) {
 
             try {
-                const croppedFile = await (processTemplateSmartCrop as any)(
+                const result = await (processTemplateSmartCrop as any)(
                     image.file,
                     template,
                     options
                 );
+
+                const croppedFile = result.file;
+                const wasUpscaled = result.upscaled;
+                const wasAiCropped = result.aiCropped;
 
                 const optimizedFile = await processLengendaryOptimize(
                     croppedFile,
@@ -357,7 +381,9 @@ export const processImagesForTemplates = async (images: any[], templates: Templa
                             ? template.width / template.height
                             : 1),
                     cropMode: template.cropMode,
-                    success: true
+                    success: true,
+                    upscaled: wasUpscaled,
+                    aiCropped: wasAiCropped
                 });
 
             } catch (error: any) {

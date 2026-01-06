@@ -31,6 +31,12 @@ interface UploadGallerySectionProps {
     formatFileSize: (size: number) => string;
 }
 
+/**
+ * Gallery component displaying uploaded images.
+ * Handles selection, removal, and preview generation for various formats (including TIFF/SVG).
+ *
+ * @param {UploadGallerySectionProps} props - Component props
+ */
 function UploadGallerySection({
     images,
     selectedImages,

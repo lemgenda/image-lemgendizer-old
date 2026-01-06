@@ -100,11 +100,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000
   },
 
-  // Dependency optimization - exclude patched packages from pre-bundling
+  // Dependency optimization
   optimizeDeps: {
-    exclude: [
-      '@tensorflow-models/coco-ssd'  // Use patched version from node_modules
-    ]
+    include: ['@tensorflow-models/coco-ssd']
   },
 
   // Development server configuration
@@ -143,7 +141,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/setupTests.js'],
+    setupFiles: ['./src/setupTests.ts'],
     css: true,
     coverage: {
       provider: 'v8',

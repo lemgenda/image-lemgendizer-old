@@ -84,6 +84,9 @@ const CustomProcessingTab = ({
                         t={t}
                     />
 
+            </div>
+
+            <div className="mb-lg">
                 <QualityImprovementCard
                     options={processingOptions.aiQuality || {
                         deblur: false,

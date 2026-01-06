@@ -14,7 +14,10 @@ interface AdvancedRenameTabProps {
 }
 
 /**
- * AdvancedRenameTab component
+ * Component for configuring advanced batch renaming rules.
+ * Supports patterns, tokens, regex find/replace, and case formatting.
+ *
+ * @param {AdvancedRenameTabProps} props - Component props
  */
 const AdvancedRenameTab = ({
     processingOptions,

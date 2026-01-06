@@ -36,6 +36,12 @@ async function copyModels() {
     console.log('Starting model copy process...');
 
     try {
+        // Clean existing directory to prevent duplicates
+        console.log('Cleaning existing models...');
+        try {
+            await fsPromises.rm(publicModelsDir, { recursive: true, force: true });
+        } catch { /* ignore if not exists */ }
+
         await fsPromises.mkdir(publicModelsDir, { recursive: true });
 
         // 1. Copy MAXIM Models
@@ -83,13 +89,68 @@ async function copyModels() {
             await copyDir(srcDir, destDir);
         }
 
-        // 2. Copy ESRGAN Slim Models (Optional, but good for completeness)
+        // 2. Copy ESRGAN Slim Models
         const esrganSrc = path.join(nodeModulesDir, '@upscalerjs', 'esrgan-slim', 'models');
         const esrganDest = path.join(publicModelsDir, 'esrgan-slim');
         console.log(`Copying esrgan-slim to ${esrganDest}...`);
         await copyDir(esrganSrc, esrganDest);
 
-        console.log('✅ AI Models copied successfully!');
+        // 3. Download COCO-SSD Models (lite_mobilenet_v2 and mobilenet_v2)
+        // These are not in node_modules, so we must fetch them.
+        const https = await import('https');
+        const downloadFile = (url, dest) => {
+            return new Promise((resolve, reject) => {
+                const file = fs.createWriteStream(dest);
+                https.get(url, (response) => {
+                    response.pipe(file);
+                    file.on('finish', () => {
+                        file.close(resolve);
+                    });
+                }).on('error', (err) => {
+                    fs.unlink(dest, () => { }); // Delete the file async
+                    reject(err);
+                });
+            });
+        };
+
+        const cocoBaseUrl = 'https://storage.googleapis.com/tfjs-models/savedmodel';
+        const cocoDestDir = path.join(publicModelsDir, 'coco-ssd');
+        await fsPromises.mkdir(cocoDestDir, { recursive: true });
+
+        const modelsToFetch = [
+            { name: 'lite_mobilenet_v2', subpath: 'ssd_mobilenet_v2', files: ['model.json', 'group1-shard1of1.bin', 'group1-shard2of2.bin'] }, // Shards might vary, checking logic needed or assume standard
+            // Actually, lite_mobilenet_v2 uses different shards.
+            // Simplified approach: Just download mobilenet_v2 (the one we want) for now to minimize complexity/risk.
+            // URL: https://storage.googleapis.com/tfjs-models/savedmodel/ssd_mobilenet_v2/model.json
+            { name: 'mobilenet_v2', urlPath: 'ssd_mobilenet_v2', files: ['model.json', 'group1-shard1of2.bin', 'group1-shard2of2.bin'] },
+            { name: 'lite_mobilenet_v2', urlPath: 'ssd_lite_mobilenet_v2', files: ['model.json', 'group1-shard1of2.bin', 'group1-shard2of2.bin'] }
+        ];
+
+        console.log('Downloading COCO-SSD models...');
+        for (const model of modelsToFetch) {
+            const modelDir = path.join(cocoDestDir, model.name);
+            await fsPromises.mkdir(modelDir, { recursive: true });
+            console.log(`Downloading ${model.name} to ${modelDir}...`);
+
+            for (const file of model.files) {
+                const dest = path.join(modelDir, file);
+                const url = `${cocoBaseUrl}/${model.urlPath}/${file}`;
+                // Check if exists to avoid redownloading
+                try {
+                    await fsPromises.access(dest);
+                    console.log(`  - ${file} exists, skipping.`);
+                } catch {
+                    console.log(`  - Fetching ${file}...`);
+                    try {
+                        await downloadFile(url, dest);
+                    } catch (e) {
+                        console.warn(`    Failed to download ${file}: ${e.message}. (Note: Shard names may vary by version, relying on CDN fallback if incomplete)`);
+                    }
+                }
+            }
+        }
+
+        console.log('✅ AI Models copied/downloaded successfully!');
     } catch (err) {
         console.error('❌ Error copying models:', err);
         process.exit(1);

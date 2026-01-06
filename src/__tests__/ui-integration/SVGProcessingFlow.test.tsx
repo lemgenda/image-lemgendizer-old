@@ -30,6 +30,9 @@ describe('SVG Processing Flow', () => {
         );
 
         // Wait for AI loading
+        // Wait for app initialization
+        await waitForElementToBeRemoved(() => screen.queryByText(/Initializing Application/i), { timeout: 5000 }).catch(() => {});
+
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
             await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 4000 });

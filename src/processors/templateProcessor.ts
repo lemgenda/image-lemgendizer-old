@@ -236,38 +236,48 @@ async function processSingleTemplate(
                 if (useSmartCrop && aiModelLoaded && !aiUpscalingDisabled) {
                     try {
                         if (isLogoTemplate) {
-                            processedFile = await processSmartCropForLogo(
+                            const result = await processSmartCropForLogo(
                                 processedFile,
                                 targetWidth,
                                 targetHeight,
                                 { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP, isLogo: true, templateConfig: template.cropConfig }
                             );
-                            wasSmartCropped = true;
+                            processedFile = result.file;
+                            wasUpscaled = result.upscaled;
+                            wasSmartCropped = result.aiCropped;
                             subjectProtected = true;
                         } else {
-                            processedFile = await processSmartCrop(
+                            const result = await processSmartCrop(
                                 processedFile,
                                 targetWidth,
                                 targetHeight,
                                 { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP, isLogo: false, templateConfig: template.cropConfig }
                             );
-                            wasSmartCropped = true;
+                            processedFile = result.file;
+                            wasUpscaled = result.upscaled;
+                            wasSmartCropped = result.aiCropped;
                         }
                     } catch {
-                        processedFile = await processSimpleSmartCrop(
+                        const result = await processSimpleSmartCrop(
                             processedFile,
                             targetWidth,
                             targetHeight,
                             { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP, isLogo: isLogoTemplate, templateConfig: template.cropConfig }
                         );
+                        processedFile = result.file;
+                        wasUpscaled = result.upscaled;
+                        wasSmartCropped = result.aiCropped;
                     }
                 } else {
-                    processedFile = await processSimpleSmartCrop(
+                    const result = await processSimpleSmartCrop(
                         processedFile,
                         targetWidth,
                         targetHeight,
                         { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }
                     );
+                    processedFile = result.file;
+                    wasUpscaled = result.upscaled;
+                    wasSmartCropped = result.aiCropped;
                 }
             } else {
                 const resizeResults: any = await processLemGendaryResize(

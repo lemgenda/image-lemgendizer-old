@@ -709,8 +709,14 @@ export const generateProcessingSummary = (summaryData: any) => {
         summary.operations.push(`${OPERATION_NAMES.RENAMED}: ${summaryData.newFileName}`);
     }
 
-    if (summary.upscalingUsed) {
+    if (summary.upscalingUsed || summary.aiUpscaledCount > 0) {
+        summary.upscalingUsed = true;
         summary.operations.push(OPERATION_NAMES.AUTO_UPSCALED);
+        summary.aiUsed = true;
+    }
+
+    if (summary.aiSmartCroppedCount > 0 && !summary.operations.includes(OPERATION_NAMES.AI_CROPPED)) {
+        summary.aiUsed = true;
     }
 
     if (summaryData.mode === PROCESSING_MODES.TEMPLATES) {
@@ -762,12 +768,17 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
         summary.operations.push(`${OPERATION_NAMES.COMPRESSED} (${qualityPercent}%)`);
     }
 
-    if (options.crop && options.crop.enabled && options.crop.mode === CROP_MODES.SMART) {
-        summary.operations.push(OPERATION_NAMES.AI_CROPPED);
+    if (summary.aiSmartCroppedCount > 0) {
         summary.aiUsed = true;
+        if (!summary.operations.includes(OPERATION_NAMES.AI_CROPPED)) {
+            summary.operations.push(OPERATION_NAMES.AI_CROPPED);
+        }
     }
 
-    // Logic for upscaling check would go here if tracked in result or options
+    if (summary.aiUpscaledCount > 0) {
+        summary.upscalingUsed = true;
+        summary.aiUsed = true;
+    }
 
     if (summary.upscalingUsed) {
         summary.operations.push(OPERATION_NAMES.AUTO_UPSCALED);

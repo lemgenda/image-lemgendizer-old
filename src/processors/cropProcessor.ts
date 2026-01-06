@@ -309,20 +309,43 @@ async function cropFromResized(resized: any, targetWidth: number, targetHeight: 
 
         let subjectCenterX, subjectCenterY;
 
-        const verticalFits = height * 1.1 <= targetHeight;
+        const verticalFits = height * (SMART_CROP_CONFIG.VERTICAL_FIT_THRESHOLD || 1.1) <= targetHeight;
 
         subjectCenterX = x + width / 2;
 
-        if (verticalFits) {
-            subjectCenterY = y + height / 2;
-        } else {
             const category = position.category || 'default';
-            if (category === 'person' || category === 'face' || category === 'animal') {
-                subjectCenterY = y + height * 0.3;
+            const focusOffsets = (SMART_CROP_CONFIG as any).FOCUS_OFFSETS || { person: 0.3, face: 0.3, animal: 0.3, default: 0.5 };
+
+            // Fix: Don't use verticalFits optimization for categories that need specific offsets (like person/face need headroom)
+            // unless they are explicitly set to center (0.5)
+            const shouldForceOffset = ['face', 'facial_feature'].includes(category);
+
+            if (verticalFits && !shouldForceOffset) {
+                subjectCenterY = y + height / 2;
             } else {
-                subjectCenterY = y + height * 0.5;
+                // Check specific categories or fall back to default
+                let offsetMultiplier = focusOffsets[category] !== undefined ? focusOffsets[category] : focusOffsets.default;
+
+                // [Refinement] Tune person focus for portrait images
+                // If it's a person and either the source image or the target crop is portrait,
+                // apply a more aggressive vertical offset (closer to top) to ensure heads are prominent.
+                if (category === 'person') {
+                    const isSourcePortrait = resized.height > resized.width;
+                    const isTargetPortrait = targetHeight > targetWidth;
+                    const isSubjectPortrait = height > width;
+
+                    if ((isSourcePortrait || isTargetPortrait || isSubjectPortrait) && focusOffsets.personPortrait) {
+                        offsetMultiplier = focusOffsets.personPortrait;
+                    }
+                }
+
+                // Special handling for high-priority categories if not explicitly found
+                if (offsetMultiplier === focusOffsets.default && (category === 'person' || category === 'face' || category === 'animal')) {
+                     subjectCenterY = y + height * 0.3; // Fallback to hardcoded safe default if config missing key but matching category logic
+                } else {
+                     subjectCenterY = y + height * offsetMultiplier;
+                }
             }
-        }
 
         offsetX = subjectCenterX - targetWidth / 2;
         offsetY = subjectCenterY - targetHeight / 2;
@@ -478,9 +501,20 @@ function findMainSubject(predictions: any[], imgWidth: number, imgHeight: number
     const validPredictions = predictions.filter(pred => {
         if (!pred.class) return false;
         const className = pred.class.toLowerCase();
-        return pred.score > (AI_SETTINGS.MIN_CONFIDENCE || 0.3) &&
+        const category = (CATEGORY_MAPPING || {})[className] || 'default';
+
+        // Lower threshold for people and faces specifically to ensure they are prioritized
+        let minConf = (AI_SETTINGS.MIN_CONFIDENCE || 0.25);
+        if (category === 'person' || category === 'face' || category === 'facial_feature') {
+            minConf = 0.15;
+        }
+
+        return pred.score > minConf &&
             !(IGNORED_OBJECTS || []).includes(className);
     });
+
+
+
     if (validPredictions.length === 0) return null;
     const scoredPredictions = validPredictions.map(pred => {
         const bbox = pred.bbox;
@@ -500,20 +534,29 @@ function findMainSubject(predictions: any[], imgWidth: number, imgHeight: number
 
         let sizePenalty = 1.0;
         if (sizeScore < (SMART_CROP_CONFIG.MIN_SUBJECT_SIZE_RATIO || 0.05)) {
-            sizePenalty = 0.5;
+            // Lower penalty for small subjects if they are high confidence
+            sizePenalty = confidenceScore > 0.8 ? 0.8 : 0.4;
         }
 
         let bonus = 1.0;
         if (centralityScore > 0.8 && confidenceScore > 0.7) {
-            bonus = 1.3;
-        }
-        if (category === 'logo') {
-            bonus *= (LOGO_DETECTION_CONFIG.PRIORITIZE_LOGOS ? 1.4 : 1.0);
+            bonus = 1.4; // Increased bonus for central high-conf subjects
         }
 
-        const score = (sizeScore * (AI_MODEL_WEIGHTS?.SIZE_WEIGHT || 0.2) +
+        // Face/Person detection bonus
+        if (category === 'face' || category === 'facial_feature') {
+            bonus *= 1.5; // Increased from 1.3
+        } else if (category === 'person') {
+            bonus *= 1.3;
+        }
+
+        if (category === 'logo') {
+            bonus *= (LOGO_DETECTION_CONFIG.PRIORITIZE_LOGOS ? 1.2 : 0.8); // Slightly lower logo priority when competing with people
+        }
+
+        const score = (sizeScore * (AI_MODEL_WEIGHTS?.SIZE_WEIGHT || 0.3) +
             confidenceScore * (AI_MODEL_WEIGHTS?.CONFIDENCE_WEIGHT || 0.4) +
-            centralityScore * (AI_MODEL_WEIGHTS?.CENTRALITY_WEIGHT || 0.4)) *
+            centralityScore * (AI_MODEL_WEIGHTS?.CENTRALITY_WEIGHT || 0.3)) *
             categoryWeight * bonus * sizePenalty;
 
         return {
@@ -527,6 +570,8 @@ function findMainSubject(predictions: any[], imgWidth: number, imgHeight: number
         };
     });
     scoredPredictions.sort((a: any, b: any) => b.score - a.score);
+
+
 
     return scoredPredictions[0] || null;
 }
@@ -680,7 +725,7 @@ async function fitImageToContain(imageFile: File, targetWidth: number, targetHei
 /**
  * Processes smart crop with proper resize
  */
-export const processSmartCrop = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }): Promise<File> => {
+export const processSmartCrop = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }): Promise<{ file: File, upscaled: boolean, aiCropped: boolean }> => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
@@ -688,9 +733,10 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
 
     if (isSVG) {
         try {
-            return await convertSVGToRasterAndCrop(imageFile, targetWidth, targetHeight, options.format || IMAGE_FORMATS.WEBP, 'center');
+            const file = await convertSVGToRasterAndCrop(imageFile, targetWidth, targetHeight, options.format || IMAGE_FORMATS.WEBP, 'center');
+            return { file, upscaled: false, aiCropped: false };
         } catch {
-            return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, options) as File;
+            return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, options);
         }
     }
 
@@ -710,7 +756,7 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
             try {
                 processableFile = await convertLegacyFormat(imageFile);
             } catch {
-                return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, options) as File;
+                return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, options);
             }
         }
 
@@ -718,12 +764,14 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
 
         const needsUpscaling = targetWidth > img.width || targetHeight > img.height;
         let sourceFile = processableFile;
+        let wasUpscaled = false;
 
         if (needsUpscaling) {
             const upscaleFactor = calculateUpscaleFactor(img.width, img.height, targetWidth, targetHeight);
             if (upscaleFactor > 1 && upscaleFactor <= MAX_SCALE_FACTOR) {
                 try {
                     sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
+                    wasUpscaled = true;
                 } catch {
                     // Intentionally ignore
                 }
@@ -789,6 +837,8 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
 
                 let predictions = await model.detect(detectionElement);
 
+
+
                 if (detectionScale !== 1 && predictions.length > 0) {
                     const invScale = 1 / detectionScale;
                     predictions = predictions.map((p: any) => ({
@@ -827,7 +877,7 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
                     focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
                     croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
                 }
-            } catch {
+            } catch (aiError: any) {
                 focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
                 croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
             }
@@ -835,16 +885,16 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
             focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
             croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
         }
-        return croppedFile!;
+        return { file: croppedFile!, upscaled: wasUpscaled, aiCropped: mainSubject !== null };
     } catch {
-        return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, options) as File;
+        return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, options);
     }
 };
 
 /**
  * Processes smart crop for template requirements
  */
-export const processTemplateSmartCrop = async (imageFile: File, template: any, options: any = {}) => {
+export const processTemplateSmartCrop = async (imageFile: File, template: any, options: any = {}): Promise<{ file: File, upscaled: boolean, aiCropped: boolean }> => {
     const {
         width,
         height,
@@ -930,7 +980,7 @@ export const processTemplateSmartCrop = async (imageFile: File, template: any, o
 
     if (isSVG) {
         try {
-            return await convertSVGToRasterAndCrop(imageFile, finalWidth, finalHeight, options.format || IMAGE_FORMATS.WEBP, cropPosition);
+            return await convertSVGToRasterAndCrop(imageFile, finalWidth, finalHeight, options.format || IMAGE_FORMATS.WEBP, cropPosition).then(file => ({ file, upscaled: false, aiCropped: false }));
         } catch {
             return await processStandardCrop(imageFile, finalWidth, finalHeight, mergedOptions);
         }
@@ -941,7 +991,7 @@ export const processTemplateSmartCrop = async (imageFile: File, template: any, o
 /**
  * Processes simple smart crop without AI (center crop fallback or standard crop)
  */
-export const processSimpleSmartCrop = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }): Promise<File | Object> => {
+export const processSimpleSmartCrop = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }): Promise<{ file: File, upscaled: boolean, aiCropped: boolean }> => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
     const isSVG = isSVGFile(imageFile);
@@ -978,6 +1028,7 @@ export const processSimpleSmartCrop = async (imageFile: File, targetWidth: numbe
         const img = await loadImage(processableFile);
         const needsUpscaling = targetWidth > img.width || targetHeight > img.height;
         let sourceFile = processableFile;
+        let wasUpscaled = false;
 
         if (needsUpscaling) {
             const upscaleFactor = calculateUpscaleFactor(
@@ -989,6 +1040,7 @@ export const processSimpleSmartCrop = async (imageFile: File, targetWidth: numbe
             if (upscaleFactor > 1) {
                 try {
                     sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
+                    wasUpscaled = true;
                 } catch { /* ignored */ }
             }
         }
@@ -997,12 +1049,13 @@ export const processSimpleSmartCrop = async (imageFile: File, targetWidth: numbe
         const focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
         const adjustedPosition = adjustCropPositionForFocalPoint(CROP_POSITIONS.CENTER, focalPoint, resized.width, resized.height);
         const croppedFile = await cropFromResized(resized, targetWidth, targetHeight, adjustedPosition, imageFile, options);
-        return croppedFile;
+        return { file: croppedFile, upscaled: wasUpscaled, aiCropped: false };
     } catch (error: any) {
         try {
             return await processStandardCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: CROP_POSITIONS.CENTER });
         } catch {
-            return await createErrorPlaceholder(imageFile, targetWidth, targetHeight, 'Crop Error', error.message);
+            const file = await createErrorPlaceholder(imageFile, targetWidth, targetHeight, 'Crop Error', error.message);
+            return { file, upscaled: false, aiCropped: false };
         }
     }
 };
@@ -1010,7 +1063,7 @@ export const processSimpleSmartCrop = async (imageFile: File, targetWidth: numbe
 /**
  * Processes standard crop with proper resize
  */
-export const processStandardCrop = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = {}): Promise<File> => {
+export const processStandardCrop = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = {}): Promise<{ file: File, upscaled: boolean, aiCropped: boolean }> => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
@@ -1034,14 +1087,32 @@ export const processStandardCrop = async (imageFile: File, targetWidth: number, 
         }
     }
 
-    const resized = await resizeImageForCrop(processableFile, targetWidth, targetHeight, options);
-    return await cropFromResized(resized, targetWidth, targetHeight, options.cropPosition || CROP_POSITIONS.CENTER, imageFile, options);
+    const img = await loadImage(processableFile);
+    const needsUpscaling = targetWidth > img.width || targetHeight > img.height;
+    let sourceFile = processableFile;
+    let wasUpscaled = false;
+
+    if (needsUpscaling) {
+        const upscaleFactor = calculateUpscaleFactor(img.width, img.height, targetWidth, targetHeight);
+        if (upscaleFactor > 1 && upscaleFactor <= MAX_SCALE_FACTOR) {
+            try {
+                sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
+                wasUpscaled = true;
+            } catch {
+                // ignore
+            }
+        }
+    }
+
+    const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight, options);
+    const file = await cropFromResized(resized, targetWidth, targetHeight, options.cropPosition || CROP_POSITIONS.CENTER, imageFile, options);
+    return { file, upscaled: wasUpscaled, aiCropped: false };
 };
 
 /**
  * Processes SVG crop operation with proper resize
  */
-export const processSVGCrop = async (svgFile: File, width: number, height: number): Promise<File> => {
+export const processSVGCrop = async (svgFile: File, width: number, height: number): Promise<{ file: File, upscaled: boolean, aiCropped: boolean }> => {
     try {
         const rasterFile = await convertSVGToRaster(svgFile, width * 2, height * 2, IMAGE_FORMATS.PNG);
         const img = new Image();
@@ -1088,7 +1159,7 @@ export const processSVGCrop = async (svgFile: File, width: number, height: numbe
         const croppedFile = new File([croppedBlob], svgFile.name.replace(/\.svg$/i, '.png'), {
             type: 'image/png'
         });
-        return croppedFile;
+        return { file: croppedFile, upscaled: false, aiCropped: false };
     } catch (error: any) {
         const canvas = document.createElement('canvas');
         canvas.width = width;
@@ -1119,9 +1190,10 @@ export const processSVGCrop = async (svgFile: File, width: number, height: numbe
 
         if (!blob) throw new Error("Failed to create error blob");
 
-        return new File([blob], `${svgFile.name}-crop-error.png`, {
+        const file = new File([blob], `${svgFile.name}-crop-error.png`, {
             type: MIME_TYPE_MAP.png
         });
+        return { file, upscaled: false, aiCropped: false };
     }
 };
 
@@ -1202,7 +1274,7 @@ export const getProcessingStatistics = () => {
 /**
  * Processes smart crop specifically for logos with subject protection
  */
-export const processSmartCropForLogo = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = {}): Promise<File> => {
+export const processSmartCropForLogo = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = {}): Promise<{ file: File, upscaled: boolean, aiCropped: boolean }> => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
     const isSVG = isSVGFile(imageFile);
@@ -1257,9 +1329,10 @@ export const processSmartCropForLogo = async (imageFile: File, targetWidth: numb
 
             if(!blob) throw new Error("Failed to create blob for logo");
 
-            return new File([blob], fileName.replace(/\.svg$/i, `.png`), { type: MIME_TYPE_MAP.png });
+            const file = new File([blob], fileName.replace(/\.svg$/i, `.png`), { type: MIME_TYPE_MAP.png });
+            return { file, upscaled: false, aiCropped: false };
         } catch {
-            return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' }) as File;
+            return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' });
         }
     }
 
@@ -1274,14 +1347,28 @@ export const processSmartCropForLogo = async (imageFile: File, targetWidth: numb
         if (isTIFF || isBMP || isGIF || isICO) {
             try {
                 processableFile = await convertLegacyFormat(imageFile);
-
-
             } catch {
-                return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' }) as File;
+                return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' });
             }
         }
 
         const img = await loadImage(processableFile);
+
+        const needsUpscaling = targetWidth > img.width || targetHeight > img.height;
+        let sourceFile = processableFile;
+        let wasUpscaled = false;
+
+        if (needsUpscaling) {
+            const upscaleFactor = calculateUpscaleFactor(img.width, img.height, targetWidth, targetHeight);
+            if (upscaleFactor > 1 && upscaleFactor <= MAX_SCALE_FACTOR) {
+                try {
+                    sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
+                    wasUpscaled = true;
+                } catch {
+                    // ignore
+                }
+            }
+        }
 
         let model = aiModel;
         if (!model) {
@@ -1289,7 +1376,7 @@ export const processSmartCropForLogo = async (imageFile: File, targetWidth: numb
                 model = await loadAIModel();
                 aiModel = model;
             } catch {
-                return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' }) as File;
+                return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' });
             }
         }
 
@@ -1297,8 +1384,8 @@ export const processSmartCropForLogo = async (imageFile: File, targetWidth: numb
             const detections = await model.detect(img.element);
 
             if (!detections || detections.length === 0) {
-
-                return await processStandardCrop(processableFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' });
+                const result = await processStandardCrop(sourceFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' });
+                return { ...result, upscaled: wasUpscaled || result.upscaled };
             }
 
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -1341,7 +1428,8 @@ export const processSmartCropForLogo = async (imageFile: File, targetWidth: numb
             cropY = Math.max(0, Math.min(cropY, img.height - cropHeight));
 
             if (cropWidth >= img.width * 0.95 && cropHeight >= img.height * 0.95) {
-                return await fitImageToContain(processableFile, targetWidth, targetHeight, options);
+                const file = await fitImageToContain(sourceFile, targetWidth, targetHeight, options);
+                return { file, upscaled: wasUpscaled, aiCropped: true };
             }
 
             const canvas = document.createElement('canvas');
@@ -1368,15 +1456,16 @@ export const processSmartCropForLogo = async (imageFile: File, targetWidth: numb
             const extension = format === IMAGE_FORMATS.PNG ? 'png' : 'webp';
             const outputFileName = fileName.replace(/\.[^.]+$/, `-logo-${targetWidth}x${targetHeight}.${extension}`);
 
-            return new File([blob], outputFileName, { type: blob.type });
+            const file = new File([blob], outputFileName, { type: blob.type });
+            return { file, upscaled: wasUpscaled, aiCropped: true };
 
         } catch {
-
-            return await processStandardCrop(processableFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' });
+            const result = await processStandardCrop(sourceFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' });
+            return { ...result, upscaled: wasUpscaled || result.upscaled };
         }
 
     } catch {
-        return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' }) as File;
+        return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' });
     }
 };
 

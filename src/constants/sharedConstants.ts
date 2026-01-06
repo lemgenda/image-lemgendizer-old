@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Shared constants used throughout the application.
+ * Includes UI settings, image processing defaults, file formats, and performance thresholds.
+ */
+
 // ================================
 // UI-Specific Constants
 // ================================

@@ -4,7 +4,8 @@ import {
     processSmartCrop,
     processSimpleSmartCrop,
     processLengendaryOptimize,
-    processTemplateImages
+    processTemplateImages,
+    processAiQualityImprovement
 } from '../processors';
 import { generateNewFileName } from './renameUtils';
 import { safeCleanupGPUMemory } from './memoryUtils';
@@ -136,11 +137,10 @@ export const cleanUrl = (url: string): string => {
 export const orchestrateCustomProcessing = async (
     images: ImageFile[],
     processingConfig: ProcessingOptions & { batchRename?: BatchRenameOptions },
-    aiModelLoaded: boolean
+    aiModelLoaded: boolean,
+    onProgress: (progress: number, status: string) => void,
+    t: (key: string, params?: any) => string
 ): Promise<ImageFile[]> => {
-    // orchestrateCustomProcessing started
-
-
     const processedImages: ImageFile[] = [];
 
     for (let i = 0; i < images.length; i++) {
@@ -160,6 +160,8 @@ export const orchestrateCustomProcessing = async (
         }
 
         let processedFile = image.file;
+        let wasUpscaled = false;
+        let wasAiCropped = false;
 
         try {
             if (processingConfig.resize && processingConfig.resize.enabled) {
@@ -179,6 +181,7 @@ export const orchestrateCustomProcessing = async (
 
                     if (resizeResults.length > 0 && resizeResults[0].resized) {
                         processedFile = resizeResults[0].resized;
+                        wasUpscaled = wasUpscaled || resizeResults[0].upscaled;
                         if (resizeResults[0].error) {
                             throw resizeResults[0].error;
                         }
@@ -186,12 +189,58 @@ export const orchestrateCustomProcessing = async (
                 }
             }
 
+            // [Antigravity] AI Quality Improvement Integration
+            const aiQualityOptions = (processingConfig as any).aiQuality;
+            if (aiQualityOptions && Object.values(aiQualityOptions).some(val => val === true)) {
+                // Determine step progress range for AI Quality (e.g., 20% of total image processing)
+                // This is a simplification; we could pass refined progress ranges.
+                const imgProgressBase = (i / images.length);
+                const imgProgressChunk = 1 / images.length;
+
+                // Create a temporary canvas from the current state
+                const tempCanvas = document.createElement('canvas');
+                const img = new Image();
+                const objectUrl = URL.createObjectURL(processedFile);
+
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                    img.src = objectUrl;
+                });
+
+                tempCanvas.width = img.naturalWidth;
+                tempCanvas.height = img.naturalHeight;
+                const ctx = tempCanvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0);
+                URL.revokeObjectURL(objectUrl);
+
+                const enhancedCanvas = await processAiQualityImprovement(
+                    tempCanvas,
+                    aiQualityOptions,
+                    (p: number, s: string) => {
+                         // Map 0-1 sub-progress to main progress
+                         onProgress(
+                             (imgProgressBase + p * 0.2 * imgProgressChunk) * 100,
+                             s
+                         );
+                    },
+                    t
+                );
+
+                // Convert canvas back to Blob/File
+                processedFile = await new Promise<File>((resolve) => {
+                    enhancedCanvas.toBlob((blob: Blob | null) => {
+                        resolve(new File([blob!], image.name, { type: 'image/webp' }));
+                    }, 'image/webp', processingConfig.output.quality || 0.8);
+                });
+            }
+
             if (processingConfig.crop && processingConfig.crop.enabled) {
                 const { width, height, mode, position } = processingConfig.crop;
 
                 if (mode === CROP_MODES.SMART && aiModelLoaded) {
                     try {
-                        processedFile = await (processSmartCrop as any)(
+                        const result = await (processSmartCrop as any)(
                             processedFile,
                             width,
                             height,
@@ -200,17 +249,23 @@ export const orchestrateCustomProcessing = async (
                                 format: IMAGE_FORMATS.WEBP
                             }
                         );
-                    } catch {
-                        processedFile = await (processSimpleSmartCrop as any)(
+                        processedFile = result.file;
+                        wasUpscaled = wasUpscaled || result.upscaled;
+                        wasAiCropped = wasAiCropped || result.aiCropped;
+                    } catch (err) {
+                        const result = await (processSimpleSmartCrop as any)(
                             processedFile,
                             width,
                             height,
-                            position || 'center',
                             {
                                 quality: processingConfig.output.quality || 0.8,
-                                format: IMAGE_FORMATS.WEBP
+                                format: IMAGE_FORMATS.WEBP,
+                                cropPosition: position || 'center'
                             }
                         );
+                        processedFile = result.file;
+                        wasUpscaled = wasUpscaled || result.upscaled;
+                        wasAiCropped = wasAiCropped || result.aiCropped;
                     }
                 } else {
                     const cropResults: any[] = await processLemGendaryCrop(
@@ -226,6 +281,8 @@ export const orchestrateCustomProcessing = async (
 
                     if (cropResults.length > 0 && cropResults[0].cropped) {
                         processedFile = cropResults[0].cropped;
+                        wasUpscaled = wasUpscaled || cropResults[0].upscaled;
+                        wasAiCropped = wasAiCropped || cropResults[0].aiCropped;
                     }
                 }
             }
@@ -318,10 +375,8 @@ export const orchestrateCustomProcessing = async (
                         type: `image/${format}`,
                         format: format,
                         processed: true,
-                        // Custom props not in ImageFile interface? I'll need to extend ImageFile or ignore.
-                        // processedImages is ImageFile[].
-                        // I'll assume extra props are fine or I should add them to ImageFile interface.
-                        // For now casting to any to avoid errors.
+                        upscaled: wasUpscaled,
+                        aiCropped: wasAiCropped
                     } as any);
                 }
             }

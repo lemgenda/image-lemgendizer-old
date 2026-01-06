@@ -85,8 +85,21 @@ function App() {
     selectedImagesForProcessing,
     templateCategories,
     templateSelectedImageObj,
-    setProcessingOptions
+    setProcessingOptions,
+    isAppInitializing
   } = useProcessingContext();
+
+  if (isAppInitializing) {
+    return (
+      <div className="splash-screen">
+          <div className="splash-content">
+              <i className="fas fa-microchip fa-spin fa-3x mb-md text-primary"></i>
+              <h2 className="text-xl font-bold mb-sm">{t('loading.initializing')}</h2>
+              <p className="text-muted">{t('loading.aiEngineStarting')}</p>
+          </div>
+      </div>
+    );
+  }
 
   return (
     <ErrorBoundary t={t}>

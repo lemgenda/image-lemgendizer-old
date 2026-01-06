@@ -377,16 +377,16 @@ export const CATEGORY_MAPPING: Record<string, string> = {
 };
 
 export const CATEGORY_WEIGHTS: Record<string, number> = {
-    'logo': 3.0,
-    'face': 2.5,
-    'facial_feature': 2.2,
-    'body_part': 1.9,
-    'person': 1.8,
+    'face': 3.5,
+    'facial_feature': 3.2,
+    'person': 3.0,
+    'body_part': 2.8,
+    'logo': 2.5,
     'animal': 1.6,
     'bird': 1.5,
     'insect': 1.3,
     'vehicle': 1.2,
-    'food': 1.4,
+    'food': 1.5,
     'bag': 1.1,
     'accessory': 1.0,
     'clothing': 1.0,
@@ -400,8 +400,8 @@ export const CATEGORY_WEIGHTS: Record<string, number> = {
 };
 
 export const IGNORED_OBJECTS = [
-    'remote', 'keyboard', 'mouse', 'cup', 'bowl', 'smart phone',
-    'fork', 'knife', 'spoon', 'cell phone',
+    'remote', 'keyboard', 'mouse', 'cup', 'bowl', 'bottle',
+    'fork', 'knife', 'spoon', 'cell phone', 'laptop', 'tablet',
     'pen', 'pencil', 'paper', 'notebook', 'clock', 'watch', 'calculator',
     'charger', 'cable', 'plug', 'socket', 'outlet', 'switch', 'button',
     'doorknob', 'handle', 'hinge', 'screw', 'nail', 'bolt', 'nut',
@@ -413,14 +413,14 @@ export const AI_MODEL_WEIGHTS = {
     SIZE_WEIGHT: 0.4,
     CONFIDENCE_WEIGHT: 0.4,
     CENTRALITY_WEIGHT: 0.2,
-    PERSON_CLASS_WEIGHT: 1.5,
-    FACE_CLASS_WEIGHT: 1.3,
-    ANIMAL_CLASS_WEIGHT: 1.2,
+    PERSON_CLASS_WEIGHT: 3.5,
+    FACE_CLASS_WEIGHT: 3.5,
+    ANIMAL_CLASS_WEIGHT: 1.5,
     DEFAULT_CLASS_WEIGHT: 1.0
 } as const;
 
 export const AI_SETTINGS = {
-    MIN_CONFIDENCE: 0.3,
+    MIN_CONFIDENCE: 0.25,
     MIN_SUBJECT_SCORE: 0.2,
     FACE_DETECTION_ENABLED: true,
     OBJECT_DETECTION_ENABLED: true,
@@ -430,7 +430,7 @@ export const AI_SETTINGS = {
     TENSORFLOW_VERSION: '4.10.0',
     COCO_SSD_VERSION: '2.2.3',
     WEBGPU_BACKEND_VERSION: '4.11.0'
-} as const;
+};
 
 export const SMART_CROP_CONFIG = {
     DEFAULT_STRATEGY: 'ai_priority',
@@ -439,5 +439,15 @@ export const SMART_CROP_CONFIG = {
     PADDING_RATIO: 0.05,
     FALLBACK_TO_CENTER: true,
     USE_FACIAL_FEATURES: true,
-    ENABLE_EDGE_DETECTION: true
+    ENABLE_EDGE_DETECTION: true,
+    VERTICAL_FIT_THRESHOLD: 1.1,
+    FOCUS_OFFSETS: {
+        person: 0.5,
+        personPortrait: 0.5,
+        face: 0.35,
+        animal: 0.5,
+        food: 0.5,
+        vehicle: 0.5,
+        default: 0.5
+    }
 } as const;
