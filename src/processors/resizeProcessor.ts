@@ -92,29 +92,32 @@ const applySmartSharpening = (canvas: HTMLCanvasElement, ctx: CanvasRenderingCon
  * @returns {Promise<HTMLCanvasElement>} Canvas element
  */
 const tensorToCanvas = async (tensor: any): Promise<HTMLCanvasElement> => {
-    const [height, width, channels] = tensor.shape;
+    const [height, width] = tensor.shape;
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error("No context");
 
-    const imageData = ctx.createImageData(width, height);
-    const data = await tensor.data(); // Async fetch from GPU to prevent blocking main thread
+    if ((window as any).tf) {
+        // Use tf.browser.toPixels for efficient async GPU->CPU transfer
+        await (window as any).tf.browser.toPixels(tensor, canvas);
+    } else {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error("No context");
 
-    for (let i = 0; i < data.length; i += channels) {
-        const pixelIndex = i / channels * 4;
-        imageData.data[pixelIndex] = data[i];
-        imageData.data[pixelIndex + 1] = data[i + 1];
-        imageData.data[pixelIndex + 2] = data[i + 2];
-        if (channels === 4) {
-            imageData.data[pixelIndex + 3] = data[i + 3];
-        } else {
-            imageData.data[pixelIndex + 3] = 255;
+        const imageData = ctx.createImageData(width, height);
+        const data = await tensor.data(); // Async fetch from GPU
+        const channels = tensor.shape[2];
+
+        // Optimized loop
+        for (let i = 0; i < data.length; i += channels) {
+            const pixelIndex = (i / channels) * 4;
+            imageData.data[pixelIndex] = data[i];
+            imageData.data[pixelIndex + 1] = data[i + 1];
+            imageData.data[pixelIndex + 2] = data[i + 2];
+            imageData.data[pixelIndex + 3] = channels === 4 ? data[i + 3] : 255;
         }
+        ctx.putImageData(imageData, 0, 0);
     }
-
-    ctx.putImageData(imageData, 0, 0);
 
     if (tensor.dispose) tensor.dispose();
 
@@ -423,8 +426,9 @@ export const safeUpscale = async (upscaler: any, img: HTMLImageElement, scale: n
 
         try {
             upscaler.upscale(img, {
-                patchSize: 32,
-                padding: 2
+                patchSize: 128,
+                padding: 2,
+                output: 'tensor' // Force tensor output to avoid sync base64 conversion
             }).then((result: any) => {
                 clearTimeout(timeoutId);
                 upscalerLastUsed[scale] = Date.now();

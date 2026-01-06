@@ -314,11 +314,20 @@ function App() {
                     </div>
                   </div>
 
-                  {processingSummary.upscalingUsed && (
+                  {(processingSummary.aiSmartCroppedCount ?? 0) > 0 && (
                     <div className="summary-item">
-                      <div className="summary-label">{t('summary.upscalingUsed')}:</div>
+                      <div className="summary-label">{t('summary.aiSmartCropped')}:</div>
                       <div className="summary-value text-success">
-                        <i className="fas fa-expand-arrows-alt mr-1"></i> {t('summary.yes')}
+                        <i className="fas fa-magic mr-1"></i> {t('summary.aiSmartCropped', { count: processingSummary.aiSmartCroppedCount })}
+                      </div>
+                    </div>
+                  )}
+
+                  {(processingSummary.aiUpscaledCount ?? 0) > 0 && (
+                    <div className="summary-item">
+                      <div className="summary-label">{t('summary.aiUpscaled')}:</div>
+                      <div className="summary-value text-success">
+                        <i className="fas fa-expand-arrows-alt mr-1"></i> {t('summary.aiUpscaled', { count: processingSummary.aiUpscaledCount })}
                       </div>
                     </div>
                   )}

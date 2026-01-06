@@ -81,6 +81,8 @@ interface ProcessingSummary {
     errors: string[];
     templatesApplied: number;
     categoriesApplied: number;
+    aiSmartCroppedCount?: number;
+    aiUpscaledCount?: number;
     formatsExported: string[];
     screenshotCount?: number;
 }
@@ -890,6 +892,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                     name: img.name,
                     error: img.error
                 })),
+                aiSmartCroppedCount: successfulImages.filter(img => img.aiCropped).length,
+                aiUpscaledCount: successfulImages.filter(img => img.upscaled).length,
                 failedCount: processedImages.filter(img => img.error).length
             }, processingConfig);
 
@@ -1077,6 +1081,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                 templatesApplied: processingOptions.selectedTemplates.length + (isFaviconSelected ? 1 : 0) + (isScreenshotSelected ? selectedScreenshotTemplates.length : 0),
                 categoriesApplied: categoriesApplied,
                 formatsExported: ['WEBP', 'PNG', 'JPG', 'ICO'],
+                aiSmartCroppedCount: processedImages.filter(img => img.aiCropped).length,
+                aiUpscaledCount: processedImages.filter(img => img.upscaled).length,
                 screenshotCount: screenshotResults ? (screenshotResults as any).successful : 0
             }, processingConfig);
 

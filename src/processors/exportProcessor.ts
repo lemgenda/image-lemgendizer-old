@@ -717,6 +717,9 @@ function createExportSummary(
         templateCount = validProcessedImages.filter(img => img.template).length;
     }
 
+    const aiSmartCroppedCount = validProcessedImages.filter(img => img.aiCropped).length;
+    const aiUpscaledCount = validProcessedImages.filter(img => img.upscaled).length;
+
     let summary = `${t ? t('export.summary.title') : 'Image Processing Export Summary'}
 ${'='.repeat(t ? t('export.summary.title').length : 30)}
 
@@ -730,7 +733,7 @@ ${t ? t('export.summary.processedImages') : 'Processed Images'}: ${validProcesse
 ${t ? t('export.summary.templatesApplied') : 'Templates Applied'}: ${templateCount}
 ${t ? t('export.summary.categoriesApplied') : 'Categories Applied'}: ${categoriesUsed.size}
 ${t ? t('export.summary.formatsExported') : 'Formats Exported'}: ${Array.from(formatsUsed).join(', ')}
-${t ? t('export.summary.totalFiles') : 'Total Files in Export'}: ${calculateTotalFiles(validOriginalImages, processedImages, settings, mode, faviconFilesCount)}
+${aiSmartCroppedCount > 0 ? `${t ? t('summary.aiSmartCropped') : 'AI Smart Cropping Applied'}: ${aiSmartCroppedCount}\n` : ''}${aiUpscaledCount > 0 ? `${t ? t('summary.aiUpscaled') : 'AI Upscaling Applied'}: ${aiUpscaledCount}\n` : ''}${t ? t('export.summary.totalFiles') : 'Total Files in Export'}: ${calculateTotalFiles(validOriginalImages, processedImages, settings, mode, faviconFilesCount)}
 
 ${t ? t('export.summary.foldersStructure') : 'FOLDERS STRUCTURE'}:${'='.repeat(t ? t('export.summary.foldersStructure').length : 18)}
 ${getExportFolderStructure(mode, settings).map(folder => `- ${folder}`).join('\n')}

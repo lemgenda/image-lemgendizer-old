@@ -688,6 +688,8 @@ export const generateProcessingSummary = (summaryData: any) => {
         operations: [],
         aiUsed: summaryData.aiUsed,
         upscalingUsed: false,
+        aiSmartCroppedCount: summaryData.aiSmartCroppedCount || 0,
+        aiUpscaledCount: summaryData.aiUpscaledCount || 0,
         totalFiles: summaryData.totalFiles
     };
 
@@ -743,6 +745,8 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
         errors: result.errors || [],
         templatesApplied: result.templatesApplied || 0,
         categoriesApplied: result.categoriesApplied || 0,
+        aiSmartCroppedCount: result.aiSmartCroppedCount || 0,
+        aiUpscaledCount: result.aiUpscaledCount || 0,
         formatsExported: result.formatsExported || ['WEBP', 'PNG', 'JPG']
     };
 

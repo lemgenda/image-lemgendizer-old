@@ -147,12 +147,12 @@ export const loadAIModel = async (): Promise<any> => {
 
     aiModelLoading = true;
     try {
-        if (!window.tf) await loadTensorFlowFromCDN();
+        if (!window.tf) await loadTensorFlow();
         if (!window.tf) throw new Error('TensorFlow.js not available');
 
         // Try to load and set WebGPU backend
         try {
-            await loadWebGPUBackendFromCDN();
+            await loadWebGPUBackend();
             if (window.tf.engine().backendName !== 'webgpu') {
                 await window.tf.setBackend('webgpu');
                 await window.tf.ready();
@@ -168,7 +168,16 @@ export const loadAIModel = async (): Promise<any> => {
             } catch { /* Final fallback to CPU */ }
         }
 
-        if (!window.cocoSsd) await loadCocoSsdFromCDN();
+        // Load patched COCO-SSD from local node_modules
+        if (!window.cocoSsd) {
+            try {
+                const cocoSsd = await import('@tensorflow-models/coco-ssd');
+                window.cocoSsd = cocoSsd;
+            } catch (e) {
+                console.error('Failed to load COCO-SSD locally', e);
+                await loadCocoSsdFromCDN();
+            }
+        }
         if (window.cocoSsd) {
             aiModel = await window.cocoSsd.load({ base: AI_SETTINGS.MODEL_TYPE });
             if (aiModel) aiModel.modelType = 'coco-ssd';
@@ -186,7 +195,24 @@ export const loadAIModel = async (): Promise<any> => {
 };
 
 /**
- * Loads TensorFlow.js from CDN
+ * Loads TensorFlow.js from local package
+ */
+const loadTensorFlow = async (): Promise<void> => {
+    if (window.tf) return;
+
+    try {
+        // Dynamic import to avoid bundling if not needed immediately
+        const tf = await import('@tensorflow/tfjs');
+        window.tf = tf;
+    } catch (e) {
+        console.error('Failed to load TensorFlow.js locally', e);
+        // Fallback to CDN if local load fails
+        await loadTensorFlowFromCDN();
+    }
+};
+
+/**
+ * Loads TensorFlow.js from CDN (Fallback)
  */
 const loadTensorFlowFromCDN = (): Promise<void> => {
     return new Promise((resolve) => {
@@ -224,34 +250,27 @@ const loadCocoSsdFromCDN = (): Promise<void> => {
 /**
  * Loads WebGPU backend from CDN
  */
-const loadWebGPUBackendFromCDN = (): Promise<void> => {
-    return new Promise((resolve) => {
-        // Check if WebGPU is supported by the browser
-        if (!navigator.gpu) {
-            resolve();
-            return;
-        }
+/**
+ * Loads WebGPU backend from local package
+ */
+const loadWebGPUBackend = async (): Promise<void> => {
+    // Check if WebGPU is supported by the browser
+    if (!navigator.gpu) {
+        return;
+    }
 
-        const scriptId = 'tf-backend-webgpu';
-        if (document.getElementById(scriptId)) {
-            resolve();
-            return;
-        }
-
-        const script = document.createElement('script');
-        script.id = scriptId;
-        script.src = `https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgpu@${AI_SETTINGS.WEBGPU_BACKEND_VERSION}/dist/tf-backend-webgpu.min.js`;
-        script.onload = () => resolve();
-        script.onerror = () => resolve();
-        document.head.appendChild(script);
-    });
+    try {
+        await import('@tensorflow/tfjs-backend-webgpu');
+    } catch (e) {
+        console.warn('Failed to load WebGPU backend', e);
+    }
 };
 
 /**
  * Creates a simple fallback AI model
  * @returns {Object} Simple AI model
  */
-const createSimpleAIModel = () => {
+function createSimpleAIModel() {
     return {
         detect: async (imgElement: HTMLImageElement | HTMLCanvasElement) => {
             const width = imgElement.width || 0;
@@ -265,7 +284,7 @@ const createSimpleAIModel = () => {
         },
         modelType: 'fallback'
     };
-};
+}
 
 /**
  * Cleans up all resources

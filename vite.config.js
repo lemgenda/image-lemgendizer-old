@@ -100,6 +100,13 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000
   },
 
+  // Dependency optimization - exclude patched packages from pre-bundling
+  optimizeDeps: {
+    exclude: [
+      '@tensorflow-models/coco-ssd'  // Use patched version from node_modules
+    ]
+  },
+
   // Development server configuration
   server: {
     port: 5173,
