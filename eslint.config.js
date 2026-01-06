@@ -6,7 +6,7 @@ import jsxA11y from 'eslint-plugin-jsx-a11y'
 
 export default [
   {
-    ignores: ['dist'],
+    ignores: ['dist', 'public', 'scripts'],
   },
   js.configs.recommended,
   {
