@@ -1,3 +1,7 @@
+/**
+ * @file ModalElement.tsx
+ * @description Generic modal dialog component with accessibility support.
+ */
 import { useEffect, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MODAL_TYPES } from '../constants';
@@ -13,6 +17,12 @@ interface ModalElementProps {
     actions?: ReactNode;
 }
 
+/**
+ * ModalElement component.
+ * @component
+ * @param {ModalElementProps} props - Component props.
+ * @returns {JSX.Element | null} The rendered modal or null if not open.
+ */
 function ModalElement({
     isOpen,
     onClose,

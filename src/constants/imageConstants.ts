@@ -1,5 +1,7 @@
-// imageConstants.ts - Image processing specific constants
-// NO THEME DEPENDENCY - standalone constants only
+/**
+ * @file imageConstants.ts
+ * @description Standalone image processing constants including dimension limits, SVG defaults, and filter IDs.
+ */
 
 // ================================
 // Dimension & Size Limits
@@ -149,3 +151,41 @@ export const getContrastColor = (backgroundColor: string): string => {
 export const getImageColors = (): typeof IMAGE_COLORS => {
     return { ...IMAGE_COLORS };
 };
+
+// ================================
+// Filter Constants
+// ================================
+export const IMAGE_FILTERS = {
+    NONE: 'none',
+    // Allowed Standard Filters
+    SEPIA: 'sepia',
+    RETRO_VINTAGE: 'retro_vintage', // Maps to Caman 'vintage'
+    HDR: 'hdr',                     // Maps to Caman 'clarity' or custom
+    BW: 'bw',
+    VIGNETTE: 'vignette',
+    INVERT: 'invert',
+
+    // CamanJS Presets
+    VINTAGE: 'vintage', // Caman 'vintage'
+    LOMO: 'lomo',
+    CLARITY: 'clarity',
+    SIN_CITY: 'sin_city',
+    SUNRISE: 'sunrise',
+    CROSS_PROCESS: 'cross_process',
+    ORANGE_PEEL: 'orange_peel',
+    LOVE: 'love',
+    GRUNGY: 'grungy',
+    JARQUES: 'jarques',
+    PINHOLE: 'pinhole',
+    OLD_BOOT: 'old_boot',
+    GLOWING_SUN: 'glowing_sun',
+    HAZY_DAYS: 'hazy_days',
+    HER_MAJESTY: 'her_majesty',
+    NOSTALGIA: 'nostalgia',
+    HEMINGWAY: 'hemingway',
+    CONCENTRATE: 'concentrate',
+    NIGHT_VISION: 'night_vision'
+} as const;
+
+export type FilterType = typeof IMAGE_FILTERS[keyof typeof IMAGE_FILTERS];
+

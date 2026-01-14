@@ -1,3 +1,7 @@
+/**
+ * @file index.ts
+ * @description Central TypeScript type and interface definitions for the application.
+ */
 // Core Application Types
 
 export type ProcessingMode = 'custom' | 'templates' | 'batch_rename';
@@ -75,6 +79,11 @@ export interface CompressionOptions {
     fileSize: string;
 }
 
+export interface FilterOptions {
+    enabled: boolean;
+    selectedFilter: string;
+}
+
 export interface ProcessingOptions {
     processingMode: ProcessingMode;
     output: OutputOptions;
@@ -97,6 +106,7 @@ export interface ProcessingOptions {
     faviconBackgroundColor?: string;
     smartCrop: boolean;
     batchRename?: BatchRenameOptions;
+    filters?: FilterOptions;
 }
 
 // Template System

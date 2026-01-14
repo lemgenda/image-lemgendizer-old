@@ -1,3 +1,7 @@
+/**
+ * @file ErrorBoundary.tsx
+ * @description React error boundary component that catches rendering errors and displays a fallback UI.
+ */
 import { Component, ErrorInfo, ReactNode } from 'react';
 import '../styles/ErrorBoundary.css';
 

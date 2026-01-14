@@ -1,3 +1,7 @@
+/**
+ * @file sharedConstants.ts
+ * @description Shared UI and processing constants, including quality defaults, crop modes, and error messages.
+ */
 // ================================
 // UI-Specific Constants
 // ================================
@@ -239,7 +243,11 @@ export const DEFAULT_PROCESSING_CONFIG = {
     faviconSiteName: 'My Website',
     faviconThemeColor: '#ffffff',
     faviconBackgroundColor: '#ffffff',
-    faviconMode: 'basic'
+    faviconMode: 'basic',
+    filters: {
+        enabled: true,
+        selectedFilter: 'none'
+    }
 };
 
 export const EXPORT_SETTINGS = {

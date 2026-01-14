@@ -1,9 +1,18 @@
+/**
+ * @file HeaderSection.tsx
+ * @description Application header component containing the logo, title, and global controls (theme/language).
+ */
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcherElement from './LanguageSwitcherElement';
 import LemGendaIconElement from './LemGendaIconElement';
 import ThemeSwitcherElement from './ThemeSwitcherElement';
 import '../styles/HeaderSection.css';
 
+/**
+ * HeaderSection component.
+ * @component
+ * @returns {JSX.Element} The rendered header.
+ */
 function HeaderSection() {
     const { t } = useTranslation();
 

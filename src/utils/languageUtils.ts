@@ -1,3 +1,7 @@
+/**
+ * @file languageUtils.ts
+ * @description Utilities for language detection, management, and flag mapping.
+ */
 import { AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE } from '../constants';
 
 export interface LanguageInfo {
@@ -44,7 +48,7 @@ export const getCurrentLanguage = (): string => {
  * @param {string} langCode - Language code to change to
  * @param {any} i18n - i18n instance
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export const changeApplicationLanguage = (langCode: string, i18n: any): void => {
     if (i18n && typeof i18n.changeLanguage === 'function') {
         i18n.changeLanguage(langCode);
@@ -67,7 +71,7 @@ export const getCurrentLanguageObject = (currentLangCode: string): LanguageInfo 
  * @param {any} i18n - i18n instance
  * @returns {string} Initialized language code
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export const initializeLanguage = (i18n: any): string => {
     const lang = getCurrentLanguage();
     if (i18n && typeof i18n.changeLanguage === 'function') {

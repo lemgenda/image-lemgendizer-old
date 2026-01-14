@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import App from '../../App';
 import { ProcessingProvider } from '../../context/ProcessingContext';
@@ -10,7 +10,7 @@ vi.mock('../../utils/generalUtils', async (importOriginal) => {
     return {
         ...actual,
         orchestrateCustomProcessing: vi.fn().mockResolvedValue([]),
-        debounce: (fn: Function) => fn,
+        debounce: (fn: (...args: any[]) => any) => fn,
     };
 });
 
@@ -33,7 +33,7 @@ describe('Resize Flow Integration', () => {
         // Wait for AI loading
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
-            await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 4000 });
+            await waitFor(() => expect(screen.queryByText(/Loading AI model/i)).not.toBeInTheDocument(), { timeout: 4000 });
         }
 
         // 1. Simulate Image Upload
@@ -50,28 +50,16 @@ describe('Resize Flow Integration', () => {
         fireEvent.change(uploadInput);
 
         // Wait for state update (Tabs appear) - Confirm upload recognized
-        try {
-            await waitFor(() => {
-                expect(screen.getByRole('tab', { name: /Custom Processing/i })).toBeInTheDocument();
-            }, { timeout: 5000 });
-
-        } catch (e) {
-
-            // screen.debug(); // Uncomment if needed, but output was messy
-            throw e;
-        }
+        // Wait for state update (Tabs appear) - Confirm upload recognized
+        await waitFor(() => {
+            expect(screen.getByRole('tab', { name: /Custom Processing/i })).toBeInTheDocument();
+        }, { timeout: 5000 });
 
         // Wait for image to be "loaded" into list - Confirm Gallery rendered
-        try {
-            await waitFor(() => {
-                expect(screen.getByText('test-image.png')).toBeInTheDocument();
-            }, { timeout: 5000 });
-
-        } catch (e) {
-
-            // screen.debug();
-            throw e;
-        }
+        // Wait for image to be "loaded" into list - Confirm Gallery rendered
+        await waitFor(() => {
+            expect(screen.getByText('test-image.png')).toBeInTheDocument();
+        }, { timeout: 5000 });
 
         // 2. Navigate to Resize Controls
         const resizeInput = screen.queryByLabelText(/Resize Dimension/i);

@@ -2,9 +2,8 @@ import { IMAGE_FORMATS } from '../constants';
 import type { ProcessingOptions } from '../types';
 
 /**
- * @fileoverview Format selection card component for choosing output image formats.
- * Provides checkboxes for WebP, AVIF, JPEG, PNG, and Original formats,
- * along with Select All and Clear All functionality, plus rename option.
+ * @file FormatSelectionCard.tsx
+ * @description UI component for choosing output image formats (WebP, AVIF, JPEG, PNG, Original).
  */
 
 interface FormatSelectionCardProps {
@@ -19,7 +18,10 @@ interface FormatSelectionCardProps {
 }
 
 /**
- * FormatSelectionCard - Component for selecting output image formats
+ * FormatSelectionCard component.
+ * @component
+ * @param {FormatSelectionCardProps} props - Component props.
+ * @returns {JSX.Element} The rendered format selection card.
  */
 const FormatSelectionCard = ({
     selectedFormats,

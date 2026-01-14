@@ -1,9 +1,19 @@
+/**
+ * @file LemGendaLogoElement.tsx
+ * @description SVG logo component for the application footer.
+ */
 import { SVG_CONSTANTS } from '../constants';
 
 interface LemGendaLogoElementProps extends React.SVGProps<SVGSVGElement> {
-    className?: string;
+  className?: string;
 }
 
+/**
+ * LemGendaLogoElement component.
+ * @component
+ * @param {LemGendaLogoElementProps} props - Component props.
+ * @returns {JSX.Element} The rendered SVG logo.
+ */
 const LemGendaLogoElement = ({ className = "", ...props }: LemGendaLogoElementProps) => (
   <svg
     className={`footer-logo ${className}`}

@@ -225,7 +225,7 @@ async function processSingleTemplate(
         let processedFile: File | any = imageFile;
         let wasUpscaled = false;
         let wasSmartCropped = false;
-        let isLogoTemplate = template.category === 'logo';
+        const isLogoTemplate = template.category === 'logo';
         let subjectProtected = false;
 
         if (template.width && template.height) {

@@ -1,5 +1,6 @@
 /**
- * Advanced renaming utility functions
+ * @file renameUtils.ts
+ * @description Advanced file renaming utilities supporting patterns, tokens, and casing transformations.
  */
 
 import { BatchRenameOptions } from '../types';

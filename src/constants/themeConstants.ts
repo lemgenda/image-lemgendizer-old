@@ -1,4 +1,7 @@
-// themeConstants.ts - Theme colors and styling constants ONLY
+/**
+ * @file themeConstants.ts
+ * @description Theme-specific colors, UI status colors, and component sizing constants.
+ */
 
 // ================================
 // Theme Configuration

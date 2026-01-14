@@ -1,3 +1,8 @@
+/**
+ * @file svgUtils.ts
+ * @description Specialized utilities for SVG manipulation, including dimension extraction,
+ * rasterization, and placeholder generation.
+ */
 import {
     FILE_EXTENSIONS,
     SVG_CONSTANTS,
@@ -134,7 +139,7 @@ export const convertSVGToRaster = async (
                         .replace(/{content}/g, trimmedText);
                 }
 
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                 
                 let svgElement;
                 let originalWidth = targetWidth || SVG_CONSTANTS.DEFAULT_WIDTH;
                 let originalHeight = targetHeight || SVG_CONSTANTS.DEFAULT_HEIGHT;

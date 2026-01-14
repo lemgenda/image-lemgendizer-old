@@ -1,3 +1,7 @@
+/**
+ * @file aiConstants.ts
+ * @description Constants for AI models, object detection classes, and smart crop weights.
+ */
 export const LOGO_DETECTION_CONFIG = {
     LOGO_CLASSES: [
         'logo',
@@ -427,9 +431,11 @@ export const AI_SETTINGS = {
     DEFAULT_CROP_STRATEGY: 'balanced',
     MAX_OBJECTS: 10,
     MODEL_TYPE: 'lite_mobilenet_v2',
-    TENSORFLOW_VERSION: '4.10.0',
+    TENSORFLOW_VERSION: '4.22.0',
     COCO_SSD_VERSION: '2.2.3',
-    WEBGPU_BACKEND_VERSION: '4.11.0'
+    WEBGPU_BACKEND_VERSION: '4.22.0',
+    LOCAL_MODEL_PATH: '/models/',
+    LOCAL_LIB_PATH: '/lib/'
 } as const;
 
 export const SMART_CROP_CONFIG = {

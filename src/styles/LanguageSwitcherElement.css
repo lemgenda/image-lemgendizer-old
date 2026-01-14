@@ -41,6 +41,11 @@
     margin: 0 8px;
 }
 
+.language-name {
+    flex: 1;
+    text-align: left;
+}
+
 .language-arrow {
     font-size: 12px;
     color: var(--color-text-muted);

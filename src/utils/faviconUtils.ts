@@ -1,4 +1,7 @@
-// @ts-ignore
+/**
+ * @file faviconUtils.ts
+ * @description Utilities for generating favicon sets, web manifests, and browser configurations.
+ */
 import JSZip from 'jszip';
 import {
     FAVICON_SIZES,

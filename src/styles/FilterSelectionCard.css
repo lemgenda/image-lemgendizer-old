@@ -1,0 +1,104 @@
+.filter-sticky-wrapper {
+    background-color: var(--color-bg-primary);
+    padding: var(--space-md);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    transition: background-color var(--transition-normal);
+}
+
+.filter-selection-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.filters-grid {
+    display: flex;
+    flex-direction: row;
+    gap: var(--gap-md, 12px);
+    margin-top: var(--gap-md, 12px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 8px;
+    /* Remove max-height since we're horizontal now */
+    /* Ensure items don't wrap */
+    flex-wrap: nowrap;
+}
+
+.filter-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--gap-sm, 8px);
+    border: 2px solid var(--border-color);
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 80px;
+    max-width: 100px;
+    opacity: 0.8;
+    /* Prevent shrinking */
+    flex-shrink: 0;
+}
+
+.filter-item:hover {
+    border-color: var(--color-primary);
+    background-color: var(--color-bg-secondary);
+    transform: translateY(-2px);
+    opacity: 1;
+}
+
+.filter-item.active {
+    border-color: var(--color-primary);
+    background-color: var(--color-primary);
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
+    opacity: 1;
+}
+
+.filter-icon {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+}
+
+.filter-name {
+    font-size: 0.7rem;
+    text-align: center;
+    text-transform: capitalize;
+}
+
+.filter-info {
+    margin-top: var(--gap-md, 12px);
+    padding: var(--gap-md, 12px);
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-md, 8px);
+    border-left: 3px solid var(--primary-color, #3b82f6);
+}
+
+.filter-description {
+    font-size: 0.85rem;
+    margin: 0;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+
+/* Horizontal scrollbar styling */
+.filters-grid::-webkit-scrollbar {
+    height: 6px;
+}
+
+.filters-grid::-webkit-scrollbar-track {
+    background: var(--color-bg-secondary, #222);
+    border-radius: 3px;
+}
+
+.filters-grid::-webkit-scrollbar-thumb {
+    background: var(--border-color, #444);
+    border-radius: 3px;
+}
+
+.filters-grid::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary, #3b82f6);
+}

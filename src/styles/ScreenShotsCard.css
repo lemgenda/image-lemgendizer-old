@@ -370,12 +370,6 @@
     font-size: 0.6em;
 }
 
-
-
-
-
-
-
 .capture-section {
     text-align: center;
     padding-top: 16px;
@@ -480,4 +474,8 @@
         width: 100%;
         justify-content: flex-start;
     }
+}
+
+.fa-spin-linear {
+    animation: fa-spin 1s infinite linear !important;
 }

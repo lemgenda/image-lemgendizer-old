@@ -1,3 +1,7 @@
+/**
+ * @file index.ts
+ * @description Central export point for all UI components.
+ */
 export { default as FooterSection } from './FooterSection';
 export { default as HeaderSection } from './HeaderSection';
 export { default as UploadSection } from './UploadSection';
@@ -17,4 +21,7 @@ export { default as TemplateSelectionCard } from './TemplateSelectionCard';
 export { default as TemplateProcessingTab } from './TemplateProcessingTab';
 export { default as CustomProcessingTab } from './CustomProcessingTab';
 export { default as AdvancedRenameTab } from './AdvancedRenameTab'; // Add this line
+export { default as FilterSelectionCard } from './FilterSelectionCard';
 export { default as ErrorBoundary } from './ErrorBoundary';
+export { default as SVGFilters } from './SVGFilters';
+export { default as FilteredPreview } from './FilteredPreview';

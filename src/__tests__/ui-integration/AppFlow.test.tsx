@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import App from '../../App';
 import { ProcessingProvider } from '../../context/ProcessingContext';
@@ -22,7 +22,7 @@ describe('App Flow Integration', () => {
         // Wait for AI loading to finish if it's showing
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
-            await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 2000 });
+            await waitFor(() => expect(screen.queryByText(/Loading AI model/i)).not.toBeInTheDocument(), { timeout: 2000 });
         }
 
         // Check for major sections
@@ -37,7 +37,7 @@ describe('App Flow Integration', () => {
         // Wait for AI loading
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
-            await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 2000 });
+            await waitFor(() => expect(screen.queryByText(/Loading AI model/i)).not.toBeInTheDocument(), { timeout: 2000 });
         }
 
         // Initially tabs are not there (images.length === 0)
@@ -70,7 +70,7 @@ describe('App Flow Integration', () => {
         // Wait for AI loading
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
-            await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 2000 });
+            await waitFor(() => expect(screen.queryByText(/Loading AI model/i)).not.toBeInTheDocument(), { timeout: 2000 });
         }
 
         const uploadArea = screen.getByText(/Drop images here or click to upload/i);

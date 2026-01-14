@@ -1,3 +1,7 @@
+/**
+ * @file ThemeSwitcherElement.tsx
+ * @description UI component for toggling between application themes (light/dark mode).
+ */
 import { useState, useEffect } from 'react';
 import { THEME_CONFIG } from '../constants';
 import type { Theme } from '../types';

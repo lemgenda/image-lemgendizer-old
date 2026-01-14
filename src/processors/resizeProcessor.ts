@@ -10,7 +10,8 @@ import {
     PROCESSING_ERRORS,
     MAX_TEXTURE_FAILURES,
     SVG_CONSTANTS,
-    MIME_TYPE_MAP
+    MIME_TYPE_MAP,
+    AI_SETTINGS
 } from '../constants';
 
 import {
@@ -28,7 +29,7 @@ import {
 let upscalerInstances: Record<string, any> = {};
 let upscalerUsageCount: Record<string, number> = {};
 let upscalerLastUsed: Record<string, number> = {};
-let currentMemoryUsage = 0;
+const currentMemoryUsage = 0;
 let memoryCleanupInterval: NodeJS.Timeout | null = null;
 let aiUpscalingDisabled = false;
 let textureManagerFailures = 0;
@@ -158,7 +159,7 @@ const loadUpscalerFromCDN = (): Promise<void> => {
         }
 
         const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/upscaler@latest/dist/browser/umd/upscaler.min.js';
+        script.src = `${AI_SETTINGS.LOCAL_LIB_PATH}upscaler.min.js`;
         script.onload = () => resolve();
         script.onerror = () => resolve();
         document.head.appendChild(script);
@@ -166,25 +167,15 @@ const loadUpscalerFromCDN = (): Promise<void> => {
 };
 
 /**
- * Loads upscaler model script
- * @param {string} src - Script source URL
+ * Loads upscaler model script (deprecated for local, but keeping signature)
+ * @param {string} _src - Script source URL
  * @returns {Promise<void>}
  */
-const loadUpscalerModelScript = (src: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-        const scriptId = `upscaler-model-${src.split('/').pop()}`;
-        if (document.getElementById(scriptId)) {
-            resolve();
-            return;
-        }
-
-        const script = document.createElement('script');
-        script.id = scriptId;
-        script.src = src;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error(`${PROCESSING_ERRORS.CONVERSION_FAILED}: ${ERROR_MESSAGES.MODEL_LOAD_FAILED}`));
-        document.head.appendChild(script);
-    });
+const loadUpscalerModelScript = (_src: string): Promise<void> => {
+    // We already copied models to /models/esrgan-slim/
+    // This function was used for CDN loading of specific model files.
+    // Upscalerjs-esrgan-slim doesn't need to be loaded as a script if we pass the model path.
+    return Promise.resolve();
 };
 
 /**
@@ -359,8 +350,7 @@ export const loadUpscalerForScale = async (scale: number): Promise<any> => {
 
         if (!(window as any)[modelGlobalName]) throw new Error(`Model ${modelGlobalName} not loaded`);
 
-        let upscaler;
-        upscaler = new (window as any).Upscaler({
+        const upscaler = new (window as any).Upscaler({
             model: (window as any)[modelGlobalName],
         });
 

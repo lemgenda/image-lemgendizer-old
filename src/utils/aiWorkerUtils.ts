@@ -1,0 +1,135 @@
+/**
+ * @file aiWorkerUtils.ts
+ * @description Utilities for determining and managing the AI Worker.
+ */
+import { AI_SETTINGS } from '../constants';
+
+// Singleton worker instance
+let aiWorker: Worker | null = null;
+let workerLoadPromise: Promise<void> | null = null;
+
+// Type definitions
+export interface AIWorkerConfig {
+    localLibPath: string;
+    localModelPath: string;
+    modelType: string;
+    useWebGPU: boolean;
+}
+
+/**
+ * Initializes the AI Worker if not already active
+ */
+export const initAIWorker = (): Promise<void> => {
+    if (workerLoadPromise) return workerLoadPromise;
+
+    workerLoadPromise = new Promise((resolve, reject) => {
+        if (aiWorker) {
+            resolve();
+            return;
+        }
+
+        try {
+            // Instantiate the worker
+            aiWorker = new Worker(new URL('../workers/ai.worker.ts', import.meta.url), {
+                type: 'classic' // Use classic to allow importScripts
+            });
+
+            // Set up one-time listener for the load event
+            const handleLoadMessage = (e: MessageEvent) => {
+                const { type, error } = e.data;
+                if (type === 'loaded') {
+                    aiWorker?.removeEventListener('message', handleLoadMessage);
+                    resolve();
+                } else if (type === 'error') {
+                    aiWorker?.removeEventListener('message', handleLoadMessage);
+                    reject(new Error(error));
+                }
+            };
+
+            aiWorker.addEventListener('message', handleLoadMessage);
+
+            // Send configuration to start loading
+            const config: AIWorkerConfig = {
+                localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
+                localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
+                modelType: AI_SETTINGS.MODEL_TYPE,
+                useWebGPU: true // Default to true, worker handles fallback
+            };
+
+            aiWorker.postMessage({ type: 'load', config });
+
+        } catch (err) {
+            workerLoadPromise = null;
+            reject(err);
+        }
+    });
+
+    return workerLoadPromise;
+};
+
+/**
+ * Detects objects in an image using the AI Worker
+ */
+export const detectObjectsInWorker = async (
+    imageSource: HTMLImageElement | HTMLCanvasElement | ImageData
+): Promise<any[]> => {
+    // Ensure worker is ready
+    await initAIWorker();
+
+    return new Promise((resolve, reject) => {
+        if (!aiWorker) {
+            reject(new Error('AI Worker not initialized'));
+            return;
+        }
+
+        // Convert source to ImageData if needed
+        let imageData: ImageData;
+
+        try {
+            if (imageSource instanceof ImageData) {
+                imageData = imageSource;
+            } else {
+                // Draw to temp canvas to extract ImageData
+                const canvas = document.createElement('canvas');
+                canvas.width = imageSource.width;
+                canvas.height = imageSource.height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Failed to get canvas context');
+
+                ctx.drawImage(imageSource, 0, 0);
+                imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            }
+
+            const handleDetectionMessage = (e: MessageEvent) => {
+                const { type, data, error } = e.data;
+                if (type === 'result') {
+                    aiWorker?.removeEventListener('message', handleDetectionMessage);
+                    resolve(data);
+                } else if (type === 'error') {
+                    aiWorker?.removeEventListener('message', handleDetectionMessage);
+                    reject(new Error(error));
+                }
+            };
+
+            aiWorker.addEventListener('message', handleDetectionMessage);
+
+            // Send data to worker (transferable for performance)
+            aiWorker.postMessage({ type: 'detect', imageData }, [imageData.data.buffer]);
+
+        } catch (err) {
+            reject(err);
+        }
+    });
+};
+
+/**
+ * Terminates the AI Worker
+ */
+export const terminateAIWorker = () => {
+    if (aiWorker) {
+        aiWorker.postMessage({ type: 'dispose' });
+        aiWorker.terminate();
+        aiWorker = null;
+        workerLoadPromise = null;
+    }
+};

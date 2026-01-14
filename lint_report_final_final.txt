@@ -1,0 +1,30 @@
+
+C:\Development\webapps\react\image-lemgendizer-old\debug\debug_test.js
+  2:19  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+C:\Development\webapps\react\image-lemgendizer-old\src\components\FilteredPreview.tsx
+  61:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Development\webapps\react\image-lemgendizer-old\src\components\FilteredPreview.tsx:61:13
+  59 |                 blobUrlRef.current = null;
+  60 |             }
+> 61 |             setDisplayUrl(src);
+     |             ^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  62 |             lastProcessed.current = { src, filter: IMAGE_FILTERS.NONE };
+  63 |             return;
+  64 |         }  react-hooks/set-state-in-effect
+
+C:\Development\webapps\react\image-lemgendizer-old\src\context\ProcessingContext.tsx
+  162:14  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Development\webapps\react\image-lemgendizer-old\src\processors\filterProcessor.ts
+  80:14  error  'e' is defined but never used. Allowed unused caught errors must match /^[A-Z_]/u  @typescript-eslint/no-unused-vars
+
+✖ 4 problems (3 errors, 1 warning)
+

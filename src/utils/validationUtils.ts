@@ -1,3 +1,8 @@
+/**
+ * @file validationUtils.ts
+ * @description Comprehensive validation logic for processing options, image files,
+ * URLs, and template configurations.
+ */
 import {
     MAX_TARGET_FILESIZE_KB,
     MAX_CROP_DIMENSION,

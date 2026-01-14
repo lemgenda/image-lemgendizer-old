@@ -1,10 +1,10 @@
-import { QualityControlsCard, ResizeCropCard, FormatSelectionCard } from './index';
-import { CROP_MODES } from '../constants';
+import { QualityControlsCard, ResizeCropCard, FormatSelectionCard, FilterSelectionCard } from './index';
+import { CROP_MODES, IMAGE_FILTERS } from '../constants';
 import type { ProcessingOptions, ImageFile } from '../types';
 
 /**
- * @fileoverview Custom processing tab container.
- * Groups quality, resize, and crop controls with the main action button for custom mode.
+ * @file CustomProcessingTab.tsx
+ * @description Container component for custom image processing controls (quality, resize, crop, filters).
  */
 
 interface CustomProcessingTabProps {
@@ -24,7 +24,10 @@ interface CustomProcessingTabProps {
 }
 
 /**
- * CustomProcessingTab - Component for custom processing mode
+ * CustomProcessingTab component.
+ * @component
+ * @param {CustomProcessingTabProps} props - Component props.
+ * @returns {JSX.Element} The rendered custom processing tab.
  */
 const CustomProcessingTab = ({
     processingOptions,
@@ -69,19 +72,27 @@ const CustomProcessingTab = ({
                     t={t}
                 />
 
-                    <ResizeCropCard
-                        cropWidth={processingOptions.cropWidth}
-                        cropHeight={processingOptions.cropHeight}
-                        resizeDimension={processingOptions.resizeDimension}
-                        showResize={processingOptions.showResize}
-                        cropMode={processingOptions.cropMode}
-                        cropPosition={processingOptions.cropPosition}
-                        aiLoading={aiLoading}
-                        onToggleResizeCrop={onToggleResizeCrop}
-                        onToggleCropMode={onToggleCropMode}
-                        onOptionChange={(key, value) => onSingleOptionChange(key as keyof ProcessingOptions, value)}
-                        t={t}
-                    />
+                <ResizeCropCard
+                    cropWidth={processingOptions.cropWidth}
+                    cropHeight={processingOptions.cropHeight}
+                    resizeDimension={processingOptions.resizeDimension}
+                    showResize={processingOptions.showResize}
+                    cropMode={processingOptions.cropMode}
+                    cropPosition={processingOptions.cropPosition}
+                    aiLoading={aiLoading}
+                    onToggleResizeCrop={onToggleResizeCrop}
+                    onToggleCropMode={onToggleCropMode}
+                    onOptionChange={(key, value) => onSingleOptionChange(key as keyof ProcessingOptions, value)}
+                    t={t}
+                />
+            </div>
+
+            <div className="mb-lg">
+                <FilterSelectionCard
+                    selectedFilter={processingOptions.filters?.selectedFilter || IMAGE_FILTERS.NONE}
+                    onFilterChange={(filter) => onOptionChange('filters', 'selectedFilter', filter)}
+                    t={t}
+                />
             </div>
 
             <div className="text-center">

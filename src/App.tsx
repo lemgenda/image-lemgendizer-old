@@ -1,3 +1,8 @@
+/**
+ * @file App.tsx
+ * @description Main application entry point for Image LemGendizer.
+ * Orchestrates the high-level layout and navigation between processing modes.
+ */
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProcessingContext } from './context/ProcessingContext';
@@ -15,7 +20,8 @@ import {
   TemplateProcessingTab,
   AdvancedRenameTab,
   TabPanel,
-  ErrorBoundary
+  ErrorBoundary,
+  SVGFilters
 } from './components';
 import type { ProcessingOptions, ProcessingMode } from './types';
 import {
@@ -91,6 +97,7 @@ function App() {
   return (
     <ErrorBoundary t={t}>
       <div className="app-container">
+        <SVGFilters />
         <HeaderSection />
 
         <main className="app-main">
@@ -108,7 +115,7 @@ function App() {
                   tabs={[
                     { id: PROCESSING_MODES.CUSTOM, label: t('mode.custom'), description: t('mode.customInfo') },
                     { id: PROCESSING_MODES.TEMPLATES, label: t('mode.templates'), description: t('mode.templatesInfo') },
-                    { id: PROCESSING_MODES.BATCH_RENAME, label: t('mode.batchRename') || 'Batch Rename', description: t('mode.batchRenameInfo') || 'Advanced file renaming' }
+                    { id: PROCESSING_MODES.BATCH_RENAME, label: t('mode.batchRename'), description: t('mode.batchRenameInfo') }
                   ]}
                   activeTab={processingOptions.processingMode}
                   onTabChange={(id: string) => toggleProcessingMode(id as ProcessingMode)}
@@ -159,6 +166,7 @@ function App() {
                       onDeselectAllScreenshotTemplates={handleDeselectAllScreenshotTemplates}
                       isFaviconSelected={isFaviconSelected}
                       onFaviconToggle={handleFaviconToggle}
+                      onOptionChange={handleOptionChange}
                       onSingleOptionChange={handleSingleOptionChange}
                       templateSelectedImageObj={templateSelectedImageObj || undefined}
                       isLoading={isLoading}
@@ -181,7 +189,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="mt-xl">
+              <div className="mt-xl no-outline" id="gallery-section" tabIndex={-1}>
                 <UploadGallerySection
                   images={images}
                   selectedImages={selectedImages}
@@ -191,6 +199,7 @@ function App() {
                   onRemoveSelected={handleRemoveSelected}
                   onSelectAll={handleSelectAll}
                   formatFileSize={formatFileSize}
+                  selectedFilter={processingOptions.filters?.selectedFilter}
                 />
               </div>
             </div>

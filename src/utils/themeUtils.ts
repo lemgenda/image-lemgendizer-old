@@ -1,3 +1,8 @@
+/**
+ * @file themeUtils.ts
+ * @description Utilities for application theming, including theme switching, persistence, and
+ * system preference integration.
+ */
 import { THEME_CONFIG, THEME_SWITCH } from '../constants';
 import { Theme } from '../types';
 

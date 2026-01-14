@@ -1,3 +1,7 @@
+/**
+ * @file UploadGallerySection.tsx
+ * @description UI component for displaying and managing the gallery of uploaded images.
+ */
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
 import {
@@ -10,6 +14,7 @@ import {
     createFilePlaceholder,
     generateSVGPreview
 } from '../utils';
+import { FilteredPreview } from '.';
 import type { ImageFile, ProcessingMode } from '../types';
 import '../styles/UploadGallerySection.css';
 
@@ -29,8 +34,15 @@ interface UploadGallerySectionProps {
     onSelectAll: () => void;
     onRemoveSelected: () => void;
     formatFileSize: (size: number) => string;
+    selectedFilter?: string;
 }
 
+/**
+ * UploadGallerySection component.
+ * @component
+ * @param {UploadGallerySectionProps} props - Component props.
+ * @returns {JSX.Element} The rendered upload gallery section.
+ */
 function UploadGallerySection({
     images,
     selectedImages,
@@ -39,7 +51,8 @@ function UploadGallerySection({
     onImageSelect,
     onSelectAll,
     onRemoveSelected,
-    formatFileSize
+    formatFileSize,
+    selectedFilter = 'none'
 }: UploadGallerySectionProps) {
     const { t } = useTranslation();
     const [imagePreviews, setImagePreviews] = useState<Record<string, PreviewData>>({});
@@ -320,20 +333,21 @@ function UploadGallerySection({
                                         </div>
                                     ) : (
                                         <>
-                                            <img
+                                            <FilteredPreview
                                                 src={previewUrl}
+                                                filter={selectedFilter}
                                                 alt=""
                                                 className="gallery-image-preview"
-                                                loading="lazy"
                                                 onLoad={(e) => {
-                                                    (e.target as HTMLImageElement).style.opacity = '1';
+                                                    (e.currentTarget as HTMLImageElement).style.opacity = '1';
                                                 }}
                                                 onError={() => {
                                                     setFailedPreviews(prev => new Set(prev).add(image.id));
                                                 }}
                                                 style={{
                                                     opacity: showRealPreview ? 1 : 0.7,
-                                                    display: showRealPreview ? 'block' : 'none'
+                                                    display: showRealPreview ? 'block' : 'none',
+                                                    transition: 'filter 0.3s ease'
                                                 }}
                                             />
 
@@ -362,7 +376,7 @@ function UploadGallerySection({
                                         {image.name}
                                     </span>
                                     <span className="gallery-image-size">
-                                        {formatFileSize(image.size)} • {image.originalFormat?.toUpperCase() || image.type.split('/')[1].toUpperCase()}
+                                        {formatFileSize(image.size)}{t('common.dotSeparator')}{image.originalFormat?.toUpperCase() || image.type.split('/')[1].toUpperCase()}
                                         {image.isTIFF && <span className="gallery-image-format-badge ml-xs">{t('common.format.tiff')}</span>}
                                         {image.isSVG && <span className="gallery-image-format-badge ml-xs">{t('common.format.svg')}</span>}
                                     </span>

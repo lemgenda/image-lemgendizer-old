@@ -9,8 +9,8 @@ import type { ProcessingOptions } from '../types';
 import '../styles/ResizeCropCard.css';
 
 /**
- * @fileoverview Resize and crop card component for image dimension settings.
- * Provides inputs for width, height, and resize dimension, along with smart crop options.
+ * @file ResizeCropCard.tsx
+ * @description UI component for image resizing and cropping settings, including smart crop.
  */
 
 interface ResizeCropCardProps {
@@ -28,7 +28,10 @@ interface ResizeCropCardProps {
 }
 
 /**
- * ResizeCropCard - Component for resize/crop settings
+ * ResizeCropCard component.
+ * @component
+ * @param {ResizeCropCardProps} props - Component props.
+ * @returns {JSX.Element} The rendered resize and crop card.
  */
 const ResizeCropCard = ({
     cropWidth,

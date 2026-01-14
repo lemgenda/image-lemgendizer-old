@@ -1,3 +1,8 @@
+/**
+ * @file fileUtils.ts
+ * @description Comprehensive suite of file manipulation utilities, including format conversion,
+ * transparency detection, and processing summary generation.
+ */
 import {
     MAX_FILENAME_LENGTH,
     INVALID_FILENAME_CHARS,
@@ -8,10 +13,11 @@ import {
     PROCESSING_THRESHOLDS,
     PROCESSING_MODES,
     CROP_MODES,
-    OPERATION_NAMES,
     OUTPUT_FORMATS,
-    IMAGE_FORMATS
+    IMAGE_FORMATS,
+    IMAGE_FILTERS
 } from '../constants';
+import { TFunction } from 'i18next';
 
 import { AVAILABLE_UPSCALE_FACTORS, MAX_TEXTURE_SIZE, MAX_SAFE_DIMENSION, MAX_TOTAL_PIXELS } from '../constants/imageConstants';
 import { ImageFile, ProcessingOptions } from '../types';
@@ -142,7 +148,7 @@ export const ensureFileObject = async (image: any): Promise<File> => {
             const response = await fetch(image.url);
             if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
             const blob = await response.blob();
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             return new File([blob], image.name || 'image', { type: blob.type });
         } catch {
 
@@ -677,10 +683,10 @@ export const generateSpecialFormatPreview = async (image: any): Promise<string> 
 /**
  * Generates processing summary
  * @param {Object} summaryData - Summary data
- * @param {Function} t - Translation function (unused in this simplified version but kept for sig match if needed)
+ * @param {TFunction} t - Translation function
  * @returns {Object} Processing summary
  */
-export const generateProcessingSummary = (summaryData: any) => {
+export const generateProcessingSummary = (summaryData: any, t: TFunction) => {
     const summary: any = {
         mode: summaryData.mode,
         imagesProcessed: summaryData.imagesProcessed,
@@ -692,32 +698,33 @@ export const generateProcessingSummary = (summaryData: any) => {
     };
 
     if (summaryData.resizeDimension) {
-        summary.operations.push(`${OPERATION_NAMES.RESIZED} to ${summaryData.resizeDimension}`);
+        summary.operations.push(t('operations.resized', { dimension: summaryData.resizeDimension }));
         summary.upscalingUsed = true;
     }
     if (summaryData.cropWidth && summaryData.cropHeight) {
-        const cropType = summaryData.cropMode === CROP_MODES.SMART ? OPERATION_NAMES.AI_CROPPED : OPERATION_NAMES.CROPPED;
-        summary.operations.push(`${cropType} ${summaryData.cropWidth}x${summaryData.cropHeight}`);
+        const cropKey = summaryData.cropMode === CROP_MODES.SMART ? 'operations.aiSmartCropping' : 'operations.standardCrop';
+        const cropLabel = t(cropKey);
+        summary.operations.push(`${cropLabel} ${summaryData.cropWidth}x${summaryData.cropHeight}`);
         summary.upscalingUsed = true;
     }
     if (summaryData.compressionQuality < 100) {
-        summary.operations.push(`${OPERATION_NAMES.COMPRESSED} (${summaryData.compressionQuality}%)`);
+        summary.operations.push(t('operations.compressed', { quality: summaryData.compressionQuality }));
     }
     if (summaryData.rename && summaryData.newFileName) {
-        summary.operations.push(`${OPERATION_NAMES.RENAMED}: ${summaryData.newFileName}`);
+        summary.operations.push(t('operations.renamed', { pattern: summaryData.newFileName }));
     }
 
     if (summary.upscalingUsed) {
-        summary.operations.push(OPERATION_NAMES.AUTO_UPSCALED);
+        summary.operations.push(t('operations.autoUpscaling'));
     }
 
     if (summaryData.mode === PROCESSING_MODES.TEMPLATES) {
         summary.templatesApplied = summaryData.templatesApplied;
         summary.categoriesApplied = summaryData.categoriesApplied;
         summary.operations = [
-            `${OPERATION_NAMES.TEMPLATES_APPLIED} (${summary.templatesApplied})`,
-            OPERATION_NAMES.AUTO_UPSCALED,
-            OPERATION_NAMES.AI_CROPPED
+            t('operations.templatesApplied', { count: summary.templatesApplied }),
+            t('operations.autoUpscaling'),
+            t('operations.aiSmartCropping')
         ];
     }
 
@@ -728,10 +735,10 @@ export const generateProcessingSummary = (summaryData: any) => {
  * Creates processing summary
  * @param {Object} result - Processing result
  * @param {Object} options - Processing options
- * @param {Function} t - Translation function
+ * @param {TFunction} t - Translation function
  * @returns {Object} Processing summary
  */
-export const createProcessingSummary = (result: any, options: ProcessingOptions & { includeFavicon?: boolean; includeScreenshots?: boolean; screenshotUrl?: string; templates?: any }) => {
+export const createProcessingSummary = (result: any, options: ProcessingOptions & { includeFavicon?: boolean; includeScreenshots?: boolean; screenshotUrl?: string; templates?: any }, t: TFunction) => {
     const summary: any = {
         mode: options.templates?.mode || PROCESSING_MODES.CUSTOM,
         imagesProcessed: result.imagesProcessed || 0,
@@ -747,40 +754,47 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
     };
 
     if (options.output.quality && options.output.quality < 1) {
-         // Assuming output quality reflects compression quality for general images
-         // Or using explicit compression config if passed (legacy wrapper)
+        // Assuming output quality reflects compression quality for general images
     }
 
     // Checking legacy compression object if it exists on options (casting)
     const legacyOptions = options as any;
     if (legacyOptions.compression && legacyOptions.compression.quality < 1) {
         const qualityPercent = Math.round(legacyOptions.compression.quality * 100);
-        summary.operations.push(`${OPERATION_NAMES.COMPRESSED} (${qualityPercent}%)`);
+        summary.operations.push(t('operations.compressed', { quality: qualityPercent }));
     }
 
     if (options.crop && options.crop.enabled && options.crop.mode === CROP_MODES.SMART) {
-        summary.operations.push(OPERATION_NAMES.AI_CROPPED);
+        summary.operations.push(t('operations.aiSmartCropping'));
         summary.aiUsed = true;
     }
 
     // Logic for upscaling check would go here if tracked in result or options
 
+    // Check for Applied Filter
+    // options comes from getProcessingConfiguration so it has a filters object
+    const opts = options as any;
+    if (opts.filters && opts.filters.selectedFilter && opts.filters.selectedFilter !== IMAGE_FILTERS.NONE) {
+        const filterName = t(`filters.name.${opts.filters.selectedFilter}`);
+        summary.operations.push(t('operations.filterApplied', { filter: filterName }));
+    }
+
     if (summary.upscalingUsed) {
-        summary.operations.push(OPERATION_NAMES.AUTO_UPSCALED);
+        summary.operations.push(t('operations.autoUpscaling'));
         summary.aiUsed = true;
     }
 
     if (options.includeFavicon) {
-        summary.operations.push(OPERATION_NAMES.FAVICONS_GENERATED);
+        summary.operations.push(t('button.generateFavicon'));
     }
 
     if (options.includeScreenshots && options.screenshotUrl) {
-        summary.operations.push(`${OPERATION_NAMES.SCREENSHOTS_GENERATED} for ${options.screenshotUrl}`);
+        summary.operations.push(`${t('button.generateScreenshots')} for ${options.screenshotUrl}`);
     }
 
     if (summary.mode === PROCESSING_MODES.TEMPLATES) {
         if (summary.templatesApplied > 0) {
-            summary.operations.push(`${OPERATION_NAMES.TEMPLATES_APPLIED} (${summary.templatesApplied})`);
+            summary.operations.push(t('operations.templatesApplied', { count: summary.templatesApplied }));
         }
     }
 
@@ -903,8 +917,8 @@ export const convertLegacyFormat = async (file: File): Promise<File> => {
 
         img.onload = () => {
 
-             clearTimeout(timeout);
-             try {
+            clearTimeout(timeout);
+            try {
                 const canvas = document.createElement('canvas');
                 canvas.width = img.naturalWidth;
                 canvas.height = img.naturalHeight;
@@ -916,8 +930,8 @@ export const convertLegacyFormat = async (file: File): Promise<File> => {
                 canvas.toBlob((blob) => {
                     URL.revokeObjectURL(objectUrl);
                     if (!blob) {
-                         reject(new Error('Blob creation failed'));
-                         return;
+                        reject(new Error('Blob creation failed'));
+                        return;
                     }
 
                     const originalName = file.name || 'image';
@@ -927,10 +941,10 @@ export const convertLegacyFormat = async (file: File): Promise<File> => {
                     resolve(new File([blob], newFileName, { type: 'image/png' }));
                 }, 'image/png');
 
-             } catch (error) {
-                 URL.revokeObjectURL(objectUrl);
-                 reject(error);
-             }
+            } catch (error) {
+                URL.revokeObjectURL(objectUrl);
+                reject(error);
+            }
         };
 
         img.onerror = () => {

@@ -1,3 +1,7 @@
+/**
+ * @file UploadSection.tsx
+ * @description UI component for uploading images via drag-and-drop or file selection.
+ */
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { handleImageDrop, handleFileSelect } from '../utils';
@@ -9,6 +13,12 @@ interface UploadSectionProps {
     isScreenshotMode?: boolean;
 }
 
+/**
+ * UploadSection component.
+ * @component
+ * @param {UploadSectionProps} props - Component props.
+ * @returns {JSX.Element} The rendered upload section.
+ */
 function UploadSection({ onImagesSelected, fileInputRef, isScreenshotMode }: UploadSectionProps) {
     const { t } = useTranslation();
 

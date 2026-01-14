@@ -3,14 +3,15 @@ import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import jsxA11y from 'eslint-plugin-jsx-a11y'
+import tseslint from 'typescript-eslint'
 
-export default [
+export default tseslint.config(
   {
-    ignores: ['dist'],
+    ignores: ['dist', 'public', 'src/vendor', 'debug'],
   },
-  js.configs.recommended,
   {
-    files: ['**/*.{js,jsx}'],
+    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    files: ['**/*.{js,jsx,cjs,mjs,ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2020,
       globals: {
@@ -42,7 +43,21 @@ export default [
         'warn',
         { allowConstantExport: true },
       ],
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // Disable base rule as it causes false positives in TS
+      'no-unused-vars': 'off',
+      // Enable TS rule
+      '@typescript-eslint/no-unused-vars': ['error', {
+        varsIgnorePattern: '^[A-Z_]',
+        argsIgnorePattern: '^[A-Z_]',
+        caughtErrorsIgnorePattern: '^[A-Z_]'
+      }],
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
-]
+  {
+    files: ['**/*.cjs'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+)

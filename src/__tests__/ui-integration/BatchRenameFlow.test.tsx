@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitForElementToBeRemoved } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import App from '../../App';
 import { ProcessingProvider } from '../../context/ProcessingContext';
@@ -22,7 +22,7 @@ describe('Batch Rename Flow Integration', () => {
         // Wait for AI loading to finish
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
-            await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 10000 });
+            await waitFor(() => expect(screen.queryByText(/Loading AI model/i)).not.toBeInTheDocument(), { timeout: 10000 });
         }
 
         // Mock a file upload

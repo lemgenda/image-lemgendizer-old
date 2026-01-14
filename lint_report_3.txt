@@ -1,0 +1,2 @@
+No lint errors found.
+All checks passed with --max-warnings 0.

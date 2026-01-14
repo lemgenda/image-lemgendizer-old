@@ -307,11 +307,10 @@ async function cropFromResized(resized: any, targetWidth: number, targetHeight: 
         const bbox = position.bbox;
         const [x, y, width, height] = bbox;
 
-        let subjectCenterX, subjectCenterY;
-
         const verticalFits = height * 1.1 <= targetHeight;
 
-        subjectCenterX = x + width / 2;
+        const subjectCenterX = x + width / 2;
+        let subjectCenterY;
 
         if (verticalFits) {
             subjectCenterY = y + height / 2;
@@ -534,7 +533,7 @@ function findMainSubject(predictions: any[], imgWidth: number, imgHeight: number
 /**
  * Detects focal point using edge detection
  */
-async function detectFocalPointSimple(imgElement: any, width: number, height: number): Promise<{x: number, y: number}> {
+async function detectFocalPointSimple(imgElement: any, width: number, height: number): Promise<{ x: number, y: number }> {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error("No context");
@@ -781,7 +780,7 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
                     dCanvas.width = Math.round(resized.width * detectionScale);
                     dCanvas.height = Math.round(resized.height * detectionScale);
                     const dctx = dCanvas.getContext('2d');
-                    if(dctx) {
+                    if (dctx) {
                         dctx.drawImage(resized.element, 0, 0, dCanvas.width, dCanvas.height);
                         detectionElement = dCanvas;
                     }
@@ -941,7 +940,7 @@ export const processTemplateSmartCrop = async (imageFile: File, template: any, o
 /**
  * Processes simple smart crop without AI (center crop fallback or standard crop)
  */
-export const processSimpleSmartCrop = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }): Promise<File | Object> => {
+export const processSimpleSmartCrop = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }): Promise<File | object> => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
     const isSVG = isSVGFile(imageFile);
@@ -965,7 +964,7 @@ export const processSimpleSmartCrop = async (imageFile: File, targetWidth: numbe
             try {
                 processableFile = await convertTIFFForProcessing(imageFile);
             } catch {
-                 return await processStandardCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: CROP_POSITIONS.CENTER });
+                return await processStandardCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: CROP_POSITIONS.CENTER });
             }
         } else if (isBMP || isGIF || isICO) {
             try {
@@ -1063,7 +1062,7 @@ export const processSVGCrop = async (svgFile: File, width: number, height: numbe
         const scaledHeight = Math.round(img.height * scale);
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
-        if(!tempCtx) throw new Error("No temp context");
+        if (!tempCtx) throw new Error("No temp context");
         tempCanvas.width = scaledWidth;
         tempCanvas.height = scaledHeight;
         tempCtx.imageSmoothingEnabled = true;
@@ -1073,7 +1072,7 @@ export const processSVGCrop = async (svgFile: File, width: number, height: numbe
         const offsetY = Math.max(0, Math.round((scaledHeight - height) / 2));
         const cropCanvas = document.createElement('canvas');
         const cropCtx = cropCanvas.getContext('2d');
-        if(!cropCtx) throw new Error("No crop context");
+        if (!cropCtx) throw new Error("No crop context");
         cropCanvas.width = width;
         cropCanvas.height = height;
         cropCtx.imageSmoothingEnabled = true;
@@ -1255,7 +1254,7 @@ export const processSmartCropForLogo = async (imageFile: File, targetWidth: numb
                 canvas.toBlob(resolve, MIME_TYPE_MAP.png, DEFAULT_PNG_QUALITY);
             });
 
-            if(!blob) throw new Error("Failed to create blob for logo");
+            if (!blob) throw new Error("Failed to create blob for logo");
 
             return new File([blob], fileName.replace(/\.svg$/i, `.png`), { type: MIME_TYPE_MAP.png });
         } catch {

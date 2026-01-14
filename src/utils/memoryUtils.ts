@@ -1,8 +1,17 @@
+/**
+ * @file memoryUtils.ts
+ * @description Utilities for monitoring and managing GPU and systemic memory.
+ */
 import {
     MEMORY_CLEANUP_INTERVAL,
     UPSCALER_IDLE_TIMEOUT,
     AI_SETTINGS
 } from '../constants';
+import {
+    initAIWorker,
+    detectObjectsInWorker,
+    terminateAIWorker
+} from './aiWorkerUtils';
 
 // Declare global types for CDN-loaded libraries
 declare global {
@@ -18,7 +27,6 @@ let upscalerUsageCount: Record<string, number> = {};
 let upscalerLastUsed: Record<string, number> = {};
 let currentMemoryUsage = 0;
 let memoryCleanupInterval: NodeJS.Timeout | null = null;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 let textureManagerFailures = 0;
 let cleanupInProgress = false;
 let aiModelLoading = false;
@@ -138,6 +146,10 @@ export const cleanupGPUMemory = (): void => {
  * Loads AI model for object detection
  * @returns {Promise<Object>} AI model instance
  */
+/**
+ * Loads AI model (initializes worker)
+ * @returns {Promise<Object>} Proxy object for AI model compatible with existing code
+ */
 export const loadAIModel = async (): Promise<any> => {
     if (aiModel) return aiModel;
     if (aiModelLoading) {
@@ -147,105 +159,34 @@ export const loadAIModel = async (): Promise<any> => {
 
     aiModelLoading = true;
     try {
-        if (!window.tf) await loadTensorFlowFromCDN();
-        if (!window.tf) throw new Error('TensorFlow.js not available');
+        // Initialize the worker
+        await initAIWorker();
 
-        // Try to load and set WebGPU backend
-        try {
-            await loadWebGPUBackendFromCDN();
-            if (window.tf.engine().backendName !== 'webgpu') {
-                await window.tf.setBackend('webgpu');
-                await window.tf.ready();
+        // Create a proxy object that mimics the coco-ssd model interface
+        // This allows existing code in cropProcessor to work without major changes
+        aiModel = {
+            detect: async (imageElement: HTMLImageElement | HTMLCanvasElement | ImageData) => {
+                return await detectObjectsInWorker(imageElement);
+            },
+            modelType: AI_SETTINGS.MODEL_TYPE,
+            dispose: () => {
+                terminateAIWorker();
+                aiModel = null;
             }
-        } catch (webgpuError) {
-            // Fallback to WebGL or CPU is handled automatically by TF.js if setBackend fails
-            // but we want to ensure we at least have WebGL if WebGPU is unavailable
-            try {
-                if (window.tf.engine().backendName !== 'webgl') {
-                    await window.tf.setBackend('webgl');
-                    await window.tf.ready();
-                }
-            } catch { /* Final fallback to CPU */ }
-        }
-
-        if (!window.cocoSsd) await loadCocoSsdFromCDN();
-        if (window.cocoSsd) {
-            aiModel = await window.cocoSsd.load({ base: AI_SETTINGS.MODEL_TYPE });
-            if (aiModel) aiModel.modelType = 'coco-ssd';
-        } else {
-            throw new Error('COCO-SSD not available');
-        }
+        };
 
         aiModelLoading = false;
         return aiModel;
-    } catch {
+    } catch (err) {
+        console.warn('Failed to load AI in worker, falling back to simple model', err);
         aiModel = createSimpleAIModel();
         aiModelLoading = false;
         return aiModel;
     }
 };
 
-/**
- * Loads TensorFlow.js from CDN
- */
-const loadTensorFlowFromCDN = (): Promise<void> => {
-    return new Promise((resolve) => {
-        if (window.tf) {
-            resolve();
-            return;
-        }
+// Removed local loading helpers as they are now handled in the worker
 
-        const script = document.createElement('script');
-        script.src = `https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@${AI_SETTINGS.TENSORFLOW_VERSION}/dist/tf.min.js`;
-        script.onload = () => resolve();
-        script.onerror = () => resolve();
-        document.head.appendChild(script);
-    });
-};
-
-/**
- * Loads COCO-SSD model from CDN
- */
-const loadCocoSsdFromCDN = (): Promise<void> => {
-    return new Promise((resolve) => {
-        if (window.cocoSsd) {
-            resolve();
-            return;
-        }
-
-        const script = document.createElement('script');
-        script.src = `https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@${AI_SETTINGS.COCO_SSD_VERSION}/dist/coco-ssd.min.js`;
-        script.onload = () => resolve();
-        script.onerror = () => resolve();
-        document.head.appendChild(script);
-    });
-};
-
-/**
- * Loads WebGPU backend from CDN
- */
-const loadWebGPUBackendFromCDN = (): Promise<void> => {
-    return new Promise((resolve) => {
-        // Check if WebGPU is supported by the browser
-        if (!navigator.gpu) {
-            resolve();
-            return;
-        }
-
-        const scriptId = 'tf-backend-webgpu';
-        if (document.getElementById(scriptId)) {
-            resolve();
-            return;
-        }
-
-        const script = document.createElement('script');
-        script.id = scriptId;
-        script.src = `https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgpu@${AI_SETTINGS.WEBGPU_BACKEND_VERSION}/dist/tf-backend-webgpu.min.js`;
-        script.onload = () => resolve();
-        script.onerror = () => resolve();
-        document.head.appendChild(script);
-    });
-};
 
 /**
  * Creates a simple fallback AI model

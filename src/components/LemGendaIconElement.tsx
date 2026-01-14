@@ -1,9 +1,19 @@
+/**
+ * @file LemGendaIconElement.tsx
+ * @description SVG icon component for the application logo.
+ */
 import { SVG_CONSTANTS } from '../constants';
 
 interface LemGendaIconElementProps extends React.SVGProps<SVGSVGElement> {
     className?: string;
 }
 
+/**
+ * LemGendaIconElement component.
+ * @component
+ * @param {LemGendaIconElementProps} props - Component props.
+ * @returns {JSX.Element} The rendered SVG icon.
+ */
 const LemGendaIconElement = ({ className = "", ...props }: LemGendaIconElementProps) => (
     <svg
         className={`header-icon ${className}`}

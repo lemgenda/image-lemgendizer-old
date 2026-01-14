@@ -71,6 +71,12 @@ export default defineConfig({
     })
   ],
 
+  resolve: {
+    alias: {
+      fibers: '/src/mocks/fibers.js'
+    }
+  },
+
   // Base public path for GitHub Pages
   base: base,
 
@@ -90,8 +96,6 @@ export default defineConfig({
         assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks: {
           'vendor-react': ['react', 'react-dom'],
-          'vendor-tf': ['@tensorflow/tfjs', '@tensorflow-models/coco-ssd'],
-          'vendor-upscaler': ['upscaler', '@upscalerjs/esrgan-slim'],
           'vendor-utils': ['jszip', 'file-saver', 'html2canvas']
         }
       }

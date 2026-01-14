@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import App from '../../App';
 import { ProcessingProvider } from '../../context/ProcessingContext';
@@ -9,7 +9,7 @@ vi.mock('../../utils/generalUtils', async (importOriginal) => {
     return {
         ...actual,
         orchestrateCustomProcessing: vi.fn().mockResolvedValue([]),
-        debounce: (fn: Function) => fn,
+        debounce: (fn: (...args: any[]) => any) => fn,
     };
 });
 
@@ -31,7 +31,7 @@ describe('Crop Flow Integration', () => {
         // Wait for AI loading
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
-            await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 4000 });
+            await waitFor(() => expect(screen.queryByText(/Loading AI model/i)).not.toBeInTheDocument(), { timeout: 4000 });
         }
 
         // 1. Upload Image
@@ -47,15 +47,15 @@ describe('Crop Flow Integration', () => {
 
         // 2. Select Image & Verify
         await waitFor(() => {
-             screen.getByText('crop-test.png');
+            screen.getByText('crop-test.png');
         }, { timeout: 5000 });
 
         // Check if Crop is actve
         const cropWidthInput = screen.queryByLabelText(/Crop Width/i);
 
         if (!cropWidthInput) {
-             const toggleButton = screen.getByRole('button', { name: /Crop Mode/i });
-             fireEvent.click(toggleButton);
+            const toggleButton = screen.getByRole('button', { name: /Crop Mode/i });
+            fireEvent.click(toggleButton);
         }
 
         // 3. Set Dimensions & Position
@@ -71,7 +71,7 @@ describe('Crop Flow Integration', () => {
         // We want Standard to select position.
         const smartToggle = screen.queryByRole('button', { name: /Standard Crop/i });
         if (smartToggle) {
-             fireEvent.click(smartToggle);
+            fireEvent.click(smartToggle);
         }
 
         // Now find the position grid or select

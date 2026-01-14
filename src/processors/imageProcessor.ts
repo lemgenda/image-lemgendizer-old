@@ -1,6 +1,7 @@
 /**
  * @file imageProcessor.ts
- * @description Core image processing logic including resize, crop, and optimization using WASM and Canvas.
+ * @description Core image processing orchestrator. Handles resizing, cropping, and optimization
+ * workflow using various sub-processors (filter, crop, resize).
  */
 import UTIF from 'utif';
 import {
@@ -13,8 +14,12 @@ import {
     DEFAULT_QUALITY,
     PROCESSING_MODES,
     CROP_MODES,
-    IMAGE_FORMATS
+    IMAGE_FORMATS,
+    IMAGE_FILTERS
 } from '../constants';
+
+import { applyImageFilter } from './filterProcessor';
+
 
 import { DEFAULT_PLACEHOLDER_DIMENSIONS, APP_TEMPLATE_CONFIG } from '../configs/templateConfigs';
 import { TemplateConfig } from '../types'; // Check if TemplateConfig is in types/index.ts or configs. It was in types.
@@ -48,8 +53,7 @@ import {
 } from './cropProcessor';
 
 
-// import { ImageFile, ProcessingOptions } from '../types';
-
+// Set UTIF globally for library compatibility
 if (typeof window !== 'undefined' && !(window as any).UTIF) {
     (window as any).UTIF = UTIF;
 }
@@ -82,7 +86,7 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
             const isICO = mimeType === 'image/x-icon' || mimeType === 'image/vnd.microsoft.icon' || FILE_EXTENSIONS.ICO.some(ext => fileName.endsWith(ext));
 
             let processedFile: File | undefined;
-            let conversionError: string | null = null;
+            const conversionError: string | null = null;
 
             if (isSVG) {
                 // Handle SVG resize
@@ -135,9 +139,9 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
                             // Attempting TIFF conversion
                             processableFile = await convertTIFFForProcessing(imageFile);
 
-                        } catch (err: any) {
-                             // TIFF conversion failed
-                             if (isTIFF) {
+                        } catch (_err: any) {
+                            // TIFF conversion failed
+                            if (isTIFF) {
                                 processableFile = await createTIFFPlaceholderFile(imageFile, dimension, dimension);
                             }
                         }
@@ -209,7 +213,7 @@ export const processLemGendaryCrop = async (
     width: number,
     height: number,
     cropPosition: string = 'center',
-    options: { quality?: number; format?: string; cropMode?: string } = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }
+    options: { quality?: number; format?: string; cropMode?: string; skipOptimization?: boolean } = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }
 ): Promise<any[]> => {
     const results: any[] = [];
 
@@ -231,7 +235,6 @@ export const processLemGendaryCrop = async (
 
 
             let croppedFile: File;
-            // let conversionError = null;
 
             if (isSVG) {
                 croppedFile = await (processSVGCrop as any)(imageFile, width, height);
@@ -241,8 +244,8 @@ export const processLemGendaryCrop = async (
                     try {
                         processableFile = await convertTIFFForProcessing(imageFile);
                     } catch {
-                         if (isTIFF) {
-                             processableFile = await createTIFFPlaceholderFile(imageFile, width, height);
+                        if (isTIFF) {
+                            processableFile = await createTIFFPlaceholderFile(imageFile, width, height);
                         }
                     }
                 } else if (isBMP || isGIF || isICO) {
@@ -264,7 +267,13 @@ export const processLemGendaryCrop = async (
                 }
             }
 
-            const optimizedFile = await processLengendaryOptimize(croppedFile, options.quality, options.format);
+            let optimizedFile: File;
+            if (options.skipOptimization) {
+                // Bypass optimization/filtering if requested (for pipeline chaining)
+                optimizedFile = croppedFile;
+            } else {
+                optimizedFile = await processLengendaryOptimize(croppedFile, options.quality, options.format);
+            }
 
             results.push({
                 original: image,
@@ -385,9 +394,17 @@ export const processImagesForTemplates = async (images: any[], templates: Templa
  * @param {File} imageFile - Image file
  * @param {number} quality - Quality level
  * @param {string} format - Output format
+ * @param {string} filter - Filter type
+ * @param {number} targetSize - Target file size
  * @returns {Promise<File>} Optimized image file
  */
-export const processLengendaryOptimize = async (imageFile: File, quality: number = DEFAULT_QUALITY, format: string = IMAGE_FORMATS.WEBP, targetSize: number | null = null): Promise<File> => {
+export const processLengendaryOptimize = async (
+    imageFile: File,
+    quality: number = DEFAULT_QUALITY,
+    format: string = IMAGE_FORMATS.WEBP,
+    filter: string = IMAGE_FILTERS.NONE,
+    targetSize: number | null = null
+): Promise<File> => {
     if (!imageFile || typeof imageFile !== 'object') {
         throw new Error(ERROR_MESSAGES.INVALID_IMAGE_FILE);
     }
@@ -487,9 +504,21 @@ export const processLengendaryOptimize = async (imageFile: File, quality: number
 
                 ctx.drawImage(img, 0, 0);
 
-                let mimeType: string = MIME_TYPE_MAP.webp;
-                let extension: string = 'webp';
-                let currentQuality: number | undefined = quality;
+                // Apply filter if selected
+                if (filter && filter !== IMAGE_FILTERS.NONE) {
+                    try {
+                        const filteredCanvas = await applyImageFilter(canvas, filter);
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(filteredCanvas, 0, 0);
+                    } catch (_filterError) {
+                        // Fail silently or handle filter error if needed
+                    }
+                }
+
+
+                const mimeType: string = MIME_TYPE_MAP.webp;
+                const extension: string = 'webp';
+                const currentQuality: number | undefined = quality;
                 let encodedBlob: Blob | null = null;
 
 
@@ -512,8 +541,8 @@ export const processLengendaryOptimize = async (imageFile: File, quality: number
                 const baseName = originalName.replace(/\.[^/.]+$/, '');
                 const newName = `${baseName}.${extension}`;
                 if (!encodedBlob) {
-                     reject(new Error(PROCESSING_ERRORS.BLOB_CREATION_FAILED));
-                     return;
+                    reject(new Error(PROCESSING_ERRORS.BLOB_CREATION_FAILED));
+                    return;
                 }
                 resolve(new File([encodedBlob], newName, { type: mimeType }));
 
@@ -530,8 +559,9 @@ export const processLengendaryOptimize = async (imageFile: File, quality: number
             if (isTIFF) {
                 createTIFFPlaceholderFile(imageFile)
                     .then((placeholderFile) => {
-                        processLengendaryOptimize(placeholderFile, quality, format, targetSize)
+                        processLengendaryOptimize(placeholderFile, quality, format, filter, targetSize)
                             .then(resolve)
+
                             .catch(() => {
                                 resolve(placeholderFile);
                             });
@@ -580,8 +610,13 @@ export const getProcessingConfiguration = (processingOptions: any): any => {
             mode: processingOptions.processingMode || PROCESSING_MODES.CUSTOM
         },
         batchRename: processingOptions.batchRename || null,
+        filters: {
+            enabled: processingOptions.filters?.enabled || false,
+            selectedFilter: processingOptions.filters?.selectedFilter || IMAGE_FILTERS.NONE
+        },
         processingMode: processingOptions.processingMode
     };
 
     return config;
 };
+

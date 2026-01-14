@@ -1,10 +1,12 @@
 import type { ProcessingOptions, ImageFile } from '../types';
-import { ScreenShotsCard, TemplateImageSection } from './index';
+import { ScreenShotsCard, TemplateImageSection, FilterSelectionCard } from './index';
 import { SOCIAL_MEDIA_TEMPLATES } from '../configs/templateConfigs';
+import { IMAGE_FILTERS } from '../constants';
+import '../styles/TemplateSelectionCard.css';
 
 /**
- * @fileoverview Template selection card component for choosing social media and other templates.
- * Provides a grid of templates categorized by platform, with special sections for screenshots and favicons.
+ * @file TemplateSelectionCard.tsx
+ * @description UI component for selecting social media and branding templates for image processing.
  */
 
 interface TemplateCategory {
@@ -35,6 +37,7 @@ interface TemplateSelectionCardProps {
     onDeselectAllScreenshotTemplates: () => void;
     isFaviconSelected: boolean;
     onFaviconToggle: (selected: boolean) => void;
+    onOptionChange: (category: keyof ProcessingOptions, key: string, value: any) => void;
     onSingleOptionChange: (key: keyof ProcessingOptions, value: any) => void;
     templateSelectedImageObj?: ImageFile;
     isLoading: boolean;
@@ -44,7 +47,10 @@ interface TemplateSelectionCardProps {
 }
 
 /**
- * TemplateSelectionCard - Component for selecting templates
+ * TemplateSelectionCard component.
+ * @component
+ * @param {TemplateSelectionCardProps} props - Component props.
+ * @returns {JSX.Element} The rendered template selection card.
  */
 const TemplateSelectionCard = ({
     processingOptions,
@@ -69,6 +75,7 @@ const TemplateSelectionCard = ({
     onDeselectAllScreenshotTemplates,
     isFaviconSelected,
     onFaviconToggle,
+    onOptionChange,
     onSingleOptionChange,
     templateSelectedImageObj,
     isLoading,
@@ -244,6 +251,14 @@ const TemplateSelectionCard = ({
                         </div>
                     );
                 })}
+            </div>
+
+            <div className="mb-lg">
+                <FilterSelectionCard
+                    selectedFilter={processingOptions.filters?.selectedFilter || IMAGE_FILTERS.NONE}
+                    onFilterChange={(filter) => onOptionChange('filters', 'selectedFilter', filter)}
+                    t={t}
+                />
             </div>
 
             <TemplateImageSection

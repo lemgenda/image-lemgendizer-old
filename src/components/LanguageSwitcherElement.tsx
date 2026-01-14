@@ -1,3 +1,7 @@
+/**
+ * @file LanguageSwitcherElement.tsx
+ * @description UI component for selecting and switching the application language.
+ */
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LanguageInfo } from '../utils/languageUtils';
@@ -61,7 +65,7 @@ function LanguageSwitcherElement() {
                             onClick={() => handleLanguageChange(lang.code)}
                         >
                             <span className="language-flag">{lang.flag}</span>
-                            <span className="language-name" style={{ flex: '1', textAlign: 'left' }}>
+                            <span className="language-name">
                                 {lang.name}
                             </span>
                         </button>

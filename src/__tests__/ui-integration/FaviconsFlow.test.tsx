@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import App from '../../App';
 import { ProcessingProvider } from '../../context/ProcessingContext';
@@ -10,7 +10,7 @@ vi.mock('../../utils/generalUtils', async (importOriginal) => {
     return {
         ...actual,
         orchestrateTemplateProcessing: vi.fn().mockResolvedValue([]),
-        debounce: (fn: Function) => fn,
+        debounce: (fn: (...args: any[]) => any) => fn,
     };
 });
 
@@ -34,7 +34,7 @@ describe('Favicons Flow', () => {
         // Wait for AI loading
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
-            await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 4000 });
+            await waitFor(() => expect(screen.queryByText(/Loading AI model/i)).not.toBeInTheDocument(), { timeout: 4000 });
         }
 
         // 1. Upload Image
@@ -49,7 +49,7 @@ describe('Favicons Flow', () => {
         }, { timeout: 5000 });
 
         await waitFor(() => {
-             screen.getByText('logo.png');
+            screen.getByText('logo.png');
         }, { timeout: 5000 });
 
         // 2. Select image for templates (Favicon uses template engine)
@@ -61,7 +61,7 @@ describe('Favicons Flow', () => {
 
         // 3. Find Favicon Toggle/Section
         try {
-             // Debug: check what's visible
+            // Debug: check what's visible
             const faviconToggle = await screen.findByLabelText(/Toggle Favicon Generation/i);
             fireEvent.click(faviconToggle);
         } catch (e) {

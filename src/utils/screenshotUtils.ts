@@ -1,3 +1,7 @@
+/**
+ * @file screenshotUtils.ts
+ * @description Utilities for capturing website screenshots via API, handling device viewports, and managing capture results.
+ */
 import {
     URL_CONSTANTS,
     DEVICE_PRESETS,
@@ -122,7 +126,7 @@ const getViewportConfig = (template: ScreenshotTemplate) => {
 export const captureScreenshot = async (url: string, template: ScreenshotTemplate, options: CaptureOptions = {}): Promise<ScreenshotResult> => {
     try {
         let processedUrl = url;
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+         
         if (typeof processedUrl !== 'string') {
             processedUrl = String(processedUrl);
         }
@@ -255,7 +259,7 @@ const createScreenshotErrorImage = async (template: ScreenshotTemplate, url: str
         const ctx = canvas.getContext('2d');
 
         if (!ctx) {
-             // Fallback if context creation fails (should rarely happen)
+            // Fallback if context creation fails (should rarely happen)
             resolve({
                 file: new Blob([]),
                 name: 'error.jpg',
@@ -317,14 +321,14 @@ const createScreenshotErrorImage = async (template: ScreenshotTemplate, url: str
                     isPlaceholder: true // Treat error image as processed but it's a "placeholder" or error rep
                 });
             } else {
-                 resolve({
+                resolve({
                     file: new Blob([]),
                     name: 'error-blob-failed.jpg',
                     template,
                     format: 'jpg',
                     processed: false,
                     error: 'Blob creation failed'
-                 });
+                });
             }
         }, 'image/jpeg', 0.8);
     });

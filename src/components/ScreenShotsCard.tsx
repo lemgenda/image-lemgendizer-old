@@ -1,3 +1,7 @@
+/**
+ * @file ScreenShotsCard.tsx
+ * @description UI component for website screenshot capture settings and device selection.
+ */
 import { useState, useEffect, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -82,7 +86,10 @@ const getTemplateIcon = (templateId: string): ReactNode => {
 };
 
 /**
- * ScreenShotsCard component for capturing website screenshots
+ * ScreenShotsCard component.
+ * @component
+ * @param {ScreenshotsCardProps} props - Component props.
+ * @returns {JSX.Element} The rendered screenshots card.
  */
 const ScreenShotsCard = ({
     isSelected,
@@ -100,6 +107,12 @@ const ScreenShotsCard = ({
 }: ScreenshotsCardProps) => {
     const { t } = useTranslation();
     const [url, setUrl] = useState<string>(screenshotUrl || '');
+    const [prevScreenshotUrl, setPrevScreenshotUrl] = useState(screenshotUrl);
+
+    if (screenshotUrl !== undefined && screenshotUrl !== prevScreenshotUrl) {
+        setPrevScreenshotUrl(screenshotUrl);
+        setUrl(screenshotUrl || '');
+    }
 
     const screenshotTemplateList = getScreenshotTemplatesWithQuality();
 
@@ -114,12 +127,6 @@ const ScreenShotsCard = ({
             });
         }
     }, [isSelected, selectedTemplates, onTemplateToggle, screenshotTemplateList]);
-
-    useEffect(() => {
-        if (screenshotUrl !== undefined) {
-            setUrl(screenshotUrl || '');
-        }
-    }, [screenshotUrl]);
 
     const handleWebsiteScreenshotToggle = (checked: boolean) => {
         onToggle(checked);
@@ -268,7 +275,7 @@ const ScreenShotsCard = ({
                         >
                             {isCapturing ? (
                                 <>
-                                    <i className="fa-solid fa-spinner fa-spin" style={{ animation: 'fa-spin 1s infinite linear' }}></i>
+                                    <i className="fa-solid fa-spinner fa-spin fa-spin-linear"></i>
                                     {t('screenshots.capturing')} {captureProgress}%
                                 </>
                             ) : (

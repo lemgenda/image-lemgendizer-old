@@ -1,8 +1,8 @@
 import { ReactNode } from 'react';
 
 /**
- * @fileoverview Tab panel component for switching between different processing modes.
- * Provides a clean tabbed interface with keyboard navigation support.
+ * @file TabPanel.tsx
+ * @description Specialized container component for displaying tabbed content with accessibility support.
  */
 
 interface Tab {

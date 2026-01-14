@@ -2,8 +2,8 @@ import { TemplateSelectionCard } from './index';
 import type { ProcessingOptions, ImageFile } from '../types';
 
 /**
- * @fileoverview Template processing tab container.
- * Wraps the TemplateSelectionCard and handles any tab-level layout.
+ * @file TemplateProcessingTab.tsx
+ * @description Container component for template-based image processing (App Icons, Social Media, etc.).
  */
 
 interface TemplateProcessingTabProps {
@@ -29,6 +29,7 @@ interface TemplateProcessingTabProps {
     onDeselectAllScreenshotTemplates: () => void;
     isFaviconSelected: boolean;
     onFaviconToggle: (selected: boolean) => void;
+    onOptionChange: (category: keyof ProcessingOptions, key: string, value: any) => void;
     onSingleOptionChange: (key: keyof ProcessingOptions, value: any) => void;
     templateSelectedImageObj?: ImageFile;
     isLoading: boolean;
@@ -38,7 +39,10 @@ interface TemplateProcessingTabProps {
 }
 
 /**
- * TemplateProcessingTab - Component for template processing mode
+ * TemplateProcessingTab component.
+ * @component
+ * @param {TemplateProcessingTabProps} props - Component props.
+ * @returns {JSX.Element} The rendered template processing tab.
  */
 const TemplateProcessingTab = (props: TemplateProcessingTabProps) => {
     return (

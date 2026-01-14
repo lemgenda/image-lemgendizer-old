@@ -1,7 +1,16 @@
+/**
+ * @file FooterSection.tsx
+ * @description Application footer component providing security information, AI status, and versioning.
+ */
 import { useTranslation } from 'react-i18next';
 import LemGendaLogoElement from './LemGendaLogoElement';
 import '../styles/FooterSection.css';
 
+/**
+ * FooterSection component.
+ * @component
+ * @returns {JSX.Element} The rendered footer.
+ */
 function FooterSection() {
     const { t } = useTranslation();
 

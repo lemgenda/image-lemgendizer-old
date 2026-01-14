@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import App from '../../App';
 import { ProcessingProvider } from '../../context/ProcessingContext';
@@ -10,7 +10,7 @@ vi.mock('../../utils/generalUtils', async (importOriginal) => {
     return {
         ...actual,
         orchestrateTemplateProcessing: vi.fn().mockResolvedValue([]),
-        debounce: (fn: Function) => fn,
+        debounce: (fn: (...args: any[]) => any) => fn,
     };
 });
 
@@ -34,7 +34,7 @@ describe('Template Processing Flow', () => {
         // Wait for AI loading
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
-            await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 4000 });
+            await waitFor(() => expect(screen.queryByText(/Loading AI model/i)).not.toBeInTheDocument(), { timeout: 4000 });
         }
 
         // 1. Upload Image
@@ -49,7 +49,7 @@ describe('Template Processing Flow', () => {
         }, { timeout: 5000 });
 
         await waitFor(() => {
-             screen.getByText('template-test.png');
+            screen.getByText('template-test.png');
         }, { timeout: 5000 });
 
         // 2. Select the image in the gallery for Template Processing (required)
@@ -61,23 +61,18 @@ describe('Template Processing Flow', () => {
         fireEvent.click(templatesTab);
 
         // 3. Select a Template
-        try {
-            // Target by ID for robustness
-            // ID derived from templateConfigs.ts: 'ig-square' -> 'template-ig-square'
-            const checkbox = document.getElementById('template-ig-square') as HTMLInputElement;
-            if (!checkbox) throw new Error('Checkbox template-ig-square not found');
+        // 3. Select a Template
+        // Target by ID for robustness
+        // ID derived from templateConfigs.ts: 'ig-square' -> 'template-ig-square'
+        const checkbox = document.getElementById('template-ig-square') as HTMLInputElement;
+        if (!checkbox) throw new Error('Checkbox template-ig-square not found');
+
+        fireEvent.click(checkbox);
+
+        // Verify and force if needed
+        if (!checkbox.checked) {
 
             fireEvent.click(checkbox);
-
-            // Verify and force if needed
-            if (!checkbox.checked) {
-
-                fireEvent.click(checkbox);
-            }
-        } catch (e) {
-
-            // screen.debug();
-            throw e;
         }
 
         // 4. Process (Download)

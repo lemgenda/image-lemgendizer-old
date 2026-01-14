@@ -190,7 +190,7 @@ export const organizeTemplatesByPlatform = (socialTemplates: any[], t: any = nul
     );
 
     validTemplates.forEach(img => {
-        let platform = img.template.platform || '';
+        const platform = img.template.platform || '';
         const displayPlatform = getTranslatedPlatformName(platform, t);
         const cleanPlatform = displayPlatform.replace(/\s*\/\s*X/g, '').trim();
 
@@ -305,7 +305,7 @@ export const createExportZip = async (
         for (const [format, images] of Object.entries(groupedByFormat)) {
             if (images.length > 0) {
                 const formatFolderName = format.toUpperCase();
-                const formatFolder = optimizedFolder?.folder(formatFolderName)!;
+                const formatFolder = optimizedFolder.folder(formatFolderName)!;
                 for (const image of images) {
                     try {
                         let fileName = image.name;
@@ -373,7 +373,7 @@ export const createExportZip = async (
 
             for (const [platform, platformImages] of Object.entries(organizedPlatforms)) {
                 const platformFolderName = platform;
-                const platformFolder = socialFolder?.folder(platformFolderName)!;
+                const platformFolder = socialFolder.folder(platformFolderName)!;
                 for (const image of platformImages) {
                     const fileName = getTranslatedImageName(image, t);
                     platformFolder?.file(fileName, image.file || image.blob);
@@ -717,7 +717,7 @@ function createExportSummary(
         templateCount = validProcessedImages.filter(img => img.template).length;
     }
 
-    let summary = `${t ? t('export.summary.title') : 'Image Processing Export Summary'}
+    const summary = `${t ? t('export.summary.title') : 'Image Processing Export Summary'}
 ${'='.repeat(t ? t('export.summary.title').length : 30)}
 
 ${t ? t('export.summary.exportDate') : 'Export Date'}: ${timestamp}

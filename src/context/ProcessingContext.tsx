@@ -1,3 +1,8 @@
+/**
+ * @file ProcessingContext.tsx
+ * @description Central state management for image processing, UI state, and AI model coordination.
+ */
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProcessingOptions, ImageFile, ProcessingMode } from '../types';
@@ -26,7 +31,8 @@ import {
     getImageDimensions,
     safeCleanupGPUMemory,
     generateSpecialFormatPreview,
-    checkImageTransparencyQuick
+    checkImageTransparencyQuick,
+    loadAIModel
 } from '../utils';
 import {
     getTemplateCategories,
@@ -144,9 +150,16 @@ interface ProcessingProviderProps {
     children: ReactNode;
 }
 
+/**
+ * Context for managing global image processing state and operations.
+ */
 const ProcessingContext = createContext<ProcessingContextValue | null>(null);
 
-// eslint-disable-next-line react-refresh/only-export-components
+/**
+ * Hook to access the processing context.
+ * @returns {ProcessingContextValue} The processing context value.
+ * @throws {Error} If used outside of a ProcessingProvider.
+ */
 export const useProcessingContext = (): ProcessingContextValue => {
     const context = useContext(ProcessingContext);
     if (!context) {
@@ -155,6 +168,11 @@ export const useProcessingContext = (): ProcessingContextValue => {
     return context;
 };
 
+/**
+ * Provider component that wraps the application and provides processing state.
+ * @param {ProcessingProviderProps} props - Component props containing children.
+ * @returns {JSX.Element} The provider component.
+ */
 export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
     const { t } = useTranslation();
     const [isScreenshotMode, setIsScreenshotMode] = useState(false);
@@ -292,11 +310,6 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
             try {
                 setAiLoading(true);
 
-                // Note: assuming path is correct relative to context folder.
-                // Context is in src/context. utils is in src/utils.
-                // So import should be from '../utils/memoryUtils'.
-                // But in App.jsx it was './utils/memoryUtils'.
-                const { loadAIModel } = await import('../utils/memoryUtils');
                 const model = await loadAIModel();
 
                 if (model && (model.modelType || typeof model.detect === 'function')) {
@@ -891,7 +904,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                     error: img.error
                 })),
                 failedCount: processedImages.filter(img => img.error).length
-            }, processingConfig);
+            }, processingConfig, t);
 
             setTimeout(() => {
                 closeModal();
@@ -1078,7 +1091,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                 categoriesApplied: categoriesApplied,
                 formatsExported: ['WEBP', 'PNG', 'JPG', 'ICO'],
                 screenshotCount: screenshotResults ? (screenshotResults as any).successful : 0
-            }, processingConfig);
+            }, processingConfig, t);
 
             setTimeout(() => {
                 closeModal();

@@ -1,3 +1,7 @@
+/**
+ * @file templateConfigs.ts
+ * @description Master configuration for all image templates, platform categories, and smart crop defaults.
+ */
 import {
     DEVICE_VIEWPORTS,
     SCREENSHOT_QUALITY

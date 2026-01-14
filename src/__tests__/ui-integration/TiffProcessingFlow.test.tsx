@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import App from '../../App';
 import { ProcessingProvider } from '../../context/ProcessingContext';
@@ -11,7 +11,7 @@ vi.mock('../../utils/generalUtils', async (importOriginal) => {
     return {
         ...actual,
         orchestrateCustomProcessing: vi.fn().mockResolvedValue([]),
-        debounce: (fn: Function) => fn,
+        debounce: (fn: (...args: any[]) => any) => fn,
     };
 });
 
@@ -42,7 +42,7 @@ describe('TIFF Processing Flow', () => {
         // Wait for AI loading
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
-            await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 4000 });
+            await waitFor(() => expect(screen.queryByText(/Loading AI model/i)).not.toBeInTheDocument(), { timeout: 4000 });
         }
 
         // 1. Upload TIFF Image
@@ -58,13 +58,13 @@ describe('TIFF Processing Flow', () => {
 
         // Wait for it to appear
         await waitFor(() => {
-             screen.getByText('image.tiff');
+            screen.getByText('image.tiff');
         }, { timeout: 5000 });
 
         // 2. Select Format to enable processing button
         const pngCheckbox = screen.getByLabelText(/PNG/i);
         if (!(pngCheckbox as HTMLInputElement).checked) {
-             fireEvent.click(pngCheckbox);
+            fireEvent.click(pngCheckbox);
         }
 
         // 3. Click Process

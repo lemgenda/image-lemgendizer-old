@@ -1,3 +1,8 @@
+/**
+ * @file tiffUtils.ts
+ * @description Utilities for TIFF file handling, including UTIF-based decoding,
+ * format conversion to PNG, and placeholder generation for unsupported TIFFs.
+ */
 import {
     IMAGE_COLORS,
     FONT_CONSTANTS,
@@ -564,7 +569,7 @@ export const convertTIFFForProcessing = async (tiffFile: File): Promise<File> =>
 
         return await createTIFFPlaceholderFile(tiffFile);
 
-    } catch (error) {
+    } catch (_error) {
 
         return await createTIFFPlaceholderFile(tiffFile);
     }

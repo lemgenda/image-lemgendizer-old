@@ -1,3 +1,7 @@
+/**
+ * @file appUtils.ts
+ * @description High-level application utilities for error handling, modal management, and category calculation.
+ */
 import {
     PROCESSING_MODES,
     ANIMATION_DURATIONS,
@@ -180,8 +184,8 @@ export const getSelectedImagesForProcessing = (
  * @param {string} type - Modal type
  * @returns {Object} Timeout reference and cleanup function
  */
-export const setupAutoClose = (closeModal: () => void, type: string): { clear: () => void; ref: NodeJS.Timeout | null } => {
-    let timeoutRef: NodeJS.Timeout | null = null;
+export const setupAutoClose = (closeModal: () => void, type: string): { clear: () => void; ref: ReturnType<typeof setTimeout> | null } => {
+    let timeoutRef: ReturnType<typeof setTimeout> | null = null;
     let timeoutDuration: number;
 
     switch (type) {

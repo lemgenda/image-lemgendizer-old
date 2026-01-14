@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import App from '../../App';
 import { ProcessingProvider } from '../../context/ProcessingContext';
@@ -10,7 +10,7 @@ vi.mock('../../utils/generalUtils', async (importOriginal) => {
     return {
         ...actual,
         orchestrateCustomProcessing: vi.fn().mockResolvedValue([]),
-        debounce: (fn: Function) => fn,
+        debounce: (fn: (...args: any[]) => any) => fn,
     };
 });
 
@@ -32,7 +32,7 @@ describe('SVG Processing Flow', () => {
         // Wait for AI loading
         const loading = screen.queryByText(/Loading AI model/i);
         if (loading) {
-            await waitForElementToBeRemoved(() => screen.queryByText(/Loading AI model/i), { timeout: 4000 });
+            await waitFor(() => expect(screen.queryByText(/Loading AI model/i)).not.toBeInTheDocument(), { timeout: 4000 });
         }
 
         // 1. Upload SVG
@@ -47,14 +47,14 @@ describe('SVG Processing Flow', () => {
         }, { timeout: 5000 });
 
         await waitFor(() => {
-             screen.getByText('icon.svg');
+            screen.getByText('icon.svg');
         }, { timeout: 5000 });
 
         // 2. Select Format (e.g. PNG) to enable processing
         // Find format checkbox. "PNG" text should coincide with label
         const pngCheckbox = screen.getByLabelText(/PNG/i);
         if (!(pngCheckbox as HTMLInputElement).checked) {
-             fireEvent.click(pngCheckbox);
+            fireEvent.click(pngCheckbox);
         }
 
         // 3. Click Process

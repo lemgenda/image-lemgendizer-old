@@ -1,3 +1,7 @@
+/**
+ * @file main.tsx
+ * @description Application entry point, initializes React, PWA, and FontAwesome.
+ */
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './i18n';

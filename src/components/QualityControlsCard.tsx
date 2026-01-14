@@ -3,8 +3,8 @@ import { COMPRESSION_QUALITY_RANGE, NUMBER_INPUT_CONSTANTS } from '../constants'
 import type { ProcessingOptions } from '../types';
 
 /**
- * @fileoverview Quality controls card component for compression settings.
- * Provides a slider for adjusting compression quality from 1-100 and optional target file size.
+ * @file QualityControlsCard.tsx
+ * @description UI component for adjusting compression quality and target file size settings.
  */
 
 interface QualityControlsCardProps {
@@ -15,7 +15,10 @@ interface QualityControlsCardProps {
 }
 
 /**
- * QualityControlsCard - Component for compression quality settings
+ * QualityControlsCard component.
+ * @component
+ * @param {QualityControlsCardProps} props - Component props.
+ * @returns {JSX.Element} The rendered quality controls card.
  */
 const QualityControlsCard = ({
     quality,

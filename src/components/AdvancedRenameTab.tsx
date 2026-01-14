@@ -1,8 +1,12 @@
-
+/**
+ * @file AdvancedRenameTab.tsx
+ * @description Tab component for batch renaming images with pattern support and live preview.
+ */
 import type { ProcessingOptions, ImageFile } from '../types';
 import { useTranslation } from 'react-i18next';
 
 import { generateNewFileName } from '../utils/renameUtils';
+import '../styles/AdvancedRenameTab.css';
 
 interface AdvancedRenameTabProps {
     processingOptions: ProcessingOptions;
@@ -14,7 +18,10 @@ interface AdvancedRenameTabProps {
 }
 
 /**
- * AdvancedRenameTab component
+ * AdvancedRenameTab component.
+ * @component
+ * @param {AdvancedRenameTabProps} props - Component props.
+ * @returns {JSX.Element} The rendered rename tab.
  */
 const AdvancedRenameTab = ({
     processingOptions,
@@ -53,8 +60,8 @@ const AdvancedRenameTab = ({
             {/* Header / Actions Section */}
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h2 className="text-xl font-bold">{t('batchRename.title') || 'Advanced Batch Rename'}</h2>
-                    <p className="text-sm text-muted">{t('batchRename.description') || 'Configure patterns and rules to rename multiple files at once.'}</p>
+                    <h2 className="text-xl font-bold">{t('batchRename.title')}</h2>
+                    <p className="text-sm text-muted">{t('batchRename.description')}</p>
                 </div>
             </div>
 
@@ -67,12 +74,12 @@ const AdvancedRenameTab = ({
                     <div className="card p-4">
                         <h3 className="text-lg font-semibold mb-3 flex items-center" data-testid="rename-pattern-title">
                             <i className="fas fa-tag mr-2 text-primary"></i>
-                            {t('rename.patternTitle') || 'Naming Pattern'}
+                            {t('rename.patternTitle')}
                         </h3>
 
                         <div className="form-group mb-4">
                             <label htmlFor="renamePattern" className="block text-sm font-medium mb-1">
-                                {t('rename.pattern') || 'Pattern'}
+                                {t('rename.pattern')}
                             </label>
                             <input
                                 type="text"
@@ -81,7 +88,7 @@ const AdvancedRenameTab = ({
                                 className="input-field w-full"
                                 value={renameOptions.pattern}
                                 onChange={(e) => handleRenameChange('pattern', e.target.value)}
-                                placeholder={t('rename.patternPlaceholder') || '{name}_{counter}'}
+                                placeholder={t('rename.patternPlaceholder')}
                             />
                         </div>
 
@@ -100,7 +107,7 @@ const AdvancedRenameTab = ({
                             </button>
                         </div>
                         <p className="text-xs text-muted">
-                            {t('rename.tokenHelp') || 'Click tokens to add them to your pattern.'}
+                            {t('rename.tokenHelp')}
                         </p>
                     </div>
 
@@ -108,12 +115,12 @@ const AdvancedRenameTab = ({
                     <div className="card p-4">
                         <h3 className="text-lg font-semibold mb-3 flex items-center">
                             <i className="fas fa-search mr-2 text-primary"></i>
-                            {t('rename.replaceTitle') || 'Find & Replace'}
+                            {t('rename.replaceTitle')}
                         </h3>
 
                         <div className="form-group mb-3">
                             <label htmlFor="renameFind" className="block text-sm font-medium mb-1">
-                                {t('rename.find') || 'Find'}
+                                {t('rename.find')}
                             </label>
                             <input
                                 type="text"
@@ -121,13 +128,13 @@ const AdvancedRenameTab = ({
                                 className="input-field w-full"
                                 value={renameOptions.find}
                                 onChange={(e) => handleRenameChange('find', e.target.value)}
-                                placeholder={t('rename.findPlaceholder') || 'Text to find...'}
+                                placeholder={t('rename.findPlaceholder')}
                             />
                         </div>
 
                         <div className="form-group mb-3">
                             <label htmlFor="renameReplace" className="block text-sm font-medium mb-1">
-                                {t('rename.replace') || 'Replace with'}
+                                {t('rename.replace')}
                             </label>
                             <input
                                 type="text"
@@ -135,7 +142,7 @@ const AdvancedRenameTab = ({
                                 className="input-field w-full"
                                 value={renameOptions.replace}
                                 onChange={(e) => handleRenameChange('replace', e.target.value)}
-                                placeholder={t('rename.replacePlaceholder') || 'Replacement text...'}
+                                placeholder={t('rename.replacePlaceholder')}
                             />
                         </div>
 
@@ -148,7 +155,7 @@ const AdvancedRenameTab = ({
                                 className="checkbox mr-2"
                             />
                             <label htmlFor="useRegex" className="text-sm cursor-pointer select-none">
-                                {t('rename.useRegex') || 'Use Regular Expressions'}
+                                {t('rename.useRegex')}
                             </label>
                         </div>
                     </div>
@@ -198,7 +205,7 @@ const AdvancedRenameTab = ({
                             </div>
                             <div className="form-group">
                                 <label htmlFor="renamePadding" className="block text-sm font-medium mb-1">
-                                    {t('rename.padding') || 'Padding'}
+                                    {t('rename.padding')}
                                 </label>
                                 <input
                                     type="number"
@@ -217,16 +224,16 @@ const AdvancedRenameTab = ({
                     <div className="card p-4 flex-grow flex flex-col min-h-0">
                         <h3 className="text-lg font-semibold mb-3 flex items-center">
                             <i className="fas fa-eye mr-2 text-primary"></i>
-                            {t('rename.previewTitle') || 'Name Preview'}
+                            {t('rename.previewTitle')}
                         </h3>
 
-                        <div className="overflow-auto border rounded border-gray-100 dark:border-gray-800" style={{ maxHeight: '400px' }}>
+                        <div className="overflow-auto border rounded border-gray-100 dark:border-gray-800 rename-preview-list">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
                                     <tr>
-                                        <th className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 font-medium">#</th>
-                                        <th className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 font-medium">{t('rename.originalName') || 'Original Name'}</th>
-                                        <th className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 font-medium text-primary">{t('rename.newName') || 'New Name'}</th>
+                                        <th className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 font-medium">{t('common.hashSymbol')}</th>
+                                        <th className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 font-medium">{t('rename.originalName')}</th>
+                                        <th className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 font-medium text-primary">{t('rename.newName')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -245,7 +252,7 @@ const AdvancedRenameTab = ({
                                     ) : (
                                         <tr>
                                             <td colSpan={3} className="px-3 py-8 text-center text-muted">
-                                                {t('rename.noSelectedImages') || 'No images selected for renaming'}
+                                                {t('rename.noSelectedImages')}
                                             </td>
                                         </tr>
                                     )}
@@ -253,7 +260,7 @@ const AdvancedRenameTab = ({
                             </table>
                         </div>
                         <p className="text-xs text-muted mt-3">
-                            {t('rename.previewInfo') || 'This shows how your files will be named. No conversions or quality changes will be applied.'}
+                            {t('rename.previewInfo')}
                         </p>
                     </div>
 
@@ -266,7 +273,7 @@ const AdvancedRenameTab = ({
                             disabled={isLoading}
                         >
                             <i className="fas fa-exchange-alt mr-2"></i>
-                            {t('rename.applyToCustom') || 'Apply to Custom Processing'}
+                            {t('rename.applyToCustom')}
                         </button>
                         <button
                             onClick={onProcess}
@@ -281,7 +288,7 @@ const AdvancedRenameTab = ({
                             ) : (
                                 <>
                                     <i className="fas fa-save mr-2"></i>
-                                    {t('rename.processBtn') || 'Rename & Save'}
+                                    {t('rename.processBtn')}
                                 </>
                             )}
                         </button>

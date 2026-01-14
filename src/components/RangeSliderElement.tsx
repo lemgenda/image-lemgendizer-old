@@ -1,22 +1,29 @@
+/**
+ * @file RangeSliderElement.tsx
+ * @description Custom range slider component with progress tracking and tick marks.
+ */
 import { useId } from 'react';
 import { COMPRESSION_QUALITY_RANGE, NUMBER_INPUT_CONSTANTS } from '../constants';
 import { calculatePercentage, generateTicks } from '../utils';
 import '../styles/RangeSliderElement.css';
 
 interface RangeSliderElementProps {
-    min?: number;
-    max?: number;
-    step?: number;
-    value?: number;
-    onChange: (value: number) => void;
-    label?: string;
-    id?: string;
-    unit?: string;
-    showTicks?: boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  value?: number;
+  onChange: (value: number) => void;
+  label?: string;
+  id?: string;
+  unit?: string;
+  showTicks?: boolean;
 }
 
 /**
- * RangeSliderElement component for selecting values within a range
+ * RangeSliderElement component.
+ * @component
+ * @param {RangeSliderElementProps} props - Component props.
+ * @returns {JSX.Element} The rendered range slider.
  */
 function RangeSliderElement({
   min = COMPRESSION_QUALITY_RANGE.MIN,
