@@ -3,6 +3,43 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.2.0] - 2026-01-14
+----------------------
+
+### New Features
+
+*   **Image Filters**: Added 20+ professional image filters powered by CamanJS
+    *   Standard filters: Sepia, Black & White, Vintage, HDR, Vignette, Invert
+    *   Creative presets: Lomo, Sunrise, Cross Process, Sin City, Love, Grungy
+    *   Specialized effects: Night Vision, Hemingway, Pinhole, Old Boot, Her Majesty
+*   **Real-time Filter Preview**: Interactive filter selection with live preview
+*   **Filter Integration**: Apply filters to all processing modes (Custom, Templates, Batch Rename)
+
+### Test Coverage
+
+*   **Unit Tests**: Added 5 comprehensive unit tests for `filterProcessor.ts`
+    *   CamanJS initialization and mocking
+    *   Filter application validation
+    *   Error handling and graceful degradation
+*   **Integration Tests**: Added 4 integration tests for Filter UI flow
+    *   Filter selection and interaction
+    *   Active filter highlighting
+    *   Localization support
+*   **Total Test Suite**: 120 tests passing (up from 111)
+
+### Improvements
+
+*   **Enhanced Linting**: Updated ESLint configuration for better TypeScript support
+*   **Code Quality**: Fixed all linting warnings and errors with `--max-warnings 0`
+*   **Git Workflow**: Improved `.gitignore` to exclude test artifacts and debug files
+*   **Pre-commit Hooks**: Enhanced `lint-staged` configuration for cleaner commits
+
+### Bug Fixes
+
+*   Fixed `react-hooks/set-state-in-effect` warnings in component state management
+*   Fixed unused variable warnings in test files
+*   Resolved ESLint configuration issues for ignored files
+
 [3.1.0] - 2026-01-04
 ----------------------
 

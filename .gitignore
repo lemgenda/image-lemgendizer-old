@@ -31,3 +31,13 @@ dist-ssr
 proxy-server.js
 proxy-server.mjs
 proxy-server.cjs
+
+# Test output files
+test_output.txt
+lint_report*.txt
+lint_output.txt
+
+# Debug folder
+debug/
+
+public/models/

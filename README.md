@@ -26,6 +26,9 @@ Visit: [**https://lemgenda.github.io/image-lemgendizer-old/**](https://lemgenda
 *   **WebGPU Acceleration**: High-performance GPU-accelerated AI processing for supported hardware
 *   **AI Upscaling**: Enhance image resolution with ESRGAN models
 
+*   **Image Filters**: 20+ professional filters including Vintage, HDR, Night Vision, and creative presets
+*   **Real-time Preview**: Live filter preview before processing
+
 *   **TIFF Support**: Comprehensive TIFF file processing with UTIF library
 
 
@@ -356,7 +359,7 @@ This project is licensed under the MIT License - see the [LICENSE](https://lice
 📊 Project Status
 -----------------
 
-**Version**: 3.1.0
+**Version**: 3.2.0
 **Last Updated**: January 2026
 **Active Development**: Yes
 **Production Ready**: Yes
