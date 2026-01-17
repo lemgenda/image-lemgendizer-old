@@ -1,4 +1,4 @@
-import { QualityControlsCard, ResizeCropCard, FormatSelectionCard, FilterSelectionCard } from './index';
+import { QualityControlsCard, ResizeCropCard, FormatSelectionCard, FilterSelectionCard, WatermarkCard } from './index';
 import { CROP_MODES, IMAGE_FILTERS } from '../constants';
 import type { ProcessingOptions, ImageFile } from '../types';
 
@@ -83,6 +83,12 @@ const CustomProcessingTab = ({
                     onToggleResizeCrop={onToggleResizeCrop}
                     onToggleCropMode={onToggleCropMode}
                     onOptionChange={(key, value) => onSingleOptionChange(key as keyof ProcessingOptions, value)}
+                    t={t}
+                />
+
+                <WatermarkCard
+                    watermark={processingOptions.watermark}
+                    onOptionChange={onOptionChange}
                     t={t}
                 />
             </div>

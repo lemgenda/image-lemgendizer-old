@@ -201,6 +201,25 @@ export const CROP_POSITION_LIST = [
     'right', 'bottom-left', 'bottom', 'bottom-right'
 ];
 
+export const WATERMARK_POSITIONS = {
+    CENTER: 'center',
+    TOP_LEFT: 'top-left',
+    TOP: 'top',
+    TOP_RIGHT: 'top-right',
+    LEFT: 'left',
+    RIGHT: 'right',
+    BOTTOM_LEFT: 'bottom-left',
+    BOTTOM: 'bottom',
+    BOTTOM_RIGHT: 'bottom-right'
+} as const;
+
+export const WATERMARK_SIZES = {
+    SMALL: 'small',
+    MEDIUM: 'medium',
+    LARGE: 'large',
+    EXTRA_LARGE: 'extra-large'
+} as const;
+
 export const CROP_MARGIN = 10;
 
 // ================================
@@ -247,6 +266,17 @@ export const DEFAULT_PROCESSING_CONFIG = {
     filters: {
         enabled: true,
         selectedFilter: 'none'
+    },
+    watermark: {
+        enabled: false,
+        type: 'text' as const,
+        text: 'LEMGENDA',
+        image: null,
+        position: 'bottom-right',
+        opacity: 0.5,
+        size: 'medium' as const,
+        color: '#ffffff',
+        fontSize: 24
     }
 };
 

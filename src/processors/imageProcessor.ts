@@ -19,10 +19,11 @@ import {
 } from '../constants';
 
 import { applyImageFilter } from './filterProcessor';
+import { applyWatermark } from './watermarkProcessor';
 
 
 import { DEFAULT_PLACEHOLDER_DIMENSIONS, APP_TEMPLATE_CONFIG } from '../configs/templateConfigs';
-import { TemplateConfig } from '../types'; // Check if TemplateConfig is in types/index.ts or configs. It was in types.
+import { TemplateConfig, ProcessingOptions } from '../types';
 
 import {
     createTIFFPlaceholderFile,
@@ -60,10 +61,6 @@ if (typeof window !== 'undefined' && !(window as any).UTIF) {
 
 /**
  * Processes LemGendary resize operation
- * @param {Array<ImageFile>} images - Array of image objects
- * @param {number} dimension - Target dimension
- * @param {Object} options - Processing options
- * @returns {Promise<Array<any>>} Array of processed images
  */
 export const processLemGendaryResize = async (images: any[], dimension: number, options: { quality?: number; format?: string } = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }): Promise<any[]> => {
 
@@ -75,11 +72,8 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
             const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
             const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
-
-
             const isSVG = isSVGFile(imageFile);
             const isTIFF = TIFF_FORMATS.includes(mimeType) || FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
-
 
             const isBMP = mimeType === 'image/bmp' || FILE_EXTENSIONS.BMP.some(ext => fileName.endsWith(ext));
             const isGIF = mimeType === 'image/gif' || FILE_EXTENSIONS.GIF.some(ext => fileName.endsWith(ext));
@@ -89,7 +83,6 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
             const conversionError: string | null = null;
 
             if (isSVG) {
-                // Handle SVG resize
                 try {
                     const dimensions = await getSVGDimensions(imageFile);
                     let newWidth, newHeight;
@@ -117,7 +110,6 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
                     });
 
                 } catch (svgError: any) {
-                    // SVG error handling
                     const errorFile = await createSVGErrorPlaceholder(image, dimension, svgError.message);
                     results.push({
                         original: image,
@@ -129,18 +121,13 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
                         aspectRatioPreserved: false
                     });
                 }
-
             } else {
-                // Handle regular or legacy image resize
                 try {
                     let processableFile = imageFile;
                     if (isTIFF) {
                         try {
-                            // Attempting TIFF conversion
                             processableFile = await convertTIFFForProcessing(imageFile);
-
                         } catch (_err: any) {
-                            // TIFF conversion failed
                             if (isTIFF) {
                                 processableFile = await createTIFFPlaceholderFile(imageFile, dimension, dimension);
                             }
@@ -148,9 +135,7 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
                     } else if (isBMP || isGIF || isICO) {
                         try {
                             processableFile = await legacyConverter(imageFile);
-                        } catch {
-                            // conversionError = error.message;
-                        }
+                        } catch { /* ignored */ }
                     }
 
                     processedFile = await (resizeImageWithAI as any)(processableFile, dimension, options);
@@ -181,7 +166,6 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
                     });
                 }
             }
-
         } catch (error: any) {
             const errorFile = await createErrorPlaceholder(image, dimension, error.message);
             results.push({
@@ -194,19 +178,11 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
             });
         }
     }
-
     return results;
 };
 
-
 /**
  * Processes image crop operation
- * @param {Array<ImageFile>} images - Array of image objects
- * @param {number} width - Target width
- * @param {number} height - Target height
- * @param {string} cropPosition - Crop position
- * @param {Object} options - Processing options
- * @returns {Promise<Array<any>>} Array of processed images
  */
 export const processLemGendaryCrop = async (
     images: any[],
@@ -220,19 +196,14 @@ export const processLemGendaryCrop = async (
     for (const image of images) {
         try {
             const imageFile = await ensureFileObject(image);
-
             const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
             const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
-
-
-            const isTIFF = TIFF_FORMATS.includes(mimeType) ||
-                FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
+            const isTIFF = TIFF_FORMATS.includes(mimeType) || FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
             const isBMP = mimeType === 'image/bmp' || FILE_EXTENSIONS.BMP.some(ext => fileName.endsWith(ext));
             const isGIF = mimeType === 'image/gif' || FILE_EXTENSIONS.GIF.some(ext => fileName.endsWith(ext));
             const isICO = mimeType === 'image/x-icon' || mimeType === 'image/vnd.microsoft.icon' || FILE_EXTENSIONS.ICO.some(ext => fileName.endsWith(ext));
             const isSVG = mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext));
-
 
             let croppedFile: File;
 
@@ -251,9 +222,7 @@ export const processLemGendaryCrop = async (
                 } else if (isBMP || isGIF || isICO) {
                     try {
                         processableFile = await legacyConverter(imageFile);
-                    } catch {
-                        // conversionError = error.message;
-                    }
+                    } catch { /* ignored */ }
                 }
 
                 if (options.cropMode === CROP_MODES.SMART) {
@@ -269,7 +238,6 @@ export const processLemGendaryCrop = async (
 
             let optimizedFile: File;
             if (options.skipOptimization) {
-                // Bypass optimization/filtering if requested (for pipeline chaining)
                 optimizedFile = croppedFile;
             } else {
                 optimizedFile = await processLengendaryOptimize(croppedFile, options.quality, options.format);
@@ -322,16 +290,11 @@ export const processLemGendaryCrop = async (
             });
         }
     }
-
     return results;
 };
 
 /**
  * Processes images for template requirements
- * @param {Array<ImageFile>} images - Array of image objects
- * @param {Array<TemplateConfig>} templates - Array of template configurations
- * @param {Object} options - Processing options
- * @returns {Promise<Array<any>>} Processed images
  */
 export const processImagesForTemplates = async (images: any[], templates: TemplateConfig[], options: any = {}): Promise<any[]> => {
     const results: any[] = [];
@@ -340,7 +303,6 @@ export const processImagesForTemplates = async (images: any[], templates: Templa
         const imageResults: any[] = [];
 
         for (const template of templates) {
-
             try {
                 const croppedFile = await (processTemplateSmartCrop as any)(
                     image.file,
@@ -354,13 +316,11 @@ export const processImagesForTemplates = async (images: any[], templates: Templa
                     template.format || options.format || IMAGE_FORMATS.WEBP
                 );
 
-
                 imageResults.push({
                     template: template.name,
                     description: template.description,
                     file: optimizedFile,
                     dimensions: { width: template.width, height: template.height },
-                    // Safely calculate aspect ratio
                     aspectRatio: template.aspectRatio ||
                         (typeof template.width === 'number' && typeof template.height === 'number'
                             ? template.width / template.height
@@ -370,7 +330,6 @@ export const processImagesForTemplates = async (images: any[], templates: Templa
                 });
 
             } catch (error: any) {
-
                 imageResults.push({
                     template: template.name,
                     description: template.description,
@@ -385,25 +344,19 @@ export const processImagesForTemplates = async (images: any[], templates: Templa
             templateResults: imageResults
         });
     }
-
     return results;
 };
 
 /**
  * Optimizes image for web delivery
- * @param {File} imageFile - Image file
- * @param {number} quality - Quality level
- * @param {string} format - Output format
- * @param {string} filter - Filter type
- * @param {number} targetSize - Target file size
- * @returns {Promise<File>} Optimized image file
  */
 export const processLengendaryOptimize = async (
     imageFile: File,
     quality: number = DEFAULT_QUALITY,
     format: string = IMAGE_FORMATS.WEBP,
     filter: string = IMAGE_FILTERS.NONE,
-    targetSize: number | null = null
+    _targetSize: number | null = null,
+    processingOptions: Partial<ProcessingOptions> = {}
 ): Promise<File> => {
     if (!imageFile || typeof imageFile !== 'object') {
         throw new Error(ERROR_MESSAGES.INVALID_IMAGE_FILE);
@@ -412,20 +365,11 @@ export const processLengendaryOptimize = async (
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
-    const isTIFF = TIFF_FORMATS.includes(mimeType) ||
-        FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
-
     if (mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext))) {
         try {
-            return await convertSVGToRaster(imageFile,
-                DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
-                DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
-                format);
+            return await convertSVGToRaster(imageFile, DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE, DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE, format);
         } catch {
-            return await createSVGPlaceholderWithAspectRatio(imageFile,
-                DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
-                DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE,
-                format);
+            return await createSVGPlaceholderWithAspectRatio(imageFile, DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE, DEFAULT_PLACEHOLDER_DIMENSIONS.MAX_SIZE, format);
         }
     }
 
@@ -441,7 +385,7 @@ export const processLengendaryOptimize = async (
         try {
             processedFile = await legacyConverter(imageFile);
         } catch {
-            if (isTIFF) {
+            if (TIFF_FORMATS.includes(mimeType)) {
                 processedFile = await createTIFFPlaceholderFile(imageFile);
             } else {
                 processedFile = await createSimpleLegacyConversion(imageFile);
@@ -450,14 +394,10 @@ export const processLengendaryOptimize = async (
     }
 
     if (format === IMAGE_FORMATS.ORIGINAL) {
-        if (isLegacyFormat) {
-            return processedFile;
-        }
-        return imageFile;
+        return isLegacyFormat ? processedFile : imageFile;
     }
 
     const hasTransparency = await checkImageTransparency(processedFile);
-
     const needsWhiteBackground = (format === IMAGE_FORMATS.JPG || format === IMAGE_FORMATS.JPEG) && hasTransparency;
 
     return new Promise((resolve, reject) => {
@@ -478,7 +418,6 @@ export const processLengendaryOptimize = async (
 
         img.onload = async () => {
             clearTimeout(timeout);
-
             try {
                 if (img.naturalWidth === 0 || img.naturalHeight === 0) {
                     URL.revokeObjectURL(objectUrl);
@@ -504,47 +443,34 @@ export const processLengendaryOptimize = async (
 
                 ctx.drawImage(img, 0, 0);
 
-                // Apply filter if selected
+                // 4. Apply filter if selected (before watermark)
                 if (filter && filter !== IMAGE_FILTERS.NONE) {
                     try {
                         const filteredCanvas = await applyImageFilter(canvas, filter);
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
                         ctx.drawImage(filteredCanvas, 0, 0);
-                    } catch (_filterError) {
-                        // Fail silently or handle filter error if needed
+                    } catch { /* Fail silently */ }
+                }
+
+                // 5. Apply watermark if enabled (after filter)
+                if (processingOptions?.watermark?.enabled) {
+                    await applyWatermark(canvas, processingOptions.watermark as any);
+                }
+
+                const mimeStr = MIME_TYPE_MAP[format as keyof typeof MIME_TYPE_MAP] || MIME_TYPE_MAP.webp;
+                const extension = format === IMAGE_FORMATS.ORIGINAL ? 'webp' : format.toLowerCase();
+
+                canvas.toBlob(blob => {
+                    URL.revokeObjectURL(objectUrl);
+                    if (blob) {
+                        const originalName = imageFile.name || 'image';
+                        const baseName = originalName.replace(/\.[^/.]+$/, '');
+                        const newName = `${baseName}.${extension}`;
+                        resolve(new File([blob], newName, { type: mimeStr }));
+                    } else {
+                        reject(new Error('Image encoding failed'));
                     }
-                }
-
-
-                const mimeType: string = MIME_TYPE_MAP.webp;
-                const extension: string = 'webp';
-                const currentQuality: number | undefined = quality;
-                let encodedBlob: Blob | null = null;
-
-
-                // Canvas API encoding (native browser support for WebP, JPEG, PNG, AVIF)
-                encodedBlob = await new Promise<Blob>((resolve, reject) => {
-                    canvas.toBlob(
-                        blob => blob ? resolve(blob) : reject(new Error('Image encoding failed')),
-                        mimeType,
-                        currentQuality || quality
-                    );
-                });
-
-                // File size target logic would need re-implementation for WASM iterative compression.
-                // For MVP WASM implementation, we are skipping the complex 'targetSize' iterative loop
-                // and focusing on direct encoding quality.
-
-                URL.revokeObjectURL(objectUrl);
-
-                const originalName = imageFile.name || 'image';
-                const baseName = originalName.replace(/\.[^/.]+$/, '');
-                const newName = `${baseName}.${extension}`;
-                if (!encodedBlob) {
-                    reject(new Error(PROCESSING_ERRORS.BLOB_CREATION_FAILED));
-                    return;
-                }
-                resolve(new File([encodedBlob], newName, { type: mimeType }));
+                }, mimeStr, quality);
 
             } catch (error: any) {
                 URL.revokeObjectURL(objectUrl);
@@ -555,23 +481,7 @@ export const processLengendaryOptimize = async (
         img.onerror = () => {
             clearTimeout(timeout);
             URL.revokeObjectURL(objectUrl);
-
-            if (isTIFF) {
-                createTIFFPlaceholderFile(imageFile)
-                    .then((placeholderFile) => {
-                        processLengendaryOptimize(placeholderFile, quality, format, filter, targetSize)
-                            .then(resolve)
-
-                            .catch(() => {
-                                resolve(placeholderFile);
-                            });
-                    })
-                    .catch(() => {
-                        reject(new Error(ERROR_MESSAGES.TIFF_CONVERSION_FAILED));
-                    });
-            } else {
-                reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
-            }
+            reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
         };
 
         img.src = objectUrl;
@@ -580,13 +490,11 @@ export const processLengendaryOptimize = async (
 
 /**
  * Gets processing configuration from options
- * @param {Object} processingOptions - Processing options
- * @returns {Object} Processing configuration
  */
 export const getProcessingConfiguration = (processingOptions: any): any => {
-    const config = {
+    return {
         compression: {
-            quality: parseInt(processingOptions.compression?.quality || 80) / 100,
+            quality: (processingOptions.compression?.quality || 80) / 100,
             targetSize: processingOptions.compression?.fileSize ? parseInt(processingOptions.compression.fileSize) : null
         },
         output: {
@@ -595,8 +503,8 @@ export const getProcessingConfiguration = (processingOptions: any): any => {
             newFileName: processingOptions.output?.newFileName || ''
         },
         resize: {
-            enabled: !!processingOptions.showResize,
-            dimension: parseInt(processingOptions.resizeDimension || '1200')
+            enabled: processingOptions.showResize || false,
+            dimension: processingOptions.resizeDimension ? parseInt(processingOptions.resizeDimension) : 1200
         },
         crop: {
             enabled: !!processingOptions.showCrop,
@@ -614,9 +522,17 @@ export const getProcessingConfiguration = (processingOptions: any): any => {
             enabled: processingOptions.filters?.enabled || false,
             selectedFilter: processingOptions.filters?.selectedFilter || IMAGE_FILTERS.NONE
         },
+        watermark: {
+            enabled: processingOptions.watermark?.enabled || false,
+            type: processingOptions.watermark?.type || 'text',
+            text: processingOptions.watermark?.text || 'LEMGENDA',
+            image: processingOptions.watermark?.image || null,
+            position: processingOptions.watermark?.position || 'bottom-right',
+            opacity: parseFloat(processingOptions.watermark?.opacity || '0.5'),
+            size: processingOptions.watermark?.size || 'medium',
+            color: processingOptions.watermark?.color || '#ffffff',
+            fontSize: parseInt(processingOptions.watermark?.fontSize || '24')
+        },
         processingMode: processingOptions.processingMode
     };
-
-    return config;
 };
-

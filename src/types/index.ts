@@ -84,6 +84,18 @@ export interface FilterOptions {
     selectedFilter: string;
 }
 
+export interface WatermarkOptions {
+    enabled: boolean;
+    type: 'text' | 'image';
+    text?: string;
+    image?: string | null; // URL or Base64
+    position: string;
+    opacity: number; // 0.1 to 1.0 (internal), 10-100 (UI)
+    size: 'small' | 'medium' | 'large' | 'extra-large';
+    color?: string;
+    fontSize?: number;
+}
+
 export interface ProcessingOptions {
     processingMode: ProcessingMode;
     output: OutputOptions;
@@ -107,6 +119,7 @@ export interface ProcessingOptions {
     smartCrop: boolean;
     batchRename?: BatchRenameOptions;
     filters?: FilterOptions;
+    watermark?: WatermarkOptions;
 }
 
 // Template System

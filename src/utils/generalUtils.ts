@@ -246,13 +246,15 @@ export const orchestrateCustomProcessing = async (
                     });
                 } else {
                     // 3. Filter & Optimize (Compression / Format Conversion)
-                    // This creates the final Blob/File with the filter applied.
+                    // This creates the final Blob/File
+                    // Final optimization and watermark
                     const optimizedFile: Blob = await processLengendaryOptimize(
                         processedFile,
                         processingConfig.output.quality || 0.8,
                         format,
                         filter,
-                        (processingConfig.output as any).targetSize
+                        (processingConfig.output as any).targetSize,
+                        processingConfig // Pass full config which includes watermark
                     );
 
                     // 4. Rename Logic (Post-Optimization)

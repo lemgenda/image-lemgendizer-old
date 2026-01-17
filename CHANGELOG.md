@@ -3,6 +3,25 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.3.0] - 2026-01-17
+----------------------
+
+### New Features
+
+*   **Advanced Watermarking**: Comprehensive watermarking system with text and image support
+    *   **Text Watermarks**: Customizable text, font size, color, and opacity
+    *   **Image Watermarks**: Upload custom logos/icons as watermarks
+    *   **Intelligent Positioning**: 9 standard positions (corners, edges, center)
+    *   **Size Presets**: Small, Medium, Large, and Extra Large scaling options
+    *   **Opacity Control**: Fine-grained visibility adjustments (10% to 100%)
+*   **Refined Processing Pipeline**: Optimized processing order (Filter -> Watermark -> Compress) to ensure watermarks are applied to filtered images but remain sharp during final compression.
+
+### Improvements & Stability
+
+*   **State Robustness**: Enhanced `ProcessingContext` with exhaustive state merging to prevent partial state corruption.
+*   **UI Stability**: Fixed "controlled input changing to uncontrolled" warnings in `WatermarkCard` using ultra-robust prop casting and fallbacks.
+*   **Localization**: Standardized i18n keys for consistent translation mapping across all UI components.
+
 [3.2.0] - 2026-01-14
 ----------------------
 

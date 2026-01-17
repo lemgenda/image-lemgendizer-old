@@ -25,3 +25,4 @@ export { default as FilterSelectionCard } from './FilterSelectionCard';
 export { default as ErrorBoundary } from './ErrorBoundary';
 export { default as SVGFilters } from './SVGFilters';
 export { default as FilteredPreview } from './FilteredPreview';
+export { default as WatermarkCard } from './WatermarkCard';

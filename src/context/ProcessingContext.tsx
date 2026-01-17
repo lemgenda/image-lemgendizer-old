@@ -232,7 +232,10 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
             zerosPadding: 3,
             dateFormat: 'YYYY-MM-DD'
         },
-        faviconMode: 'basic' as 'basic' | 'complete'
+        faviconMode: 'basic' as 'basic' | 'complete',
+        watermark: {
+            ...DEFAULT_PROCESSING_CONFIG.watermark
+        }
     });
     // userInteractedWithModal state removed
 
@@ -752,17 +755,19 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
 
     const handleOptionChange = (category: keyof ProcessingOptions, key: string, value: any) => {
         setProcessingOptions(prev => {
-            const categoryValue = prev[category];
-            if (typeof categoryValue === 'object' && categoryValue !== null) {
-                return {
-                    ...prev,
-                    [category]: {
-                        ...categoryValue,
-                        [key]: value
-                    }
-                };
-            }
-            return prev;
+            // Get the default values for this category to ensure full object structure
+            const categoryDefaults = (DEFAULT_PROCESSING_CONFIG as any)[category] || {};
+            // Get the current values in state
+            const currentCategoryState = prev[category] || {};
+
+            return {
+                ...prev,
+                [category]: {
+                    ...categoryDefaults,
+                    ...currentCategoryState,
+                    [key]: value
+                }
+            };
         });
     };
 
