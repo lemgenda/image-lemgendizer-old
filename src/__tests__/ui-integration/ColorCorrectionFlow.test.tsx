@@ -1,7 +1,7 @@
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import ColorCorrectionCard from '../ColorCorrectionCard';
+import ColorCorrectionCard from '../../components/ColorCorrectionCard';
 import * as ProcessingContext from '../../context/ProcessingContext';
 
 // Mock translations
