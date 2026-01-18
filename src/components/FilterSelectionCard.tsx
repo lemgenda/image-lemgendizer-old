@@ -10,6 +10,7 @@ interface FilterSelectionCardProps {
     selectedFilter: string;
     onFilterChange: (filter: string) => void;
     t: (key: string, params?: any) => string;
+    disabled?: boolean;
 }
 
 /**
@@ -18,7 +19,7 @@ interface FilterSelectionCardProps {
  * @param {FilterSelectionCardProps} props - Component props.
  * @returns {JSX.Element} The rendered filter selection card.
  */
-const FilterSelectionCard = ({ selectedFilter, onFilterChange, t }: FilterSelectionCardProps) => {
+const FilterSelectionCard = ({ selectedFilter, onFilterChange, t, disabled = false }: FilterSelectionCardProps) => {
     const filtersGridRef = useRef<HTMLDivElement>(null);
 
     const filters = [
@@ -71,7 +72,7 @@ const FilterSelectionCard = ({ selectedFilter, onFilterChange, t }: FilterSelect
     }, []);
 
     return (
-        <div className="card filter-selection-card">
+        <div className={`card filter-selection-card ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
             <h3 className="card-title">
                 <i className="fas fa-magic"></i> {t('filters.title')}
             </h3>
@@ -81,7 +82,8 @@ const FilterSelectionCard = ({ selectedFilter, onFilterChange, t }: FilterSelect
                     <button
                         key={filter.id}
                         className={`filter-item ${selectedFilter === filter.id ? 'active' : ''}`}
-                        onClick={() => onFilterChange(filter.id)}
+                        onClick={() => !disabled && onFilterChange(filter.id)}
+                        disabled={disabled}
                         title={t(`filters.description.${filter.id}`) || filter.id}
                     >
                         <div className="filter-icon">
@@ -93,8 +95,6 @@ const FilterSelectionCard = ({ selectedFilter, onFilterChange, t }: FilterSelect
                     </button>
                 ))}
             </div>
-
-
         </div>
     );
 };

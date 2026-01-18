@@ -36,6 +36,7 @@ interface UploadGallerySectionProps {
     formatFileSize: (size: number) => string;
     selectedFilter?: string;
     watermarkOptions?: WatermarkOptions;
+    colorCorrectionOptions?: any;
 }
 
 /**
@@ -54,7 +55,8 @@ function UploadGallerySection({
     onRemoveSelected,
     formatFileSize,
     selectedFilter = 'none',
-    watermarkOptions
+    watermarkOptions,
+    colorCorrectionOptions
 }: UploadGallerySectionProps) {
     const { t } = useTranslation();
     const [imagePreviews, setImagePreviews] = useState<Record<string, PreviewData>>({});
@@ -345,6 +347,7 @@ function UploadGallerySection({
                                             <FilteredPreview
                                                 src={previewUrl}
                                                 filter={selectedFilter}
+                                                colorCorrection={colorCorrectionOptions}
                                                 watermark={watermarkOptions}
                                                 alt=""
                                                 className={`gallery-image-preview ${showRealPreview ? 'preview-visible' : 'preview-hidden'}`}

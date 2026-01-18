@@ -248,9 +248,10 @@ export const orchestrateCustomProcessing = async (
 
 
             for (const format of outputFormats) {
-                // Determine if we need to force optimization (for watermark or filter) even on original format
+                // Determine if we need to force optimization (for watermark, filter, or color correction) even on original format
                 const needsProcessing = processingConfig.watermark?.enabled ||
-                    (filter && filter !== IMAGE_FILTERS.NONE);
+                    (filter && filter !== IMAGE_FILTERS.NONE) ||
+                    processingConfig.colorCorrection?.enabled;
 
 
 

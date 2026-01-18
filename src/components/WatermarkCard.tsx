@@ -1,3 +1,4 @@
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     WATERMARK_POSITIONS,
@@ -66,7 +67,7 @@ function WatermarkCard({
 
     return (
         <div className="watermark-card card">
-            <h3 className="watermark-card-title">
+            <h3 className="card-title">
                 <i className="fas fa-copyright"></i> {t('watermark.title')}
             </h3>
 

@@ -17,6 +17,13 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
     label,
     className = ''
 }) => {
+    const handleChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = e.target.value;
+        if (newValue !== value) {
+            onChange(newValue);
+        }
+    }, [value, onChange]);
+
     return (
         <div className={`form-group ${className}`}>
             {label && <label className="form-label">{label}</label>}
@@ -25,7 +32,7 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
                     type="color"
                     className="form-control form-control-color"
                     value={value || '#ffffff'}
-                    onChange={(e) => onChange(e.target.value)}
+                    onChange={handleChange}
                 />
                 <span className="text-xs font-mono text-muted">{(value || '#ffffff').toUpperCase()}</span>
             </div>

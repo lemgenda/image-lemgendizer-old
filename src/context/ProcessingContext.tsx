@@ -14,6 +14,7 @@ import {
     generateExportSettings,
     preloadUpscalerModel
 } from '../processors';
+import { warmupAIModels } from '../utils/aiWorkerUtils';
 import {
     createImageObjects,
     createProcessingSummary,
@@ -51,6 +52,7 @@ import {
     CROP_MODES,
     ALL_OUTPUT_FORMATS,
     DEFAULT_PROCESSING_CONFIG,
+    DEFAULT_COLOR_CORRECTION,
     MODAL_TYPES,
     NUMBER_INPUT_CONSTANTS,
     IMAGE_FORMATS,
@@ -119,6 +121,8 @@ interface ProcessingContextValue {
     handleSelectAllInCategory: (categoryId: string) => void;
     handleDeselectAllInCategory: (categoryId: string) => void;
     handleOptionChange: (category: keyof ProcessingOptions, key: string, value: any) => void;
+    handleColorCorrectionChange: (key: string, value: any) => void;
+    toggleColorCorrection: (enabled: boolean) => void;
     handleSingleOptionChange: (key: keyof ProcessingOptions, value: any) => void;
     applyRenamePatternToCustom: () => void;
     processCustomImages: () => Promise<void>;
@@ -159,7 +163,7 @@ export const useProcessingContext = (): ProcessingContextValue => {
  * @param {ProcessingProviderProps} props - Component props containing children.
  * @returns {JSX.Element} The provider component.
  */
-export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
+export const ProcessingProvider = ({ children }: ProcessingProviderProps): React.ReactElement => {
     const { t } = useTranslation();
     const [isScreenshotMode, setIsScreenshotMode] = useState(false);
     const [isFaviconSelected, setIsFaviconSelected] = useState(false);
@@ -226,11 +230,11 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
     // userInteractedWithModal state removed
 
 
-    // Refs
+
     const autoCloseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-    // Initial Effects
+
     useEffect(() => {
         return () => {
             if (autoCloseTimeoutRef.current) {
@@ -310,6 +314,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                 if (model && (model.modelType || typeof model.detect === 'function')) {
                     setAiModelLoaded(true);
                     setAiLoading(false);
+                    // Trigger background warmup for all models
+                    warmupAIModels();
                 } else {
                     throw new Error('AI model failed to load');
                 }
@@ -378,7 +384,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         autoCloseTimeoutRef.current = autoClose.ref;
     }, [t, closeModal]);
 
-    // Handlers
+
     const updateProcessingModal = (progress: number, step: string, title = t('message.processing')) => {
         setModal({
             isOpen: true,
@@ -745,14 +751,45 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         }));
     };
 
-    const handleOptionChange = (category: keyof ProcessingOptions, key: string, value: any) => {
+    const handleColorCorrectionChange = useCallback((key: string, value: any) => {
+        setProcessingOptions(prev => ({
+            ...prev,
+            filters: {
+                ...prev.filters,
+                enabled: false,
+                selectedFilter: 'none'
+            },
+            colorCorrection: {
+                ...(prev.colorCorrection || DEFAULT_COLOR_CORRECTION),
+                enabled: true,
+                [key]: value
+            }
+        }));
+    }, []);
+
+    const toggleColorCorrection = useCallback((enabled: boolean) => {
+        setProcessingOptions(prev => ({
+            ...prev,
+            filters: enabled ? {
+                ...prev.filters,
+                enabled: false,
+                selectedFilter: 'none'
+            } : prev.filters,
+            colorCorrection: {
+                ...(prev.colorCorrection || DEFAULT_COLOR_CORRECTION),
+                enabled
+            }
+        }));
+    }, []);
+
+    const handleOptionChange = useCallback((category: keyof ProcessingOptions, key: string, value: any) => {
         setProcessingOptions(prev => {
             // Get the default values for this category to ensure full object structure
             const categoryDefaults = (DEFAULT_PROCESSING_CONFIG as any)[category] || {};
             // Get the current values in state
             const currentCategoryState = prev[category] || {};
 
-            return {
+            let newState = {
                 ...prev,
                 [category]: {
                     ...categoryDefaults,
@@ -760,8 +797,21 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                     [key]: value
                 }
             };
+
+            // Mutual Exclusivity: Filters vs Color Correction
+            if (category === 'filters' && key === 'selectedFilter' && value !== 'none') {
+                newState = {
+                    ...newState,
+                    colorCorrection: {
+                        ...DEFAULT_COLOR_CORRECTION,
+                        enabled: false
+                    }
+                };
+            }
+
+            return newState;
         });
-    };
+    }, []);
 
     const handleSingleOptionChange = (key: keyof ProcessingOptions, value: any) => {
         setProcessingOptions(prev => ({
@@ -852,7 +902,10 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
 
             const settings = generateExportSettings(EXPORT_SETTINGS.CUSTOM, {
                 includeOptimized: true,
-                includeOriginal: true
+                includeOriginal: true,
+                watermark: processingOptions.watermark,
+                filters: processingOptions.filters,
+                colorCorrection: processingOptions.colorCorrection
             });
 
             let zipBlob;
@@ -868,6 +921,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                 if (!zipBlob) {
                     throw new Error('Failed to create zip file');
                 }
+
             } catch (zipError) {
                 // Failed to create zip
                 throw new Error(`Failed to create zip file: ${(zipError as Error).message}`);
@@ -1040,7 +1094,10 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                 includeWebImages: true,
                 includeLogoImages: true,
                 includeSocialMedia: true,
-                createFolders: true
+                createFolders: true,
+                watermark: processingOptions.watermark,
+                filters: processingOptions.filters,
+                colorCorrection: processingOptions.colorCorrection
             });
 
             const zipBlob = await createExportZip(
@@ -1223,7 +1280,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         setSelectedImages(images.map(img => img.id));
     };
 
-    // Derived State
+
     const selectedImagesForProcessing = getSelectedImagesForProcessing(
         images,
         selectedImages,
@@ -1262,7 +1319,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         setIsScreenshotMode,
         setScreenshotUrl,
 
-        // Handlers
+
         updateProcessingModal,
         startProcessingModal,
         handleScreenshotUrlChange,
@@ -1287,6 +1344,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         handleSelectAllInCategory,
         handleDeselectAllInCategory,
         handleOptionChange,
+        handleColorCorrectionChange,
+        toggleColorCorrection,
         handleSingleOptionChange,
         applyRenamePatternToCustom,
         processCustomImages,
@@ -1296,7 +1355,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         downloadScreenshotZip,
         handleCaptureScreenshots,
 
-        // Derived
+
         selectedImagesForProcessing,
         templateCategories,
         templateSelectedImageObj,

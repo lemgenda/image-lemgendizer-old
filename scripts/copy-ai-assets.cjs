@@ -102,16 +102,32 @@ ASSETS_TO_COPY.forEach(asset => {
             }
 
             // Patch 2: Fix "no matching constructor for vec3<f32>(i32, i32, i32)" error
-            // The issue causes a crash when using WebGPU backend with certain models.
-            // We replace the faulty shader generation string with one that explicitly casts to f32.
-            const faultyShader = 'resData = vec3<f32>(x[xIndex], x[xIndex + 1], x[xIndex + 2]);';
-            const fixedShader = 'resData = vec3<f32>(f32(x[xIndex]), f32(x[xIndex + 1]), f32(x[xIndex + 2]));';
-
-            if (content.includes(faultyShader)) {
-                content = content.replace(faultyShader, fixedShader);
-                console.log('Patched tf-backend-webgpu.min.js: Fixed vec3<f32> constructor shader error.');
+            // Use Regex to be robust against minification variable names
+            const vec3Regex = /resData=vec3<f32>\(([^,]+),([^,]+),([^)]+)\);/g;
+            if (vec3Regex.test(content)) {
+                content = content.replace(vec3Regex, 'resData=vec3<f32>(f32($1),f32($2),f32($3));');
+                console.log('Patched tf-backend-webgpu.min.js: Fixed vec3<f32> constructor shader error (Regex).');
             } else {
-                console.warn('Warning: Could not find vec3<f32> shader pattern to patch.');
+                // Try alternate formatting (spaces) just in case
+                const vec3RegexSpaces = /resData = vec3<f32>\(([^,]+), ([^,]+), ([^)]+)\);/g;
+                if (vec3RegexSpaces.test(content)) {
+                    content = content.replace(vec3RegexSpaces, 'resData = vec3<f32>(f32($1), f32($2), f32($3));');
+                    console.log('Patched tf-backend-webgpu.min.js: Fixed vec3<f32> constructor shader error (Regex/Spaces).');
+                } else {
+                    console.warn('Warning: Could not find vec3<f32> shader pattern to patch.');
+                }
+            }
+
+            // Patch 3: Disable Einsum to preventing crashing/glitches
+            // Simple rename of the kernel so it's not found
+            if (content.includes('kernelName:"Einsum"')) {
+                content = content.replace('kernelName:"Einsum"', 'kernelName:"Einsum_Disabled"');
+                console.log('Patched tf-backend-webgpu.min.js: Disabled Einsum kernel (Simple Rename).');
+            } else if (content.includes("kernelName:'Einsum'")) {
+                content = content.replace("kernelName:'Einsum'", "kernelName:'Einsum_Disabled'");
+                console.log('Patched tf-backend-webgpu.min.js: Disabled Einsum kernel (Simple Rename Single Quote).');
+            } else {
+                console.warn('Warning: Could not find Einsum kernel registration to patch.');
             }
 
             fs.writeFileSync(destPath, content);

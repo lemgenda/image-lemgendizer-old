@@ -1,8 +1,5 @@
-/**
- * @file filterProcessor.ts
- * @description Provides image filtering capabilities using the CamanJS library.
- */
 import { IMAGE_FILTERS } from '../constants';
+import { ColorCorrectionOptions } from '../types';
 
 // Cache for CamanJS loading promise
 let camanLoadingPromise: Promise<void> | null = null;
@@ -43,21 +40,20 @@ function loadCamanJS(): Promise<void> {
 }
 
 /**
- * Applies a specific image filter to the provided canvas or image element.
- * This function orchestrates the dynamic loading of CamanJS and the application
- * of standard or custom filters (like elliptical vignettes).
+ * Applies image adjustments and/or a specific image filter to the provided canvas or image element.
  *
  * @param {HTMLImageElement | HTMLCanvasElement} source - Source image or canvas element.
  * @param {string} filterType - Type of filter to apply (from IMAGE_FILTERS).
+ * @param {ColorCorrectionOptions} [colorCorrection] - Optional color correction settings.
  * @returns {Promise<HTMLCanvasElement>} A promise resolving to the resulting filtered canvas.
  */
 export const applyImageFilter = async (
     source: HTMLImageElement | HTMLCanvasElement,
-    filterType: string
+    filterType: string,
+    colorCorrection?: ColorCorrectionOptions
 ): Promise<HTMLCanvasElement> => {
     // 1. Create a fresh canvas and copy source to it
     const canvas = document.createElement('canvas');
-    // Ensure we don't carry over previous contexts if source is a used canvas
     const width = source instanceof HTMLImageElement ? source.naturalWidth : source.width;
     const height = source instanceof HTMLImageElement ? source.naturalHeight : source.height;
 
@@ -70,7 +66,10 @@ export const applyImageFilter = async (
     }
     ctx.drawImage(source, 0, 0);
 
-    if (filterType === IMAGE_FILTERS.NONE) {
+    const hasFilter = filterType && filterType !== IMAGE_FILTERS.NONE;
+    const hasColorCorrection = colorCorrection && colorCorrection.enabled;
+
+    if (!hasFilter && !hasColorCorrection) {
         return canvas;
     }
 
@@ -78,7 +77,7 @@ export const applyImageFilter = async (
     try {
         await loadCamanJS();
     } catch (_e) {
-        return canvas; // Fail gracefully if library cannot be loaded
+        return canvas;
     }
 
     const Caman = (window as any).Caman;
@@ -86,156 +85,109 @@ export const applyImageFilter = async (
         throw new Error("CamanJS failed to initialize");
     }
 
-    // 2. Apply CamanJS Filter
+    // 2. Apply CamanJS Filter/Adjustments
     return new Promise((resolve, reject) => {
         try {
-            // Caman modifies the canvas in-place.
-            // We pass the canvas element directly.
             Caman(canvas, function (this: any) {
                 try {
-                    switch (filterType) {
-                        // --- Standard Allowed Filters ---
-                        case IMAGE_FILTERS.SEPIA:
-                            this.sepia(100);
-                            break;
-                        case IMAGE_FILTERS.BW:
-                            this.greyscale();
-                            break;
-                        case IMAGE_FILTERS.INVERT:
-                            this.invert();
-                            break;
-                        case IMAGE_FILTERS.VIGNETTE: {
-                            // Custom Elliptical Vignette: Scales with aspect ratio to avoid portrait issues
-                            const vX = this.canvas.width / 2;
-                            const vY = this.canvas.height / 2;
+                    // Apply Color Correction first if enabled
+                    if (hasColorCorrection && colorCorrection) {
+                        if (colorCorrection.brightness !== 0) this.brightness(colorCorrection.brightness);
+                        if (colorCorrection.contrast !== 0) this.contrast(colorCorrection.contrast);
+                        if (colorCorrection.saturation !== 0) this.saturation(colorCorrection.saturation);
+                        if (colorCorrection.vibrance !== 0) this.vibrance(colorCorrection.vibrance);
+                        if (colorCorrection.exposure !== 0) this.exposure(colorCorrection.exposure);
+                        if (colorCorrection.hue !== 0) this.hue(colorCorrection.hue);
+                        if (colorCorrection.sepia !== 0) this.sepia(colorCorrection.sepia);
+                        if (colorCorrection.gamma !== 1.0) this.gamma(colorCorrection.gamma);
+                        if (colorCorrection.noise !== 0) this.noise(colorCorrection.noise);
+                        if (colorCorrection.clip !== 0) this.clip(colorCorrection.clip);
+                        if (colorCorrection.sharpen !== 0) this.sharpen(colorCorrection.sharpen);
+                        if (colorCorrection.stackBlur !== 0) this.stackBlur(colorCorrection.stackBlur);
+                    }
 
-                            this.process("vignette", function (pixel: any) {
-                                const loc = pixel.locationXY();
-                                const nx = (loc.x - vX) / vX;
-                                const ny = (loc.y - vY) / vY;
-                                const dist = Math.sqrt(nx * nx + ny * ny);
-
-                                if (dist > 0.7) {
-                                    const strength = Math.pow((dist - 0.7) / 0.4, 2) * 1.5;
-                                    pixel.r = Math.pow(pixel.r / 255, 1 + strength) * 255;
-                                    pixel.g = Math.pow(pixel.g / 255, 1 + strength) * 255;
-                                    pixel.b = Math.pow(pixel.b / 255, 1 + strength) * 255;
-                                }
-                                return pixel;
-                            });
-                            break;
+                    // Apply Presets (though in our UI they are mutually exclusive)
+                    if (hasFilter) {
+                        switch (filterType) {
+                            case IMAGE_FILTERS.SEPIA: this.sepia(100); break;
+                            case IMAGE_FILTERS.BW: this.greyscale(); break;
+                            case IMAGE_FILTERS.INVERT: this.invert(); break;
+                            case IMAGE_FILTERS.VIGNETTE: {
+                                const vX = this.canvas.width / 2;
+                                const vY = this.canvas.height / 2;
+                                this.process("vignette", function (pixel: any) {
+                                    const loc = pixel.locationXY();
+                                    const nx = (loc.x - vX) / vX;
+                                    const ny = (loc.y - vY) / vY;
+                                    const dist = Math.sqrt(nx * nx + ny * ny);
+                                    if (dist > 0.7) {
+                                        const strength = Math.pow((dist - 0.7) / 0.4, 2) * 1.5;
+                                        pixel.r = Math.pow(pixel.r / 255, 1 + strength) * 255;
+                                        pixel.g = Math.pow(pixel.g / 255, 1 + strength) * 255;
+                                        pixel.b = Math.pow(pixel.b / 255, 1 + strength) * 255;
+                                    }
+                                    return pixel;
+                                });
+                                break;
+                            }
+                            case IMAGE_FILTERS.RETRO_VINTAGE: this.vintage(); break;
+                            case IMAGE_FILTERS.HDR:
+                                this.contrast(20);
+                                this.saturation(20);
+                                this.vibrance(20);
+                                break;
+                            case IMAGE_FILTERS.VINTAGE:
+                                this.greyscale();
+                                this.contrast(5);
+                                this.noise(5);
+                                this.sepia(100);
+                                this.channels({ red: 8, blue: 2, green: 4 });
+                                this.gamma(0.87);
+                                this.vignette("40%", 30);
+                                break;
+                            case IMAGE_FILTERS.LOMO: this.lomo(); break;
+                            case IMAGE_FILTERS.CLARITY: this.clarity(); break;
+                            case IMAGE_FILTERS.SIN_CITY: this.sinCity(); break;
+                            case IMAGE_FILTERS.SUNRISE: this.sunrise(); break;
+                            case IMAGE_FILTERS.CROSS_PROCESS: this.crossProcess(); break;
+                            case IMAGE_FILTERS.ORANGE_PEEL: this.orangePeel(); break;
+                            case IMAGE_FILTERS.LOVE: this.love(); break;
+                            case IMAGE_FILTERS.GRUNGY: this.grungy(); break;
+                            case IMAGE_FILTERS.JARQUES: this.jarques(); break;
+                            case IMAGE_FILTERS.PINHOLE: this.pinhole(); break;
+                            case IMAGE_FILTERS.OLD_BOOT: this.oldBoot(); break;
+                            case IMAGE_FILTERS.GLOWING_SUN: this.glowingSun(); break;
+                            case IMAGE_FILTERS.HAZY_DAYS: this.hazyDays(); break;
+                            case IMAGE_FILTERS.HER_MAJESTY: this.herMajesty(); break;
+                            case IMAGE_FILTERS.NOSTALGIA: this.nostalgia(); break;
+                            case IMAGE_FILTERS.HEMINGWAY: this.hemingway(); break;
+                            case IMAGE_FILTERS.CONCENTRATE: this.concentrate(); break;
+                            case IMAGE_FILTERS.NIGHT_VISION: {
+                                this.greyscale();
+                                this.contrast(60);
+                                this.sharpen(35);
+                                this.brightness(-10);
+                                this.colorize('#046704ff', 45);
+                                this.channels({ green: 25, red: -20, blue: -20 });
+                                this.gamma(0.6);
+                                const cX = this.canvas.width / 2;
+                                const cY = this.canvas.height / 2;
+                                this.process("vignette", function (pixel: any) {
+                                    const loc = pixel.locationXY();
+                                    const nx = (loc.x - cX) / cX;
+                                    const ny = (loc.y - cY) / cY;
+                                    const dist = Math.sqrt(nx * nx + ny * ny);
+                                    if (dist > 0.6) {
+                                        const strength = Math.pow((dist - 0.6) / 0.5, 2) * 2.0;
+                                        pixel.r = Math.pow(pixel.r / 255, 1 + strength) * 255;
+                                        pixel.g = Math.pow(pixel.g / 255, 1 + strength) * 255;
+                                        pixel.b = Math.pow(pixel.b / 255, 1 + strength) * 255;
+                                    }
+                                    return pixel;
+                                });
+                                break;
+                            }
                         }
-                        case IMAGE_FILTERS.RETRO_VINTAGE:
-                            this.vintage(); // Use Caman's vintage for Retro
-                            break;
-                        case IMAGE_FILTERS.HDR:
-                            // Approximate HDR with high contrast/vibrance/saturation
-                            this.contrast(20);
-                            this.saturation(20);
-                            this.vibrance(20);
-                            // this.sharpen(10); // Optional
-                            break;
-
-                        // --- CamanJS Presets ---
-                        case IMAGE_FILTERS.VINTAGE:
-                            // Manual vintage with film grain
-                            this.greyscale();
-                            this.contrast(5);
-                            this.noise(5); // Film grain effect (increased from default 3)
-                            this.sepia(100);
-                            this.channels({ red: 8, blue: 2, green: 4 });
-                            this.gamma(0.87);
-                            this.vignette("40%", 30);
-                            break;
-                        case IMAGE_FILTERS.LOMO:
-                            this.lomo();
-                            break;
-                        case IMAGE_FILTERS.CLARITY:
-                            this.clarity();
-                            break;
-                        case IMAGE_FILTERS.SIN_CITY:
-                            this.sinCity();
-                            break;
-                        case IMAGE_FILTERS.SUNRISE:
-                            this.sunrise();
-                            break;
-                        case IMAGE_FILTERS.CROSS_PROCESS:
-                            this.crossProcess();
-                            break;
-                        case IMAGE_FILTERS.ORANGE_PEEL:
-                            this.orangePeel();
-                            break;
-                        case IMAGE_FILTERS.LOVE:
-                            this.love();
-                            break;
-                        case IMAGE_FILTERS.GRUNGY:
-                            this.grungy();
-                            break;
-                        case IMAGE_FILTERS.JARQUES:
-                            this.jarques();
-                            break;
-                        case IMAGE_FILTERS.PINHOLE:
-                            this.pinhole();
-                            break;
-                        case IMAGE_FILTERS.OLD_BOOT:
-                            this.oldBoot();
-                            break;
-                        case IMAGE_FILTERS.GLOWING_SUN:
-                            this.glowingSun();
-                            break;
-                        case IMAGE_FILTERS.HAZY_DAYS:
-                            this.hazyDays();
-                            break;
-                        case IMAGE_FILTERS.HER_MAJESTY:
-                            this.herMajesty();
-                            break;
-                        case IMAGE_FILTERS.NOSTALGIA:
-                            this.nostalgia();
-                            break;
-                        case IMAGE_FILTERS.HEMINGWAY:
-                            this.hemingway();
-                            break;
-                        case IMAGE_FILTERS.CONCENTRATE:
-                            this.concentrate();
-                            break;
-                        case IMAGE_FILTERS.NIGHT_VISION: {
-                            // Night vision effect
-                            this.greyscale();
-                            this.contrast(60); // Even more contrast (from 45)
-                            this.sharpen(35); // Sharper (from 30)
-                            this.brightness(-10);
-                            this.colorize('#046704ff', 45);
-                            this.channels({ green: 25, red: -20, blue: -20 });
-                            this.gamma(0.6); // Lower gamma (from 0.8)
-
-                            // Custom Elliptical Vignette: Scales with aspect ratio to avoid portrait issues
-                            const cX = this.canvas.width / 2;
-                            const cY = this.canvas.height / 2;
-
-                            this.process("vignette", function (pixel: any) {
-                                const loc = pixel.locationXY();
-                                // Normalizing distance from center (-1 to 1) relative to width/height
-                                const nx = (loc.x - cX) / cX;
-                                const ny = (loc.y - cY) / cY;
-
-                                // Elliptical distance formula
-                                const dist = Math.sqrt(nx * nx + ny * ny);
-
-                                if (dist > 0.6) {
-                                    // Apply power-based darkening for smooth falloff
-                                    const strength = Math.pow((dist - 0.6) / 0.5, 2) * 2.0;
-                                    pixel.r = Math.pow(pixel.r / 255, 1 + strength) * 255;
-                                    pixel.g = Math.pow(pixel.g / 255, 1 + strength) * 255;
-                                    pixel.b = Math.pow(pixel.b / 255, 1 + strength) * 255;
-                                }
-                                return pixel;
-                            });
-                            break;
-                        }
-
-                        default:
-                            // No op
-                            break;
                     }
 
                     // Render and resolve

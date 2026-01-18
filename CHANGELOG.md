@@ -3,6 +3,23 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.6.0] - 2026-01-18
+----------------------
+
+### Major Changes
+
+*   **Production Code Cleanup**: Complete audit and cleanup of the codebase for v3.6.0 release.
+*   **Log Removal**: Removed all `console.log` and debug logging from the source code and proxy server.
+*   **Emoji Removal**: Removed all literal emojis from the source code files for a cleaner, more professional codebase.
+*   **Comment Cleanup**: Removed all non-JSDoc comments from the core logic and components.
+*   **Documentation Update**: Updated README and technical documentation to reflect v3.6.0 status.
+
+### Technical Improvements
+
+*   **Linting Compliance**: Achieved strict linting compliance with zero errors and warnings.
+*   **Version Update**: Synchronized version numbers across `package.json`, `i18n.ts`, and documentation.
+*   **Proxy Server Optimization**: Refactored proxy server to remove debug output and improve production logging.
+
 [3.5.0] - 2026-01-18
 ----------------------
 

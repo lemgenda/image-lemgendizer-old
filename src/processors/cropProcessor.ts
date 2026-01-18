@@ -489,9 +489,7 @@ function findMainSubject(predictions: any[], imgWidth: number, imgHeight: number
         const className = pred.class.toLowerCase();
         const isValid = pred.score > (AI_SETTINGS.MIN_CONFIDENCE || 0.3) &&
             !(IGNORED_OBJECTS || []).includes(className);
-        if (!isValid && pred.score > 0.1) {
-            // console.log(`[SmartCrop] Filtering out ${pred.class} (Score: ${pred.score.toFixed(2)})`);
-        }
+
         return isValid;
     });
 

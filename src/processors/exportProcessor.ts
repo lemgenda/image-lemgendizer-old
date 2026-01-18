@@ -279,7 +279,7 @@ export const createExportZip = async (
             try {
                 originalFolder?.file(image.name, image.file || image.blob);
             } catch {
-                // Ignore error adding original image
+                /* ignored */
             }
         }
     }
@@ -294,7 +294,7 @@ export const createExportZip = async (
             try {
                 renamedFolder?.file(image.name, image.file || image.blob);
             } catch {
-                // Ignore error
+                /* ignored */
             }
         }
     } else if (mode === PROCESSING_MODES.CUSTOM && validProcessedImages.length > 0) {
@@ -314,7 +314,7 @@ export const createExportZip = async (
                         }
                         formatFolder?.file(fileName, image.file || image.blob);
                     } catch {
-                        // Ignore error adding optimized image
+                        /* ignored */
                     }
                 }
             }

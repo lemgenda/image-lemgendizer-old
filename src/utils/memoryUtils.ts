@@ -177,15 +177,14 @@ export const loadAIModel = async (): Promise<any> => {
 
         aiModelLoading = false;
         return aiModel;
-    } catch (err) {
-        console.warn('Failed to load AI in worker, falling back to simple model', err);
+    } catch {
         aiModel = createSimpleAIModel();
         aiModelLoading = false;
         return aiModel;
     }
 };
 
-// Removed local loading helpers as they are now handled in the worker
+
 
 
 /**

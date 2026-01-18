@@ -58,7 +58,7 @@ function App() {
     closeModal,
     handleModalInteraction,
 
-    // Handlers
+
     handleScreenshotUrlChange,
     handleImageUpload,
     handleImageSelect,
@@ -87,7 +87,7 @@ function App() {
     processTemplates,
     handleCaptureScreenshots,
 
-    // Derived
+
     selectedImagesForProcessing,
     templateCategories,
     templateSelectedImageObj,
@@ -201,6 +201,7 @@ function App() {
                   formatFileSize={formatFileSize}
                   selectedFilter={processingOptions.filters?.selectedFilter}
                   watermarkOptions={processingOptions.watermark}
+                  colorCorrectionOptions={processingOptions.colorCorrection}
                 />
               </div>
             </div>

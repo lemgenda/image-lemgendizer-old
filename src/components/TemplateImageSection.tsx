@@ -95,6 +95,7 @@ const TemplateImageSection = ({
                 <FilteredPreview
                   src={(templateSelectedImageObj as any).url}
                   filter={processingOptions.filters?.selectedFilter || 'none'}
+                  colorCorrection={processingOptions.colorCorrection}
                   alt={templateSelectedImageObj.name}
                   className="template-image-section-tiff-img"
                 />
@@ -106,6 +107,7 @@ const TemplateImageSection = ({
               <FilteredPreview
                 src={(templateSelectedImageObj as any).url}
                 filter={processingOptions.filters?.selectedFilter || 'none'}
+                colorCorrection={processingOptions.colorCorrection}
                 alt={templateSelectedImageObj.name}
                 className="template-image-section-regular-img"
               />

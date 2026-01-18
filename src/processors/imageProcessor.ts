@@ -447,13 +447,22 @@ export const processLengendaryOptimize = async (
 
                 ctx.drawImage(img, 0, 0);
 
-                // 4. Apply filter if selected (before watermark)
-                if (filter && filter !== IMAGE_FILTERS.NONE) {
+                // 4. Apply filter or color correction if selected (before watermark)
+                const needsFilter = filter && filter !== IMAGE_FILTERS.NONE;
+                const needsColorCorrection = processingOptions.colorCorrection?.enabled;
+
+                if (needsFilter || needsColorCorrection) {
                     try {
-                        const filteredCanvas = await applyImageFilter(canvas, filter);
+                        const filteredCanvas = await applyImageFilter(
+                            canvas,
+                            filter || IMAGE_FILTERS.NONE,
+                            processingOptions.colorCorrection
+                        );
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
                         ctx.drawImage(filteredCanvas, 0, 0);
-                    } catch { /* Fail silently */ }
+                    } catch {
+                        // Do not rethrow, so the image is at least saved without filter
+                    }
                 }
 
                 // 5. Apply watermark if enabled (after filter)
@@ -538,6 +547,21 @@ export const getProcessingConfiguration = (processingOptions: any): any => {
             fontSize: parseInt(processingOptions.watermark?.fontSize || '24'),
             repeat: !!processingOptions.watermark?.repeat
         },
+        colorCorrection: processingOptions.colorCorrection ? {
+            enabled: processingOptions.colorCorrection.enabled || false,
+            brightness: parseFloat(processingOptions.colorCorrection.brightness || 0),
+            contrast: parseFloat(processingOptions.colorCorrection.contrast || 0),
+            saturation: parseFloat(processingOptions.colorCorrection.saturation || 0),
+            vibrance: parseFloat(processingOptions.colorCorrection.vibrance || 0),
+            exposure: parseFloat(processingOptions.colorCorrection.exposure || 0),
+            hue: parseFloat(processingOptions.colorCorrection.hue || 0),
+            sepia: parseFloat(processingOptions.colorCorrection.sepia || 0),
+            gamma: parseFloat(processingOptions.colorCorrection.gamma || 1),
+            noise: parseFloat(processingOptions.colorCorrection.noise || 0),
+            clip: parseFloat(processingOptions.colorCorrection.clip || 0),
+            sharpen: parseFloat(processingOptions.colorCorrection.sharpen || 0),
+            stackBlur: parseFloat(processingOptions.colorCorrection.stackBlur || 0)
+        } : undefined,
         processingMode: processingOptions.processingMode
     };
 };

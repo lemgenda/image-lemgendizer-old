@@ -1,5 +1,5 @@
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import App from '../../App';
 import * as generalUtils from '../../utils/generalUtils';
@@ -42,10 +42,16 @@ describe('Watermark Flow', () => {
         }, { timeout: 5000 });
 
         // 2. Locate Watermark Section
-        // Assuming "Custom Processing" tab or similar is visible
+        // Ensure we are on the Custom Processing tab
+        const customTab = screen.getByRole('tab', { name: /custom/i });
+        fireEvent.click(customTab);
+
         // 3. Enable Watermark
-        // It's a button that toggles. Text is "Enable" when disabled.
-        const enableBtn = screen.getByRole('button', { name: /enable/i });
+        // Scope to Watermark card to avoid conflict with Color Correction
+        // Use heading to find the card reliably
+        const watermarkHeading = screen.getByRole('heading', { name: /watermark/i });
+        const watermarkCard = watermarkHeading.closest('.card') as HTMLElement;
+        const enableBtn = within(watermarkCard).getByRole('button', { name: /enable/i });
         fireEvent.click(enableBtn);
 
         // 4. Change Watermark Text

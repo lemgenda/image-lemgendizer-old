@@ -251,6 +251,25 @@ export const WATERMARK_FONTS = [
 ] as const;
 
 /**
+ * Default color correction settings.
+ */
+export const DEFAULT_COLOR_CORRECTION = {
+    enabled: false,
+    brightness: 0,
+    contrast: 0,
+    saturation: 0,
+    vibrance: 0,
+    exposure: 0,
+    hue: 0,
+    sepia: 0,
+    gamma: 1.0,
+    noise: 0,
+    clip: 0,
+    sharpen: 0,
+    stackBlur: 0
+};
+
+/**
  * Default internal processing configuration.
  * Categories: output, resize, crop, filters, watermark
  */
@@ -293,6 +312,9 @@ export const DEFAULT_PROCESSING_CONFIG: ProcessingOptions = {
     filters: {
         enabled: false,
         selectedFilter: 'none'
+    },
+    colorCorrection: {
+        ...DEFAULT_COLOR_CORRECTION
     },
     watermark: {
         enabled: false,

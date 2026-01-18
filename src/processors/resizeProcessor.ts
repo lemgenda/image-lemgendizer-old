@@ -6,12 +6,10 @@ import {
     MAX_TOTAL_PIXELS,
     MAX_SAFE_DIMENSION,
     TILE_SIZE,
-    UPSCALING_TIMEOUT,
     PROCESSING_ERRORS,
     MAX_TEXTURE_FAILURES,
     SVG_CONSTANTS,
-    MIME_TYPE_MAP,
-    AI_SETTINGS
+    MIME_TYPE_MAP
 } from '../constants';
 
 import {
@@ -26,15 +24,9 @@ import {
 
 
 // Upscaler state management
-let upscalerInstances: Record<string, any> = {};
-let upscalerUsageCount: Record<string, number> = {};
-let upscalerLastUsed: Record<string, number> = {};
-const currentMemoryUsage = 0;
-let memoryCleanupInterval: NodeJS.Timeout | null = null;
 let aiUpscalingDisabled = false;
 let textureManagerFailures = 0;
 let cleanupInProgress = false;
-let loadingPromise: Promise<void> | null = null;
 
 /* --- Helpers --- */
 
@@ -148,72 +140,6 @@ const dataURLToCanvas = (dataURL: string): Promise<HTMLCanvasElement> => {
     });
 };
 
-/**
- * Loads upscaler and required libraries from local path
- * @returns {Promise<void>}
- */
-const loadUpscalerLibraries = (): Promise<void> => {
-    if (loadingPromise) return loadingPromise;
-
-    loadingPromise = (async () => {
-        if ((window as any).Upscaler && (window as any).tf) {
-            return;
-        }
-
-        const loadScript = (src: string): Promise<void> => {
-            return new Promise((res) => {
-                // Check if script is already loaded
-                if (document.querySelector(`script[src="${src}"]`)) {
-                    res();
-                    return;
-                }
-
-                const s = document.createElement('script');
-                s.src = src;
-                s.onload = () => res();
-                s.onerror = () => {
-                    console.warn(`[AI] Failed to load script: ${src}`);
-                    res(); // Fail silently to try next steps or fallback
-                };
-                document.head.appendChild(s);
-            });
-        };
-
-        if (!(window as any).tf) {
-            await loadScript(`${AI_SETTINGS.LOCAL_LIB_PATH}tf.min.js`);
-        }
-        // Load WebGPU backend
-        await loadScript(`${AI_SETTINGS.LOCAL_LIB_PATH}tf-backend-webgpu.min.js`);
-
-        try {
-            // Check if WebGPU is already active to avoid redundant registration logs
-            const currentBackend = (window as any).tf?.getBackend();
-            if (currentBackend !== 'webgpu') {
-                // Attempt to use WebGPU
-                await (window as any).tf.setBackend('webgpu');
-                await (window as any).tf.ready();
-                await (window as any).tf.ready();
-            } else {
-                await (window as any).tf.ready();
-            }
-        } catch (e) {
-            console.warn('[AI] WebGPU initialization failed, falling back to default:', e);
-            // Fallback will likely vary (webgl is usually default if webgpu fails or isn't set)
-            try {
-                await (window as any).tf.setBackend('webgl');
-                await (window as any).tf.ready();
-            } catch (err) {
-                console.warn('[AI] WebGL fallback also failed:', err);
-            }
-        }
-
-        if (!(window as any).Upscaler) {
-            await loadScript(`${AI_SETTINGS.LOCAL_LIB_PATH}upscaler.min.js`);
-        }
-    })();
-
-    return loadingPromise;
-};
 
 
 /**
@@ -342,6 +268,8 @@ export const processSVGResize = async (svgFile: File, width: number, height: num
 };
 
 
+import { upscaleInWorker, preloadUpscalerInWorker } from '../utils/aiWorkerUtils';
+
 /**
  * Preloads upscaler model for a specific scale
  * @param {number} scale - Scale factor
@@ -349,9 +277,9 @@ export const processSVGResize = async (svgFile: File, width: number, height: num
  */
 export const preloadUpscalerModel = async (scale: number): Promise<void> => {
     try {
-        await loadUpscalerForScale(scale);
-    } catch (err) {
-        console.warn(`[AI] Failed to preload upscaler x${scale}:`, err);
+        await preloadUpscalerInWorker(scale);
+    } catch {
+        /* ignored */
     }
 };
 
@@ -359,121 +287,45 @@ export const preloadUpscalerModel = async (scale: number): Promise<void> => {
 /**
  * Loads upscaler for specific scale
  * @param {number} scale - Scale factor
- * @returns {Promise<Object>} Upscaler instance
+ * @returns {Promise<Object>} Upscaler instance/proxy
  */
 export const loadUpscalerForScale = async (scale: number): Promise<any> => {
-    if (upscalerInstances[scale] && upscalerUsageCount[scale] !== undefined) {
-        upscalerUsageCount[scale]++;
-        upscalerLastUsed[scale] = Date.now();
-        return upscalerInstances[scale];
-    }
-
     if (scale === 8) {
-        const fallbackUpscaler = createEnhancedFallbackUpscaler(scale);
-        upscalerInstances[scale] = fallbackUpscaler;
-        upscalerUsageCount[scale] = 1;
-        upscalerLastUsed[scale] = Date.now();
-        return fallbackUpscaler;
+        return createEnhancedFallbackUpscaler(scale);
     }
 
-    const wasCleanupInProgress = cleanupInProgress;
-    cleanupInProgress = true;
-
-    try {
-        if (!(window as any).Upscaler) await loadUpscalerLibraries();
-
-        const modelPath = `${AI_SETTINGS.LOCAL_MODEL_PATH}esrgan-slim/x${scale}/model.json`;
-
-        const upscaler = new (window as any).Upscaler({
-            model: {
-                path: modelPath,
-                scale: scale
-            },
-        });
-
-        // Warmup the model with a tiny tensor if possible
-        // Note: upscalerjs doesn't expose the internal tf directly easily here
-        // but we can at least ensure instance is created.
-
-        upscalerInstances[scale] = upscaler;
-        upscalerUsageCount[scale] = 1;
-        upscalerLastUsed[scale] = Date.now();
-        cleanupInProgress = wasCleanupInProgress;
-        return upscaler;
-
-    } catch (err) {
-        console.warn(`[AI] Failed to load local model for x${scale}, falling back:`, err);
-        const fallbackUpscaler = createEnhancedFallbackUpscaler(scale);
-        upscalerInstances[scale] = fallbackUpscaler;
-        upscalerUsageCount[scale] = 1;
-        upscalerLastUsed[scale] = Date.now();
-        cleanupInProgress = wasCleanupInProgress;
-        return fallbackUpscaler;
-    }
+    // Now handled by worker, we return a proxy object
+    return {
+        isWorker: true,
+        scale,
+        upscale: async (img: HTMLImageElement) => {
+            return upscaleInWorker(img, scale);
+        }
+    };
 };
 
 /**
  * Releases upscaler for specific scale
  * @param {number} scale - Scale factor
  */
-export const releaseUpscalerForScale = (scale: number): void => {
-    if (upscalerUsageCount[scale]) {
-        upscalerUsageCount[scale]--;
-        upscalerLastUsed[scale] = Date.now();
-
-        if (upscalerUsageCount[scale] <= 0 && currentMemoryUsage > 1000) {
-            setTimeout(() => {
-                if (upscalerUsageCount[scale] <= 0) {
-                    const upscaler = upscalerInstances[scale];
-                    if (upscaler && upscaler.dispose) {
-                        try { upscaler.dispose(); } catch { /* ignored */ }
-                    }
-                    delete upscalerInstances[scale];
-                    delete upscalerUsageCount[scale];
-                    delete upscalerLastUsed[scale];
-                }
-            }, 1000);
-        }
-    }
+export const releaseUpscalerForScale = (_scale: number): void => {
+    // Worker handles its own memory/cleanup for now
 };
 
 /**
  * Safely upscales image
- * @param {Object} upscaler - Upscaler instance
+ * @param {Object} upscaler - Upscaler instance/proxy
  * @param {HTMLImageElement} img - Image element
  * @param {number} scale - Scale factor
  * @returns {Promise<Object>} Upscale result
  */
 export const safeUpscale = async (upscaler: any, img: HTMLImageElement, scale: number): Promise<any> => {
-    if (upscalerUsageCount[scale]) upscalerUsageCount[scale]++;
+    if (upscaler.isWorker) {
+        return upscaleInWorker(img, scale);
+    }
 
-    return new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-            releaseUpscalerForScale(scale);
-            reject(new Error(ERROR_MESSAGES.UPSCALING_FAILED));
-        }, UPSCALING_TIMEOUT);
-
-        try {
-            upscaler.upscale(img, {
-                patchSize: 32,
-                padding: 2,
-                output: 'tensor' // Force tensor output to avoid readSync warning on WebGPU
-            }).then((result: any) => {
-                clearTimeout(timeoutId);
-                upscalerLastUsed[scale] = Date.now();
-                releaseUpscalerForScale(scale);
-                resolve(result);
-            }).catch((error: any) => {
-                clearTimeout(timeoutId);
-                releaseUpscalerForScale(scale);
-                reject(error);
-            });
-        } catch (error) {
-            clearTimeout(timeoutId);
-            releaseUpscalerForScale(scale);
-            reject(error);
-        }
-    });
+    // Fallback for non-worker upscalers (like enhanced fallback)
+    return upscaler.upscale(img);
 };
 
 /**
@@ -673,10 +525,35 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
 
         let canvas: HTMLCanvasElement;
 
-        // Handle Tensor output (preferred for WebGPU performance)
-        // Check if it looks like a tensor (has shape and data methods/properties)
-        if (upscaleResult && typeof upscaleResult.data === 'function' && upscaleResult.shape) {
-            const tensor = upscaleResult; // It's a raw tensor
+        if (upscaleResult.data && upscaleResult.shape) {
+            // Handle worker result (Float32Array)
+            canvas = document.createElement('canvas');
+            const [height, width] = upscaleResult.shape;
+            canvas.width = width;
+            canvas.height = height;
+            const tf = (window as any).tf;
+            if (tf) {
+                // Reconstruct tensor to use toPixels for high quality
+                const tensor = tf.tensor(upscaleResult.data, [...upscaleResult.shape, 3], 'float32');
+                await tf.browser.toPixels(tensor, canvas);
+                tensor.dispose();
+            } else {
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    const imageData = ctx.createImageData(width, height);
+                    const data = upscaleResult.data;
+                    // Note: This assumes data is already in 0-255 range
+                    for (let i = 0, j = 0; i < data.length; i += 3, j += 4) {
+                        imageData.data[j] = data[i];
+                        imageData.data[j + 1] = data[i + 1];
+                        imageData.data[j + 2] = data[i + 2];
+                        imageData.data[j + 3] = 255;
+                    }
+                    ctx.putImageData(imageData, 0, 0);
+                }
+            }
+        } else if (upscaleResult && typeof upscaleResult.data === 'function' && upscaleResult.shape) {
+            const tensor = upscaleResult;
             canvas = document.createElement('canvas');
             const [height, width] = tensor.shape;
             canvas.width = width;
@@ -883,23 +760,8 @@ export const resizeImageStandard = async (imageFile: File, targetDimension: numb
  * Cleans up resize processor resources
  */
 export const cleanupResizeProcessor = (): void => {
-    Object.keys(upscalerInstances).forEach(key => {
-        const upscaler = upscalerInstances[key];
-        if (upscaler && upscaler.dispose) {
-            try { upscaler.dispose(); } catch { /* ignored */ }
-        }
-    });
-
-    upscalerInstances = {};
-    upscalerUsageCount = {};
-    upscalerLastUsed = {};
     aiUpscalingDisabled = false;
     textureManagerFailures = 0;
-
-    if (memoryCleanupInterval) {
-        clearInterval(memoryCleanupInterval);
-        memoryCleanupInterval = null;
-    }
 };
 
 /**

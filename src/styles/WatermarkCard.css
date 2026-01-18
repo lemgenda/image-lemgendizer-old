@@ -1,9 +1,9 @@
 .watermark-card.card {
-    padding: var(--spacing-md);
+    padding: var(--space-lg);
 }
 
 .watermark-card .form-group {
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--space-md);
 }
 
 .watermark-card .form-group:last-child {
@@ -11,14 +11,14 @@
 }
 
 .toggle-btn {
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--space-md);
 }
 
 .watermark-info-box {
     background-color: var(--bg-info);
     border-radius: var(--radius-sm);
-    padding: var(--spacing-sm);
-    margin-bottom: var(--spacing-md);
+    padding: var(--space-sm);
+    margin-bottom: var(--space-md);
     font-size: var(--font-size-sm);
     border-left: 4px solid var(--color-primary);
 }
@@ -28,7 +28,7 @@
     color: var(--text-muted);
     display: flex;
     align-items: flex-start;
-    gap: var(--spacing-xs);
+    gap: var(--space-xs);
 }
 
 .watermark-info-box i {

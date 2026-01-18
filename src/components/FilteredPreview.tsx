@@ -12,6 +12,7 @@ import '../styles/FilteredPreview.css';
 interface FilteredPreviewProps {
     src: string;
     filter: string;
+    colorCorrection?: any;
     watermark?: WatermarkOptions;
     alt?: string;
     className?: string;
@@ -29,6 +30,7 @@ interface FilteredPreviewProps {
 const FilteredPreview: React.FC<FilteredPreviewProps> = ({
     src,
     filter,
+    colorCorrection,
     watermark,
     alt = "",
     className = "",
@@ -37,12 +39,13 @@ const FilteredPreview: React.FC<FilteredPreviewProps> = ({
 }) => {
     const [displayUrl, setDisplayUrl] = useState<string>(src);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
-    const lastProcessed = useRef<{ src: string, filter: string, watermark?: string } | null>(null);
+    const lastProcessed = useRef<{ src: string, filter: string, colorCorrection?: string, watermark?: string } | null>(null);
     const blobUrlRef = useRef<string | null>(null);
     const [prevSrc, setPrevSrc] = useState(src);
 
-    // Create a stable string representation of watermark for dependency tracking
+    // Create stable string representations for dependency tracking
     const watermarkKey = watermark ? JSON.stringify(watermark) : 'none';
+    const colorCorrectionKey = colorCorrection ? JSON.stringify(colorCorrection) : 'none';
 
     // Sync displayUrl when src becomes empty (render phase)
     if (src !== prevSrc) {
@@ -59,14 +62,15 @@ const FilteredPreview: React.FC<FilteredPreviewProps> = ({
             return;
         }
 
-        // If no filter AND no enabled watermark
-        if ((filter === IMAGE_FILTERS.NONE || !filter) && (!watermark || !watermark.enabled)) {
+        // If no filter AND no enabled watermark AND no enabled color correction
+        const hasColorCorrection = colorCorrection && colorCorrection.enabled;
+        if ((filter === IMAGE_FILTERS.NONE || !filter) && (!watermark || !watermark.enabled) && !hasColorCorrection) {
             if (blobUrlRef.current) {
                 URL.revokeObjectURL(blobUrlRef.current);
                 blobUrlRef.current = null;
             }
             if (displayUrl !== src) setDisplayUrl(src);
-            lastProcessed.current = { src, filter: IMAGE_FILTERS.NONE, watermark: 'none' };
+            lastProcessed.current = { src, filter: IMAGE_FILTERS.NONE, colorCorrection: 'none', watermark: 'none' };
             return;
         }
 
@@ -74,6 +78,7 @@ const FilteredPreview: React.FC<FilteredPreviewProps> = ({
         if (
             lastProcessed.current?.src === src &&
             lastProcessed.current?.filter === filter &&
+            lastProcessed.current?.colorCorrection === colorCorrectionKey &&
             lastProcessed.current?.watermark === watermarkKey
         ) {
             return;
@@ -95,8 +100,8 @@ const FilteredPreview: React.FC<FilteredPreviewProps> = ({
 
                 if (!isMounted) return;
 
-                // 1. Apply filter (on a copy/canvas)
-                const canvas = await applyImageFilter(img, filter);
+                // 1. Apply filter and color correction (on a copy/canvas)
+                const canvas = await applyImageFilter(img, filter, colorCorrection);
 
                 if (!isMounted) return;
 
@@ -120,7 +125,7 @@ const FilteredPreview: React.FC<FilteredPreviewProps> = ({
 
                     blobUrlRef.current = newBlobUrl;
                     setDisplayUrl(newBlobUrl);
-                    lastProcessed.current = { src, filter, watermark: watermarkKey };
+                    lastProcessed.current = { src, filter, colorCorrection: colorCorrectionKey, watermark: watermarkKey };
                     setIsProcessing(false);
                 }, 'image/jpeg', 0.8);
 
@@ -138,7 +143,7 @@ const FilteredPreview: React.FC<FilteredPreviewProps> = ({
             isMounted = false;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [src, filter, watermarkKey]);
+    }, [src, filter, colorCorrectionKey, watermarkKey]);
 
     // Cleanup blob URL on unmount
     useEffect(() => {

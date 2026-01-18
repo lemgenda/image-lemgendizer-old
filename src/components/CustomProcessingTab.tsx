@@ -2,6 +2,7 @@ import QualityControlsCard from './QualityControlsCard';
 import ResizeCropCard from './ResizeCropCard';
 import FormatSelectionCard from './FormatSelectionCard';
 import FilterSelectionCard from './FilterSelectionCard';
+import ColorCorrectionCard from './ColorCorrectionCard';
 import WatermarkCard from './WatermarkCard';
 import { CROP_MODES, IMAGE_FILTERS } from '../constants';
 import type { ProcessingOptions, ImageFile } from '../types';
@@ -86,7 +87,7 @@ const CustomProcessingTab = ({
                     aiLoading={aiLoading}
                     onToggleResizeCrop={onToggleResizeCrop}
                     onToggleCropMode={onToggleCropMode}
-                    onOptionChange={(key, value) => onSingleOptionChange(key as keyof ProcessingOptions, value)}
+                    onOptionChange={(key: string, value: any) => onSingleOptionChange(key as keyof ProcessingOptions, value)}
                     t={t}
                 />
 
@@ -94,13 +95,18 @@ const CustomProcessingTab = ({
                     watermark={processingOptions.watermark}
                     onOptionChange={onOptionChange as (category: string, key: string, value: any) => void}
                 />
+
+                <div className="col-span-2">
+                    <ColorCorrectionCard />
+                </div>
             </div>
 
             <div className="mb-lg">
                 <FilterSelectionCard
                     selectedFilter={processingOptions.filters?.selectedFilter || IMAGE_FILTERS.NONE}
-                    onFilterChange={(filter) => onOptionChange('filters', 'selectedFilter', filter)}
+                    onFilterChange={(filter: string) => onOptionChange('filters', 'selectedFilter', filter)}
                     t={t}
+                    disabled={!!processingOptions.colorCorrection?.enabled}
                 />
             </div>
 

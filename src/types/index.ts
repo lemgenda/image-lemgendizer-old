@@ -85,6 +85,22 @@ export interface FilterOptions {
     selectedFilter: string;
 }
 
+export interface ColorCorrectionOptions {
+    enabled: boolean;
+    brightness: number; // -100 to 100
+    contrast: number; // -100 to 100
+    saturation: number; // -100 to 100
+    vibrance: number; // -100 to 100
+    exposure: number; // -100 to 100
+    hue: number; // 0 to 100
+    sepia: number; // 0 to 100
+    gamma: number; // 0 to 10 (displayed as 0.0 to 10.0)
+    noise: number; // 0 to 100
+    clip: number; // 0 to 100
+    sharpen: number; // 0 to 100
+    stackBlur: number; // 0 to 20
+}
+
 export interface WatermarkOptions {
     enabled: boolean;
     type: 'text' | 'image';
@@ -122,6 +138,7 @@ export interface ProcessingOptions {
     smartCrop: boolean;
     batchRename?: BatchRenameOptions;
     filters?: FilterOptions;
+    colorCorrection?: ColorCorrectionOptions;
     watermark?: WatermarkOptions;
 }
 

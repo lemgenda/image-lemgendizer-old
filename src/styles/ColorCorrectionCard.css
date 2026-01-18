@@ -1,0 +1,35 @@
+/**
+ * @file ColorCorrectionCard.css
+ * @description Styling for the ColorCorrectionCard component.
+ */
+
+.color-correction-card {
+    display: flex;
+    flex-direction: column;
+    /* gap: var(--space-md); - Removed gap as toggle and content provide spacing */
+}
+
+/* Adjustments grid configuration */
+.color-correction-card .adjustments-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    /* Enforce 2 columns */
+    gap: var(--space-lg) var(--space-md);
+}
+
+.color-correction-card .adjustment-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.color-correction-card .reset-btn {
+    padding: 0.25rem 0.75rem;
+    font-size: var(--font-size-sm);
+}
+
+/* Responsive fallback */
+@media (max-width: 640px) {
+    .color-correction-card .adjustments-grid {
+        grid-template-columns: 1fr;
+    }
+}

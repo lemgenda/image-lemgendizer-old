@@ -107,9 +107,7 @@ export const FORMAT_SUPPORT = {
     TIFF: false // Needs conversion
 };
 
-// ================================
-// Helper Functions (standalone, no theme dependency)
-// ================================
+
 
 /**
  * Checks if a color is light or dark

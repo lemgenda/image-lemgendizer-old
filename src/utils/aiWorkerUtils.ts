@@ -82,20 +82,16 @@ export const detectObjectsInWorker = async (
             return;
         }
 
-        // Convert source to ImageData if needed
-        let imageData: ImageData;
-
         try {
+            let imageData: ImageData;
             if (imageSource instanceof ImageData) {
                 imageData = imageSource;
             } else {
-                // Draw to temp canvas to extract ImageData
                 const canvas = document.createElement('canvas');
                 canvas.width = imageSource.width;
                 canvas.height = imageSource.height;
                 const ctx = canvas.getContext('2d');
                 if (!ctx) throw new Error('Failed to get canvas context');
-
                 ctx.drawImage(imageSource, 0, 0);
                 imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             }
@@ -112,13 +108,100 @@ export const detectObjectsInWorker = async (
             };
 
             aiWorker.addEventListener('message', handleDetectionMessage);
-
-            // Send data to worker (transferable for performance)
             aiWorker.postMessage({ type: 'detect', imageData }, [imageData.data.buffer]);
-
         } catch (err) {
             reject(err);
         }
+    });
+};
+
+/**
+ * Upscales an image using the AI Worker
+ */
+export const upscaleInWorker = async (
+    imageSource: HTMLImageElement | HTMLCanvasElement | ImageData,
+    scale: number
+): Promise<{ data: Float32Array; shape: [number, number]; scale: number }> => {
+    await initAIWorker();
+
+    return new Promise((resolve, reject) => {
+        if (!aiWorker) {
+            reject(new Error('AI Worker not initialized'));
+            return;
+        }
+
+        try {
+            let imageData: ImageData;
+            if (imageSource instanceof ImageData) {
+                imageData = imageSource;
+            } else {
+                const canvas = document.createElement('canvas');
+                canvas.width = imageSource.width;
+                canvas.height = imageSource.height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Failed to get canvas context');
+                ctx.drawImage(imageSource, 0, 0);
+                imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            }
+
+            const handleUpscaleMessage = (e: MessageEvent) => {
+                const { type, data, shape, scale: resScale, error } = e.data;
+                if (type === 'upscale_result') {
+                    aiWorker?.removeEventListener('message', handleUpscaleMessage);
+                    resolve({ data, shape, scale: resScale });
+                } else if (type === 'error') {
+                    aiWorker?.removeEventListener('message', handleUpscaleMessage);
+                    reject(new Error(error));
+                }
+            };
+
+            aiWorker.addEventListener('message', handleUpscaleMessage);
+
+            const config = {
+                localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
+                localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
+                scale
+            };
+
+            aiWorker.postMessage({ type: 'upscale', imageData, config }, [imageData.data.buffer]);
+        } catch (err) {
+            reject(err);
+        }
+    });
+};
+
+/**
+ * Preloads an upscaler model in the worker
+ */
+export const preloadUpscalerInWorker = async (scale: number): Promise<void> => {
+    await initAIWorker();
+    aiWorker?.postMessage({
+        type: 'preload',
+        config: {
+            localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
+            localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
+            scale
+        }
+    });
+};
+
+/**
+ * Warms up all AI models in the worker
+ */
+export const warmupAIModels = async (): Promise<void> => {
+    await initAIWorker();
+    return new Promise((resolve) => {
+        const handleWarmupMessage = (e: MessageEvent) => {
+            if (e.data.type === 'warmup_complete') {
+                aiWorker?.removeEventListener('message', handleWarmupMessage);
+                resolve();
+            }
+        };
+        aiWorker?.addEventListener('message', handleWarmupMessage);
+        aiWorker?.postMessage({ type: 'warmup' });
+
+        // Timeout as fallback for warmup
+        setTimeout(resolve, 10000);
     });
 };
 

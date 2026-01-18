@@ -280,7 +280,7 @@ Generated on: ${new Date().toLocaleDateString()}`;
     });
 
     for (const size of targetSizes) {
-        const canvas = document.createElement('canvas'); // in worker or main thread? Assuming main thread for now since strict DOM access
+        const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) continue;
 

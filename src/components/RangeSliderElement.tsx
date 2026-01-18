@@ -14,9 +14,11 @@ interface RangeSliderElementProps {
   value?: number;
   onChange: (value: number) => void;
   label?: string;
+  icon?: string;
   id?: string;
   unit?: string;
   showTicks?: boolean;
+  disabled?: boolean;
 }
 
 /**
@@ -32,9 +34,11 @@ function RangeSliderElement({
   value = COMPRESSION_QUALITY_RANGE.DEFAULT,
   onChange,
   label,
+  icon,
   id,
   unit = '%',
-  showTicks = true
+  showTicks = true,
+  disabled = false
 }: RangeSliderElementProps) {
   const percentage = calculatePercentage(min, max, value);
   const ticks = generateTicks(min, max);
@@ -42,10 +46,13 @@ function RangeSliderElement({
   const inputId = id || `range-slider-${uniqueId}`;
 
   return (
-    <div className="range-component">
+    <div className={`range-component ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       {label && (
         <div className="range-header">
-          <label className="form-label" htmlFor={inputId}>{label}</label>
+          <label className="form-label" htmlFor={inputId}>
+            {icon && <i className={`fas ${icon} mr-1`}></i>}
+            {label}
+          </label>
           <span className="range-value">
             {value}{unit}
           </span>
@@ -62,6 +69,7 @@ function RangeSliderElement({
         value={value}
         style={{ '--range-progress': `${percentage}%` } as React.CSSProperties}
         onChange={(e) => onChange(Number(e.target.value))}
+        disabled={disabled}
       />
 
       {showTicks && (

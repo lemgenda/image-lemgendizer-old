@@ -4,30 +4,33 @@
  */
 
 interface AIWorkerMessage {
-    type: 'load' | 'detect' | 'dispose';
+    type: 'load' | 'detect' | 'upscale' | 'preload' | 'dispose' | 'warmup';
     imageData?: ImageData;
     config?: any;
+    scale?: number;
 }
 
 interface AIWorkerResponse {
-    type: 'loaded' | 'result' | 'error';
+    type: 'loaded' | 'result' | 'upscale_result' | 'error' | 'warmup_complete';
     data?: any;
     error?: string;
     isLoaded?: boolean;
 }
 
-// Global variables for the worker scope
+
 let aiModel: any = null;
 let bodySegmenter: any = null;
+let upscalerInstances: Record<number, any> = {};
 let isModelLoading = false;
+let isWarmingUp = false;
 
-// Declare importScripts for worker environment
+
 declare function importScripts(...urls: string[]): void;
 
-// Initialize worker context
+
 const ctx: Worker = self as any;
 
-// Suppress benign warnings that are false positives in a worker context
+
 const originalWarn = console.warn;
 console.warn = (...args: any[]) => {
     const msg = args.join(' ');
@@ -70,8 +73,8 @@ const loadModel = async (config: any) => {
                     } else {
                         await (self as any).tf.setBackend('webgl');
                     }
-                } catch (e) {
-                    console.warn('WebGPU load failed in worker, falling back', e);
+                } catch {
+                    /* ignored */
                 }
             }
         }
@@ -85,8 +88,8 @@ const loadModel = async (config: any) => {
         if (!(self as any).faceLandmarksDetection) {
             try {
                 importScripts(`${libPath}face-landmarks-detection.min.js`);
-            } catch (e) {
-                console.warn('Failed to load face-landmarks-detection script', e);
+            } catch {
+                /* ignored */
             }
         }
 
@@ -94,8 +97,8 @@ const loadModel = async (config: any) => {
         if (!(self as any).bodySegmentation) {
             try {
                 importScripts(`${libPath}body-segmentation.min.js`);
-            } catch (e) {
-                console.warn('Failed to load body-segmentation script', e);
+            } catch {
+                /* ignored */
             }
         }
 
@@ -121,9 +124,9 @@ const loadModel = async (config: any) => {
                     modelType: 'general'
                 };
                 bodySegmenter = await (self as any).bodySegmentation.createSegmenter(model, segmenterConfig);
-                console.log('Body Segmenter (SelfieSegmentation) initialized');
-            } catch (e) {
-                console.warn('Failed to initialize Body Segmenter', e);
+
+            } catch {
+                /* ignored */
             }
         }
 
@@ -137,14 +140,19 @@ const loadModel = async (config: any) => {
                     maxFaces: 5
                 };
                 (self as any).faceDetector = await (self as any).faceLandmarksDetection.createDetector(model, detectorConfig);
-                console.log('Face Detector initialized');
-            } catch (e) {
-                console.warn('Failed to initialize Face Detector', e);
+
+            } catch {
+                /* ignored */
             }
         }
 
         isModelLoading = false;
         ctx.postMessage({ type: 'loaded', isLoaded: true });
+
+        // Optional: Trigger background warmup if requested
+        if (config.warmup) {
+            warmupModels();
+        }
 
     } catch (error: any) {
         isModelLoading = false;
@@ -166,8 +174,8 @@ const detectObjects = async (imageData: ImageData) => {
         try {
             const predictions = await aiModel.detect(imageData);
             results.push(...predictions);
-        } catch (error: any) {
-            console.warn('Coco-SSD detection failed', error);
+        } catch {
+            /* ignored */
         }
     }
 
@@ -214,8 +222,8 @@ const detectObjects = async (imageData: ImageData) => {
                     }
                 }
             }
-        } catch (error) {
-            console.warn('Body Segmentation failed', error);
+        } catch {
+            /* ignored */
         }
     }
 
@@ -234,18 +242,134 @@ const detectObjects = async (imageData: ImageData) => {
                     });
                 }
             }
-        } catch (error) {
-            console.warn('Face detection failed', error);
+        } catch {
+            /* ignored */
         }
     }
 
     ctx.postMessage({ type: 'result', data: results });
 };
 
+/**
+ * Loads an upscaler for a specific scale
+ */
+const loadUpscaler = async (scale: number, config: any) => {
+    if (upscalerInstances[scale]) return upscalerInstances[scale];
+
+    const libPath = config.localLibPath || '/lib/';
+    const modelPath = config.localModelPath || '/models/';
+
+    if (!(self as any).Upscaler) {
+        importScripts(`${libPath}upscaler.min.js`);
+    }
+
+    if ((self as any).Upscaler) {
+        const upscaler = new (self as any).Upscaler({
+            model: {
+                path: `${modelPath}esrgan-slim/x${scale}/model.json`,
+                scale: scale
+            }
+        });
+        upscalerInstances[scale] = upscaler;
+        return upscaler;
+    }
+    throw new Error(`UpscalerJS not found at ${libPath}upscaler.min.js`);
+};
 
 /**
- * Clean up resources
+ * Upscales target image data
  */
+const upscaleImage = async (imageData: ImageData, scale: number, config: any) => {
+    try {
+        const upscaler = await loadUpscaler(scale, config);
+
+        // Convert ImageData to tensor for UpscalerJS if needed,
+        // or let UpscalerJS handle it from ImageData if supported in worker.
+        // Most UpscalerJS versions in workers can take ImageData or Tensors.
+
+        const result = await upscaler.upscale(imageData, {
+            patchSize: 64, // Increased patch size for worker
+            padding: 4,
+            output: 'tensor'
+        });
+
+        // Convert result back to ImageData or send as Float32Array
+        let outputData: any;
+        let shape: [number, number];
+
+        if (result && result.data && typeof result.data === 'function') {
+            outputData = await result.data();
+            shape = [result.shape[0], result.shape[1]];
+            result.dispose();
+        } else {
+            outputData = result;
+            shape = [imageData.height * scale, imageData.width * scale];
+        }
+
+        ctx.postMessage({
+            type: 'upscale_result',
+            data: outputData,
+            shape,
+            scale
+        }, [outputData.buffer]);
+
+    } catch (error: any) {
+        ctx.postMessage({ type: 'error', error: `Upscale Error: ${error.message}` });
+    }
+};
+
+/**
+ * Warms up all loaded models with dummy data
+ */
+const warmupModels = async () => {
+    if (isWarmingUp) return;
+    isWarmingUp = true;
+
+
+    try {
+        const tf = (self as any).tf;
+        if (!tf) return;
+
+        // 1. Warmup Detection (Coco-SSD)
+        if (aiModel) {
+            const zeros = tf.zeros([224, 224, 3], 'int32');
+            await aiModel.detect(zeros);
+            zeros.dispose();
+
+        }
+
+        // 2. Warmup Segmentation
+        if (bodySegmenter) {
+            const zeros = tf.zeros([256, 256, 3], 'int32');
+            await bodySegmenter.segmentPeople(zeros);
+            zeros.dispose();
+
+        }
+
+        // 3. Warmup Face Detection
+        if ((self as any).faceDetector) {
+            const zeros = tf.zeros([256, 256, 3], 'int32');
+            await (self as any).faceDetector.estimateFaces(zeros);
+            zeros.dispose();
+
+        }
+
+        // 4. Warmup Upscalers (if any loaded)
+        for (const scale in upscalerInstances) {
+            const upscaler = upscalerInstances[scale];
+            const zeros = tf.zeros([32, 32, 3], 'int32');
+            await upscaler.upscale(zeros, { output: 'tensor' }).then((t: any) => t.dispose());
+            zeros.dispose();
+
+        }
+
+        ctx.postMessage({ type: 'warmup_complete' });
+    } catch {
+        /* ignored */
+    } finally {
+        isWarmingUp = false;
+    }
+};
 const disposeModel = () => {
     if (aiModel && aiModel.dispose) {
         try { aiModel.dispose(); } catch { /* ignored */ }
@@ -266,9 +390,17 @@ const disposeModel = () => {
     if ((self as any).tf) {
         (self as any).tf.disposeVariables();
     }
+
+    for (const scale in upscalerInstances) {
+        const upscaler = upscalerInstances[scale];
+        if (upscaler && upscaler.dispose) {
+            try { upscaler.dispose(); } catch { /* ignored */ }
+        }
+    }
+    upscalerInstances = {};
 };
 
-// Message Handler
+
 ctx.onmessage = async (e: MessageEvent<AIWorkerMessage>) => {
     const { type, imageData, config } = e.data;
 
@@ -282,6 +414,21 @@ ctx.onmessage = async (e: MessageEvent<AIWorkerMessage>) => {
             } else {
                 ctx.postMessage({ type: 'error', error: 'No image data provided for detection' });
             }
+            break;
+        case 'upscale':
+            if (imageData && config && config.scale) {
+                await upscaleImage(imageData, config.scale, config);
+            } else {
+                ctx.postMessage({ type: 'error', error: 'Missing parameters for upscale' });
+            }
+            break;
+        case 'preload':
+            if (config && config.scale) {
+                await loadUpscaler(config.scale, config);
+            }
+            break;
+        case 'warmup':
+            await warmupModels();
             break;
         case 'dispose':
             disposeModel();
