@@ -610,10 +610,10 @@ export const upscaleImageEnhancedFallback = async (imageFile: File, scale: numbe
  * @param {string} originalName - Original file name
  * @returns {Promise<File>} Upscaled image file
  */
-export const upscaleImageWithAI = async (imageFile: File, scale: number, originalName: string): Promise<{ file: File; scale?: number }> => {
+export const upscaleImageWithAI = async (imageFile: File, scale: number, originalName: string): Promise<{ file: File; scale?: number; model?: string }> => {
     if (aiUpscalingDisabled) {
         const fallbackFile = await upscaleImageEnhancedFallback(imageFile, scale, originalName);
-        return { file: fallbackFile, scale };
+        return { file: fallbackFile, scale, model: 'enhanced-fallback' };
     }
 
     const wasCleanupInProgress = cleanupInProgress;
@@ -635,7 +635,7 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
             const fallbackFile = await upscaleImageEnhancedFallback(imageFile, safeDimensions.scale, originalName);
-            return { file: fallbackFile, scale: safeDimensions.scale };
+            return { file: fallbackFile, scale: safeDimensions.scale, model: 'enhanced-fallback' };
         }
 
         const availableScales = AVAILABLE_UPSCALE_FACTORS;
@@ -644,7 +644,7 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
             const fallbackFile = await upscaleImageEnhancedFallback(imageFile, Math.min(scale, 4), originalName);
-            return { file: fallbackFile, scale: Math.min(scale, 4) };
+            return { file: fallbackFile, scale: Math.min(scale, 4), model: 'enhanced-fallback' };
         }
 
         let upscaler;
@@ -656,7 +656,7 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
             const fallbackFile = await upscaleImageEnhancedFallback(imageFile, scale, originalName);
-            return { file: fallbackFile, scale };
+            return { file: fallbackFile, scale, model: 'enhanced-fallback' };
         }
 
         let upscaleResult;
@@ -668,7 +668,7 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
             const fallbackFile = await upscaleImageEnhancedFallback(imageFile, scale, originalName);
-            return { file: fallbackFile, scale };
+            return { file: fallbackFile, scale, model: 'enhanced-fallback' };
         }
 
         let canvas: HTMLCanvasElement;
@@ -695,7 +695,7 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
             const fallbackFile = await upscaleImageEnhancedFallback(imageFile, scale, originalName);
-            return { file: fallbackFile, scale };
+            return { file: fallbackFile, scale, model: 'enhanced-fallback' };
         }
 
         URL.revokeObjectURL(objectUrl);
@@ -713,7 +713,7 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
         );
 
         const upscaledFile = new File([blob], newName, { type: MIME_TYPE_MAP.webp });
-        return { file: upscaledFile, scale };
+        return { file: upscaledFile, scale, model: 'esrgan-slim' };
 
     } catch {
         textureManagerFailures++;
@@ -733,7 +733,7 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
             const safeDimensions = calculateSafeDimensions(img.naturalWidth, img.naturalHeight, scale);
             URL.revokeObjectURL(objectUrl);
             const fallbackFile = await upscaleImageEnhancedFallback(imageFile, safeDimensions.scale, originalName);
-            return { file: fallbackFile, scale: safeDimensions.scale };
+            return { file: fallbackFile, scale: safeDimensions.scale, model: 'enhanced-fallback' };
         } catch {
             throw new Error('AI upscaling failed');
         }

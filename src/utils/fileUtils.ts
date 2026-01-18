@@ -790,7 +790,14 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
         summary.upscalingUsed = true;
         summary.aiUsed = true;
         summary.upscaleScale = upscaledImage.aiUpscaleScale;
-        summary.operations.push(t('operations.aiUpscalingWithModel', { model: `x${upscaledImage.aiUpscaleScale}` }));
+
+        let modelInfo = `x${upscaledImage.aiUpscaleScale}`;
+        if (upscaledImage.aiUpscaleModel) {
+            summary.upscaleModel = upscaledImage.aiUpscaleModel;
+            modelInfo += ` (${upscaledImage.aiUpscaleModel})`;
+        }
+
+        summary.operations.push(t('operations.aiUpscalingWithModel', { model: modelInfo }));
     } else if (summary.upscalingUsed) {
         summary.operations.push(t('operations.autoUpscaling'));
         summary.aiUsed = true;

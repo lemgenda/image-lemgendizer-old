@@ -183,4 +183,5 @@ export interface ProcessingSummary {
     screenshotCount?: number;
     watermarkApplied: boolean;
     upscaleScale?: number;
+    upscaleModel?: string;
 }

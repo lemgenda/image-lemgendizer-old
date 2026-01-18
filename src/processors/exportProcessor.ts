@@ -734,7 +734,11 @@ ${t ? t('export.summary.totalFiles') : 'Total Files in Export'}: ${calculateTota
 
 ${validProcessedImages.some(img => img.aiUpscaleScale) ? `
 ${t ? t('summary.upscalingUsed') : 'AI UPSCALING'}:${'='.repeat(t ? t('summary.upscalingUsed').length : 12)}
-- ${t ? t('operations.aiUpscalingWithModel', { model: `x${validProcessedImages.find(img => img.aiUpscaleScale).aiUpscaleScale}` }) : `AI upscaling with x${validProcessedImages.find(img => img.aiUpscaleScale).aiUpscaleScale} model`}
+- ${(() => {
+                const img = validProcessedImages.find(img => img.aiUpscaleScale);
+                const model = img.aiUpscaleModel ? `x${img.aiUpscaleScale} (${img.aiUpscaleModel})` : `x${img.aiUpscaleScale}`;
+                return t ? t('operations.aiUpscalingWithModel', { model }) : `AI upscaling with ${model} model`;
+            })()}
 ` : ''}
 
 ${settings.watermark && settings.watermark.enabled ? `

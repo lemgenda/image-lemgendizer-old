@@ -180,6 +180,9 @@ export const orchestrateCustomProcessing = async (
                         if (resizeResults[0].upscaleScale) {
                             (image as any).aiUpscaleScale = resizeResults[0].upscaleScale;
                         }
+                        if (resizeResults[0].upscaleModel) {
+                            (image as any).aiUpscaleModel = resizeResults[0].upscaleModel;
+                        }
                         if (resizeResults[0].error) {
                             throw resizeResults[0].error;
                         }

@@ -330,7 +330,8 @@ function App() {
                       <div className="summary-value text-success">
                         <i className="fas fa-expand-arrows-alt mr-1"></i>
                         {processingSummary.upscaleScale
-                          ? `${t('summary.yes')} (x${processingSummary.upscaleScale})`
+                          ? `${t('summary.yes')} (x${processingSummary.upscaleScale}${processingSummary.upscaleModel ? ` - ${processingSummary.upscaleModel}` : ''
+                          })`
                           : t('summary.yes')}
                       </div>
                     </div>
