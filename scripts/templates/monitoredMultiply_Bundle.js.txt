@@ -1,0 +1,322 @@
+/**
+ * @license
+ * [Antigravity] Super-Optimized Binary Operations Template
+ * Supports: Multiply, Sub, Div
+ */
+import { util } from '@tensorflow/tfjs-core';
+
+// [Antigravity] Multi-Op Program
+class FastBinaryProgram {
+    constructor(shape, op) {
+        this.variableNames = ['A', 'B'];
+        this.outputShape = shape;
+        const size = util.sizeFromShape(this.outputShape);
+        this.size = true;
+        this.workgroupSize = [256, 1, 1];
+        this.dispatchLayout = { x: this.outputShape.map((_, i) => i) };
+        this.dispatch = [Math.max(1, Math.ceil(size / 256)), 1, 1];
+
+        let opStr = '';
+        if (op === 'MUL') opStr = 'f32(A[index]) * f32(B[index])';
+        else if (op === 'ADD') opStr = 'f32(A[index]) + f32(B[index])';
+        else if (op === 'SUB') opStr = 'f32(A[index]) - f32(B[index])';
+        else if (op === 'DIV') opStr = 'f32(A[index]) / f32(B[index])';
+
+        this.userCode = `
+            fn main(index: i32) {
+                if (index < uniforms.size) {
+                    let val = ${opStr};
+                    setOutputAtIndex(index, f32(val));
+                }
+            }
+        `;
+    }
+    getUserCode() { return this.userCode; }
+}
+
+// [Antigravity] Multiply-Specific Programs
+class FastMultiplyProgram {
+    constructor(outputShape, isBroadcast, isScalarA, isScalarB) {
+        this.variableNames = ['A', 'B'];
+        this.outputShape = Array.from(outputShape);
+        const size = util.sizeFromShape(this.outputShape);
+        this.size = true;
+        this.workgroupSize = [256, 1, 1];
+        this.dispatchLayout = { x: this.outputShape.map((_, i) => i) };
+        this.dispatch = [Math.ceil(size / 256), 1, 1];
+
+        if (isBroadcast) {
+            this.userCode = "fn main(index: i32) { if (index < uniforms.size) { let C = uniforms.out_dims[3]; let a_idx = index / C; let b_idx = index % C; let a_val = f32(A[a_idx]); let b_val = f32(B[b_idx]); setOutputAtIndex(index, f32(a_val * b_val)); } }";
+        } else if (isScalarA) {
+            this.userCode = "fn main(index: i32) { if (index < uniforms.size) { let val = f32(A[0]) * f32(B[index]); setOutputAtIndex(index, f32(val)); } }";
+        } else if (isScalarB) {
+            this.userCode = "fn main(index: i32) { if (index < uniforms.size) { let val = f32(A[index]) * f32(B[0]); setOutputAtIndex(index, f32(val)); } }";
+        } else {
+            this.userCode = "fn main(index: i32) { if (index < uniforms.size) { let val = f32(A[index]) * f32(B[index]); setOutputAtIndex(index, f32(val)); } }";
+        }
+    }
+    getUserCode() { return this.userCode; }
+}
+
+class FastChannelMultiplyProgram {
+    constructor(outputShape, cSize) {
+        this.variableNames = ['A', 'B'];
+        this.outputShape = outputShape;
+        const size = util.sizeFromShape(this.outputShape);
+        this.size = true;
+        this.workgroupSize = [256, 1, 1];
+        this.dispatchLayout = { x: this.outputShape.map((_, i) => i) };
+        this.dispatch = [Math.ceil(size / 256), 1, 1];
+        this.userCode = `fn main(index: i32) { if (index < uniforms.size) { let C = ${cSize}; let b_idx = index % C; let val = f32(A[index]) * f32(B[b_idx]); setOutputAtIndex(index, f32(val)); } }`;
+    }
+    getUserCode() { return this.userCode; }
+}
+
+class FastDoubleBroadcastProgram {
+    constructor(outputShape, cSize, isASpatial, dtype = 'float32') {
+        this.variableNames = ['A', 'B'];
+        this.outputShape = outputShape;
+        const size = util.sizeFromShape(this.outputShape);
+        this.size = true;
+        this.workgroupSize = [256, 1, 1];
+        this.dispatchLayout = { x: this.outputShape.map((_, i) => i) };
+        this.dispatch = [Math.ceil(size / 256), 1, 1];
+
+        const cast = (dtype === 'int32') ? 'i32' : 'f32';
+        const C = cSize;
+
+        // Index = spatial_idx * C + channel_idx
+        if (isASpatial) {
+             // A: [1, H, W, 1] -> Used as spatial. IndexA = index / C
+             // B: [1, 1, 1, C] -> Used as channel. IndexB = index % C
+             this.userCode = `
+                fn main(index: i32) {
+                    if (index < uniforms.size) {
+                        let C = ${C};
+                        let idxA = index / C;
+                        let idxB = index % C;
+                        let val = ${cast}(A[idxA]) * ${cast}(B[idxB]);
+                        setOutputAtIndex(index, f32(val));
+                    }
+                }
+             `;
+        } else {
+             // B is Spatial, A is Channel
+             this.userCode = `
+                fn main(index: i32) {
+                    if (index < uniforms.size) {
+                        let C = ${C};
+                        let idxB = index / C;
+                        let idxA = index % C;
+                        let val = ${cast}(A[idxA]) * ${cast}(B[idxB]);
+                        setOutputAtIndex(index, f32(val));
+                    }
+                }
+             `;
+        }
+    }
+    getUserCode() { return this.userCode; }
+}
+
+class Fast5DOuterBroadcastProgram {
+    constructor(shapeA, shapeB, dtype = 'float32') {
+        this.variableNames = ['A', 'B'];
+        const N = Math.max(shapeA[0], shapeB[0]);
+        const H = Math.max(shapeA[2], shapeB[2]);
+        const W = Math.max(shapeA[3], shapeB[3]);
+        const C = Math.max(shapeA[4], shapeB[4]);
+
+        this.outputShape = [N, 1, H, W, C];
+        this.size = true;
+        this.workgroupSize = [256, 1, 1];
+        const size = N * H * W * C;
+        this.dispatchLayout = { x: [0], y: [], z: [] };
+        this.dispatch = [Math.ceil(size / 256), 1, 1];
+
+        // Inline simplified kernel for brevity in bundle
+        const isA_Big = shapeA[2] > 1; // A has spatial dims
+        const stride_N = H*W*C;
+        const stride_C = C;
+
+        // Coordinates from index
+        // n = index / stride_N
+        // c = index % stride_C
+        // idx_big = index % stride_N
+        // idx_small = n * C + c
+
+        const cast = (dtype === 'int32') ? 'i32' : 'f32';
+        let kernel = '';
+        if (isA_Big) {
+             kernel = `
+                let idxA = index % ${stride_N};
+                let n = index / ${stride_N};
+                let c = index % ${stride_C};
+                let idxB = n * ${stride_C} + c;
+                let val = ${cast}(A[idxA]) * ${cast}(B[idxB]);
+             `;
+        } else {
+             kernel = `
+                let idxB = index % ${stride_N};
+                let n = index / ${stride_N};
+                let c = index % ${stride_C};
+                let idxA = n * ${stride_C} + c;
+                let val = ${cast}(A[idxA]) * ${cast}(B[idxB]);
+             `;
+        }
+
+        this.userCode = `
+            fn main(index: i32) {
+                if (index < uniforms.size) {
+                    ${kernel}
+                    setOutputAtIndex(index, f32(val));
+                }
+            }
+        `;
+    }
+    getUserCode() { return this.userCode; }
+}
+
+// Global Stats Init
+if (!self._antigravity) self._antigravity = {};
+['mul', 'sub', 'div'].forEach(k => {
+    if (!self._antigravity[k]) self._antigravity[k] = { count: 0, hits: 0, cpuTime: 0 };
+});
+
+class _ag_FastScalarBinaryProgram {
+    constructor(op, dtype) {
+        this.variableNames = ['A', 'B'];
+        this.outputShape = [];
+        this.size = true;
+        this.workgroupSize = [1, 1, 1];
+        this.dispatch = [1, 1, 1];
+        const cast = (dtype === 'int32') ? 'i32' : 'f32';
+        const opStr = op === 'MUL' ? '*' : op === 'ADD' ? '+' : op === 'SUB' ? '-' : '/';
+        this.userCode = `fn main(index: i32) { setOutputAtIndex(0, f32(${cast}(A[0]) ${opStr} ${cast}(B[0]))); }`;
+    }
+    getUserCode() { return this.userCode; }
+}
+
+const createMonitoredBinaryOp = (opCode, originalFunc, key) => {
+    return (args) => {
+        const t0 = performance.now();
+        const { inputs, backend } = args;
+        const { a, b } = inputs;
+
+        if (a && b) {
+            const aShape = a.shape;
+            const bShape = b.shape;
+            const aSize = util.sizeFromShape(aShape);
+            const bSize = util.sizeFromShape(bShape);
+
+            // [Antigravity] Zero-Size Short-Circuit
+            // If any input is empty, the result of element-wise mul/sub/div is empty.
+            if (aSize === 0 || bSize === 0) {
+                 const newShape = backend_util.assertAndGetBroadcastShape(aShape, bShape);
+                 return backend.makeTensorInfo(newShape, 'float32', new Float32Array(0));
+            }
+
+            const aRank = aShape.length;
+            const bRank = bShape.length;
+
+            // Element-wise
+            if (aRank === bRank && aShape.every((v, i) => v === bShape[i])) {
+                 // [Antigravity] Scalar Fast Path
+                 if (aSize === 1) {
+                      const res = backend.runWebGPUProgram(new _ag_FastScalarBinaryProgram(opCode, a.dtype), [a, b], a.dtype);
+                      if (self._antigravity && self._antigravity[key]) {
+                          self._antigravity[key].count++;
+                          self._antigravity[key].hits++;
+                          self._antigravity[key].cpuTime += (performance.now() - t0);
+                      }
+                      return res;
+                 }
+                 const res = backend.runWebGPUProgram(new FastBinaryProgram(a.shape, opCode), [a, b], a.dtype);
+                 if (self._antigravity && self._antigravity[key]) {
+                      self._antigravity[key].count++;
+                      self._antigravity[key].hits++;
+                      self._antigravity[key].cpuTime += (performance.now() - t0);
+                 }
+                 return res;
+            }
+
+            // Multiply-Specific Optimizations
+            if (opCode === 'MUL') {
+                if (aSize === 1 || bSize === 1) {
+                    const program = new FastMultiplyProgram(aSize === 1 ? bShape : aShape, false, aSize === 1, bSize === 1);
+                    const res = backend.runWebGPUProgram(program, [a, b], 'float32');
+                    if (self._antigravity && self._antigravity.mul) {
+                         self._antigravity.mul.count++;
+                         self._antigravity.mul.hits++;
+                         self._antigravity.mul.cpuTime += (performance.now() - t0);
+                    }
+                    return res;
+                }
+
+                if (aRank === bRank && aRank >= 2) {
+                    const C = aShape[aRank - 1];
+                    if (bShape[bRank - 1] === C) {
+                         const aTotal = aSize / C;
+                         const bTotal = bSize / C;
+                         if (aTotal === 1 || bTotal === 1) {
+                             const program = new FastChannelMultiplyProgram(aSize > bSize ? aShape : bShape, C);
+                             const res = backend.runWebGPUProgram(program, [a, b], 'float32');
+                             if (self._antigravity && self._antigravity.mul) {
+                                 self._antigravity.mul.count++;
+                                 self._antigravity.mul.hits++;
+                                 self._antigravity.mul.cpuTime += (performance.now() - t0);
+                             }
+                             return res;
+                         }
+                    }
+                }
+                // Double Broadcast: [1, H, W, 1] x [1, 1, 1, C]
+                if (aRank === 4 && bRank === 4) {
+                     const [a0, a1, a2, a3] = aShape;
+                     const [b0, b1, b2, b3] = bShape;
+
+                     // A is spatial, B is channel
+                     if (a0===1 && a3===1 && b0===1 && b1===1 && b2===1 && b3 > 1) {
+                         const program = new FastDoubleBroadcastProgram(b3 > aSize ? bShape : [...aShape.slice(0,3), b3], b3, true, 'float32');
+                         const res = backend.runWebGPUProgram(program, [a, b], 'float32');
+                         if (self._antigravity && self._antigravity.mul) {
+                             self._antigravity.mul.count++;
+                             self._antigravity.mul.hits++;
+                             self._antigravity.mul.cpuTime += (performance.now() - t0);
+                         }
+                         return res;
+                     }
+                }
+
+                // [Antigravity] Double Broadcast 5D - Outer Broadcast
+                // A: [1, 1, H, W, C] vs B: [N, 1, 1, 1, C]
+                if (aRank === 5 && bRank === 5) {
+                    const isA_HWC = (aShape[0]===1 && aShape[1]===1);
+                    const isB_N111C = (bShape[1]===1 && bShape[2]===1 && bShape[3]===1);
+                    const isB_HWC = (bShape[0]===1 && bShape[1]===1);
+                    const isA_N111C = (aShape[1]===1 && aShape[2]===1 && aShape[3]===1);
+
+                    if ((isA_HWC && isB_N111C) || (isB_HWC && isA_N111C)) {
+                         const program = new Fast5DOuterBroadcastProgram(aShape, bShape, 'float32');
+                         const res = backend.runWebGPUProgram(program, [a, b], 'float32');
+                         if (self._antigravity && self._antigravity.mul) {
+                             self._antigravity.mul.count++;
+                             self._antigravity.mul.hits++;
+                             self._antigravity.mul.cpuTime += (performance.now() - t0);
+                         }
+                         return res;
+                    }
+                }
+            }
+        }
+
+        const res = originalFunc(args);
+        const dt = performance.now() - t0;
+        if (self._antigravity && self._antigravity[key]) {
+            self._antigravity[key].count++;
+            self._antigravity[key].cpuTime += dt;
+        }
+        return res;
+    };
+};
+
+// [Antigravity] Wrappers are injected dynamically by postinstall.cjs to ensure correct ordering.

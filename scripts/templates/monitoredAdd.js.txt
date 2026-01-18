@@ -1,0 +1,213 @@
+/**
+ * @license
+ * Copyright 2021 Google LLC. All Rights Reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * =============================================================================
+ */
+import { Add as _ag_Add, util as _ag_util } from '@tensorflow/tfjs-core';
+import { BinaryOpType as _ag_BinaryOpType } from '../binary_op_util';
+import { binaryKernelFunc as _ag_binaryKernelFunc } from '../kernel_utils/kernel_funcs_utils';
+import { addImplCPU as _ag_cpuAdd } from '../kernel_utils/shared';
+
+// [Antigravity] FastAddProgram for Broadcast Add (Bias Add)
+class _ag_FastAddProgram {
+    constructor(outputShape, aShape, bShape) {
+        this.variableNames = ['A', 'B'];
+        this.outputShape = Array.from(outputShape);
+        const size = _ag_util.sizeFromShape(this.outputShape);
+        this.size = true;
+
+        const WORKGROUP_SIZE = 256;
+        this.workgroupSize = [WORKGROUP_SIZE, 1, 1];
+        this.dispatchLayout = { x: this.outputShape.map((_, i) => i) };
+        this.dispatch = [Math.ceil(size / WORKGROUP_SIZE), 1, 1];
+
+        // Handles [1, H, W, C] + [1, 1, 1, C]
+        // B is the bias vector
+        const C = bShape[3];
+
+        this.userCode = `
+            fn main(index: i32) {
+                if (index < uniforms.size) {
+                    let C = ${C};
+                    let valA = f32(A[index]);
+                    let valB = f32(B[index % C]);
+                    setOutputAtIndex(index, valA + valB);
+                }
+            }
+        `;
+    }
+    getUserCode() { return this.userCode; }
+}
+
+// [Antigravity] Element-Wise Binary Program (Add)
+class _ag_FastBinaryAddProgram {
+    constructor(shape) {
+        this.variableNames = ['A', 'B'];
+        this.outputShape = shape;
+        const size = _ag_util.sizeFromShape(this.outputShape);
+        this.size = true;
+        this.workgroupSize = [256, 1, 1];
+        this.dispatchLayout = { x: this.outputShape.map((_, i) => i) };
+        this.dispatch = [Math.ceil(size / 256), 1, 1];
+        this.userCode = `
+            fn main(index: i32) {
+                if (index < uniforms.size) {
+                    let val = f32(A[index]) + f32(B[index]);
+                    setOutputAtIndex(index, val);
+                }
+            }
+        `;
+    }
+    getUserCode() { return this.userCode; }
+}
+
+// [Antigravity] Scalar Add Program
+class _ag_FastBinaryAddScalarProgram {
+    constructor(shape, isScalarA, isScalarB) {
+        this.variableNames = ['A', 'B'];
+        this.outputShape = shape;
+        const size = _ag_util.sizeFromShape(this.outputShape);
+        this.size = true;
+        this.workgroupSize = [256, 1, 1];
+        this.dispatchLayout = { x: this.outputShape.map((_, i) => i) };
+        this.dispatch = [Math.ceil(size / 256), 1, 1];
+
+        if (isScalarA) {
+            this.userCode = `
+                fn main(index: i32) {
+                    if (index < uniforms.size) {
+                        let val = f32(A[0]) + f32(B[index]);
+                        setOutputAtIndex(index, val);
+                    }
+                }
+            `;
+        } else {
+            this.userCode = `
+                fn main(index: i32) {
+                    if (index < uniforms.size) {
+                        let val = f32(A[index]) + f32(B[0]);
+                        setOutputAtIndex(index, val);
+                    }
+                }
+            `;
+        }
+    }
+    getUserCode() { return this.userCode; }
+}
+
+let _ag_addCount = 0;
+let _ag_fastAddHits = 0;
+
+// [Antigravity] Global Stats Init
+if (!globalThis._antigravity) globalThis._antigravity = {};
+if (!globalThis._antigravity.add) globalThis._antigravity.add = { count: 0, hits: 0, cpuTime: 0 };
+
+export const add = (args) => {
+    const t0 = performance.now();
+    const { inputs, backend } = args;
+    const { a, b } = inputs;
+
+    _ag_addCount++;
+
+    // [Antigravity] Strict Dtype Check
+    if (a.dtype !== 'float32' || b.dtype !== 'float32') {
+        return originalAddKernelFunc(args);
+    }
+
+    const aShape = a.shape;
+    const bShape = b.shape;
+    const aRank = aShape.length;
+    const bRank = bShape.length;
+
+    // Check for optimized Bias Add case: [1, H, W, C] + [1, 1, 1, C]
+    if (aRank === 4 && bRank === 4) {
+        const [a0, a1, a2, a3] = aShape;
+        const [b0, b1, b2, b3] = bShape;
+        if (b0 === 1 && b1 === 1 && b2 === 1 && b3 === a3 && b3 > 1) {
+            _ag_fastAddHits++;
+            const program = new _ag_FastAddProgram(a.shape, a.shape, b.shape);
+            const res = backend.runWebGPUProgram(program, [a, b], 'float32');
+            const dt = performance.now() - t0;
+            if (globalThis._antigravity.add) {
+                globalThis._antigravity.add.count++;
+                globalThis._antigravity.add.hits++;
+                globalThis._antigravity.add.cpuTime += dt;
+            }
+            return res;
+        }
+    }
+
+    // Check for Scalar Add
+    const sizeA = _ag_util.sizeFromShape(a.shape);
+    const sizeB = _ag_util.sizeFromShape(b.shape);
+
+    if (sizeA === 1 && sizeB >= 1) {
+        _ag_fastAddHits++;
+        const program = new _ag_FastBinaryAddScalarProgram(b.shape, true, false);
+        const res = backend.runWebGPUProgram(program, [a, b], 'float32');
+        const dt = performance.now() - t0;
+        if (globalThis._antigravity.add) {
+            globalThis._antigravity.add.count++;
+            globalThis._antigravity.add.hits++;
+            globalThis._antigravity.add.cpuTime += dt;
+        }
+        return res;
+    }
+
+    if (sizeB === 1 && sizeA >= 1) {
+        _ag_fastAddHits++;
+        const program = new _ag_FastBinaryAddScalarProgram(a.shape, false, true);
+        const res = backend.runWebGPUProgram(program, [a, b], 'float32');
+        const dt = performance.now() - t0;
+        if (globalThis._antigravity.add) {
+            globalThis._antigravity.add.count++;
+            globalThis._antigravity.add.hits++;
+            globalThis._antigravity.add.cpuTime += dt;
+        }
+        return res;
+    }
+
+    // Check for standard Element-Wise Add
+    if (_ag_util.arraysEqual(a.shape, b.shape)) {
+        _ag_fastAddHits++;
+        const program = new _ag_FastBinaryAddProgram(a.shape);
+        const res = backend.runWebGPUProgram(program, [a, b], 'float32');
+        const dt = performance.now() - t0;
+        if (globalThis._antigravity.add) {
+            globalThis._antigravity.add.count++;
+            globalThis._antigravity.add.hits++;
+            globalThis._antigravity.add.cpuTime += dt;
+        }
+        return res;
+    }
+
+    if (_ag_addCount % 500 === 0) {
+        console.log(`[Antigravity] Add Stats: ${_ag_fastAddHits}/${_ag_addCount} Optimized (${((_ag_fastAddHits/_ag_addCount)*100).toFixed(1)}%)`);
+    }
+
+    const res = originalAddKernelFunc(args);
+    const dt = performance.now() - t0;
+    if (globalThis._antigravity.add) {
+        globalThis._antigravity.add.count++;
+        globalThis._antigravity.add.cpuTime += dt;
+    }
+    return res;
+};
+
+export const addKernelFunc = add;
+export const addConfig = {
+    kernelName: _ag_Add,
+    backendName: 'webgpu',
+    kernelFunc: add
+};

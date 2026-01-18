@@ -1,0 +1,36 @@
+/**
+ * [Antigravity] Global Kernel Profiler
+ * This template patches WebGPUBackend.runWebGPUProgram to track all kernel calls.
+ */
+
+// We target the runWebGPUProgram method
+// We will insert our tracker at the start
+
+export const monitoredRunWebGPUProgram = (original) => {
+    return function(program, inputs, outputDtype, programDefinedUniform, output) {
+        if (!self._antigravity_all) {
+            self._antigravity_all = {
+                counts: {},
+                total: 0,
+                lastReport: 0
+            };
+        }
+
+        const name = program.constructor.name || 'UnknownProgram';
+        self._antigravity_all.counts[name] = (self._antigravity_all.counts[name] || 0) + 1;
+        self._antigravity_all.total++;
+
+        // Periodic report (e.g. every 5000 calls or when a tile finishes?)
+        // We use a simple counter for now
+        if (self._antigravity_all.total - self._antigravity_all.lastReport >= 5000) {
+            self._antigravity_all.lastReport = self._antigravity_all.total;
+            console.log(`[Antigravity] 📊 GLOBAL KERNEL REPORT (Total: ${self._antigravity_all.total})`);
+            const sorted = Object.entries(self._antigravity_all.counts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 15);
+            console.table(Object.fromEntries(sorted));
+        }
+
+        return original.apply(this, arguments);
+    };
+};

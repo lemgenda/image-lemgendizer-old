@@ -1,0 +1,88 @@
+/**
+ * @license
+ * Copyright 2021 Google LLC. All Rights Reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * =============================================================================
+ */
+import { backend_util as _ag_backend_util, DepthwiseConv2dNative as _ag_DepthwiseConv2dNative } from '@tensorflow/tfjs-core';
+import { DepthwiseConv2DNCHWSharedProgram as _ag_DepthwiseConv2DNCHWSharedProgram } from '../depthwise_conv2d_nchw_shared_webgpu';
+import { DepthwiseConv2DVec4Program as _ag_DepthwiseConv2DVec4Program } from '../depthwise_conv2d_vec4_webgpu';
+import { DepthwiseConv2DProgram as _ag_DepthwiseConv2DProgram } from '../depthwise_conv2d_webgpu';
+
+// [Antigravity] Global Stats Init
+if (!globalThis._antigravity) globalThis._antigravity = {};
+if (!globalThis._antigravity.depthwise) globalThis._antigravity.depthwise = { count: 0, vec4Hits: 0, cpuTime: 0 };
+
+export function depthwiseConv2dNative(args) {
+    const t0 = performance.now();
+    const { inputs, backend, attrs } = args;
+    const { x, filter } = inputs;
+    const { strides, pad, dataFormat, dilations, dimRoundingMode } = attrs;
+    const $dataFormat = _ag_backend_util.convertConv2DDataFormat(dataFormat);
+    let $dilations = dilations;
+    if ($dilations == null) {
+        $dilations = [1, 1];
+    }
+    const convInfo = _ag_backend_util.computeConv2DInfo(x.shape, filter.shape, strides, $dilations, pad, dimRoundingMode, true /* depthwise */, $dataFormat);
+    const dimensions = [
+        { type: 'int32', data: [convInfo.padInfo.top, convInfo.padInfo.left] },
+        { type: 'int32', data: [convInfo.inHeight, convInfo.inWidth] },
+    ];
+    const isChannelsLast = convInfo.dataFormat === 'channelsLast';
+    let program;
+    let programType = "Naive";
+
+    const canUseSharedNCHW = !isChannelsLast && convInfo.inHeight > 16 && convInfo.inWidth > 16 &&
+        convInfo.strideHeight === 1 && convInfo.strideWidth === 1 &&
+        convInfo.dilationWidth === 1 && convInfo.dilationHeight === 1 &&
+        convInfo.inChannels === convInfo.outChannels;
+
+    const canUseVec4 = isChannelsLast && convInfo.outHeight > 4 && convInfo.outWidth > 4 &&
+        convInfo.strideWidth <= 2 &&
+        convInfo.inChannels === convInfo.outChannels &&
+        convInfo.dilationHeight === 1 && convInfo.dilationWidth === 1 &&
+        convInfo.inChannels % 4 === 0;
+
+    if (canUseSharedNCHW) {
+        programType = "NCHW-Shared";
+        program = new _ag_DepthwiseConv2DNCHWSharedProgram(convInfo.outShape, convInfo.filterHeight, convInfo.filterWidth);
+    }
+    else if (canUseVec4) {
+        programType = "Vec4";
+        program = new _ag_DepthwiseConv2DVec4Program(convInfo);
+        dimensions.push({ type: 'int32', data: [program.virtualWidth] });
+    }
+    else {
+        programType = "Naive";
+        program = new _ag_DepthwiseConv2DProgram(convInfo);
+        dimensions.push({ type: 'int32', data: [convInfo.filterHeight] }, { type: 'int32', data: [convInfo.filterWidth] }, { type: 'int32', data: [convInfo.strideHeight, convInfo.strideWidth] }, {
+            type: 'int32',
+            data: [convInfo.dilationHeight, convInfo.dilationWidth]
+        });
+    }
+
+    const res = backend.runWebGPUProgram(program, [x, filter], x.dtype, dimensions);
+    const dt = performance.now() - t0;
+    if (globalThis._antigravity.depthwise) {
+        globalThis._antigravity.depthwise.count++;
+        if (programType === 'Vec4') globalThis._antigravity.depthwise.vec4Hits++;
+        globalThis._antigravity.depthwise.cpuTime += dt;
+    }
+    return res;
+}
+
+export const depthwiseConv2dNativeConfig = {
+    kernelName: _ag_DepthwiseConv2dNative,
+    backendName: 'webgpu',
+    kernelFunc: depthwiseConv2dNative,
+};

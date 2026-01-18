@@ -1,0 +1,45 @@
+/**
+ * @license
+ * Copyright 2021 Google LLC. All Rights Reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * =============================================================================
+ */
+import { Conv2D as _ag_Conv2D, util as _ag_util } from '@tensorflow/tfjs-core';
+// No import for conv2DImpl needed as we delegate to originalConv2d
+
+// [Antigravity] Global Stats Init
+if (!globalThis._antigravity) globalThis._antigravity = {};
+if (!globalThis._antigravity.conv2d) globalThis._antigravity.conv2d = { count: 0, cpuTime: 0 };
+
+export function conv2d(args) {
+    const t0 = performance.now();
+    const { inputs, backend, attrs } = args;
+    const { x, filter } = inputs;
+    const { strides, pad, dataFormat, dilations, dimRoundingMode } = attrs;
+
+    // Delegate to originalConv2d (renamed by postinstall logic)
+    const res = originalConv2d(args);
+
+    const dt = performance.now() - t0;
+    if (globalThis._antigravity.conv2d) {
+        globalThis._antigravity.conv2d.count++;
+        globalThis._antigravity.conv2d.cpuTime += dt;
+    }
+    return res;
+}
+
+export const conv2DConfig = {
+    kernelName: _ag_Conv2D,
+    backendName: 'webgpu',
+    kernelFunc: conv2d
+};

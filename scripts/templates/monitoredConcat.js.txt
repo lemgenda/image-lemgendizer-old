@@ -1,0 +1,44 @@
+/**
+ * @license
+ * Copyright 2021 Google LLC. All Rights Reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * =============================================================================
+ */
+import { Concat as _ag_Concat, util as _ag_util } from '@tensorflow/tfjs-core';
+import { concatImpl as _ag_concatImpl } from './Concat_impl';
+
+// [Antigravity] Global Stats Init
+if (!globalThis._antigravity) globalThis._antigravity = {};
+if (!globalThis._antigravity.concat) globalThis._antigravity.concat = { count: 0, hits: 0, cpuTime: 0 };
+
+export function concat(args) {
+    const t0 = performance.now();
+    const { inputs, backend, attrs } = args;
+    const { axis } = attrs;
+
+    // Concat Logic
+    const res = _ag_concatImpl(inputs, axis, backend);
+
+    const dt = performance.now() - t0;
+    if (globalThis._antigravity.concat) {
+        globalThis._antigravity.concat.count++;
+        globalThis._antigravity.concat.cpuTime += dt;
+    }
+    return res;
+}
+
+export const concatConfig = {
+    kernelName: _ag_Concat,
+    backendName: 'webgpu',
+    kernelFunc: concat
+};
