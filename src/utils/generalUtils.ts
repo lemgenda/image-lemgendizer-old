@@ -212,6 +212,11 @@ export const orchestrateCustomProcessing = async (
                                 cropPosition: position
                             }
                         );
+
+                        if ((processedFile as any).aiUpscaleScale) {
+                            (image as any).aiUpscaleScale = (processedFile as any).aiUpscaleScale;
+                            (image as any).aiUpscaleModel = (processedFile as any).aiUpscaleModel;
+                        }
                     } catch {
                         processedFile = await (processSimpleSmartCrop as any)(
                             processedFile,

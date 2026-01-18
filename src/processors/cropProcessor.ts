@@ -299,6 +299,7 @@ export function calculateCropOffset(srcWidth: number, srcHeight: number, targetW
 async function cropFromResized(resized: any, targetWidth: number, targetHeight: number, position: any, originalFile: File, options: any = {}, logos: any[] = []): Promise<File> {
     const img = resized.element;
     let offsetX = 0, offsetY = 0;
+
     if (typeof position === 'string') {
         const offset = calculateCropOffset(resized.width, resized.height, targetWidth, targetHeight, position);
         offsetX = offset.offsetX;
@@ -312,15 +313,19 @@ async function cropFromResized(resized: any, targetWidth: number, targetHeight: 
         const subjectCenterX = x + width / 2;
         let subjectCenterY;
 
+        const category = position.category || 'default';
         if (verticalFits) {
             subjectCenterY = y + height / 2;
+
         } else {
-            const category = position.category || 'default';
-            if (category === 'person' || category === 'face' || category === 'animal') {
-                subjectCenterY = y + height * 0.3;
+            if (category === 'face') {
+                subjectCenterY = y + height * 0.5; // Center exactly on face
+            } else if (category === 'person' || category === 'animal') {
+                subjectCenterY = y + height * 0.3; // Focus on upper body/head
             } else {
                 subjectCenterY = y + height * 0.5;
             }
+
         }
 
         offsetX = subjectCenterX - targetWidth / 2;
@@ -473,14 +478,35 @@ function adjustForLogos(offsetX: number, offsetY: number, cropWidth: number, cro
  * Finds main subject in predictions
  */
 function findMainSubject(predictions: any[], imgWidth: number, imgHeight: number): any | null {
-    if (!predictions || predictions.length === 0) return null;
+    if (!predictions || predictions.length === 0) {
+
+        return null;
+    }
+
+
     const validPredictions = predictions.filter(pred => {
         if (!pred.class) return false;
         const className = pred.class.toLowerCase();
-        return pred.score > (AI_SETTINGS.MIN_CONFIDENCE || 0.3) &&
+        const isValid = pred.score > (AI_SETTINGS.MIN_CONFIDENCE || 0.3) &&
             !(IGNORED_OBJECTS || []).includes(className);
+        if (!isValid && pred.score > 0.1) {
+            // console.log(`[SmartCrop] Filtering out ${pred.class} (Score: ${pred.score.toFixed(2)})`);
+        }
+        return isValid;
     });
-    if (validPredictions.length === 0) return null;
+
+    if (validPredictions.length === 0) {
+
+        return null;
+    }
+
+
+    const hasHumanAnywhere = validPredictions.some(p => {
+        const className = (p.class || '').toLowerCase();
+        const cat = (CATEGORY_MAPPING || {})[className] || 'default';
+        return cat === 'face' || cat === 'person' || cat === 'facial_feature';
+    });
+
     const scoredPredictions = validPredictions.map(pred => {
         const bbox = pred.bbox;
         const area = bbox[2] * bbox[3];
@@ -502,18 +528,44 @@ function findMainSubject(predictions: any[], imgWidth: number, imgHeight: number
             sizePenalty = 0.5;
         }
 
+        // NEW: "Frame Penalty" - if subject covers > 85%, it's likely background or the whole person, not the focal point.
+        if (sizeScore > 0.85) {
+            sizePenalty *= 0.15; // Hard penalty for overly large boxes
+        }
+
         let bonus = 1.0;
         if (centralityScore > 0.8 && confidenceScore > 0.7) {
-            bonus = 1.3;
+            bonus = 1.2;
         }
+
         if (category === 'logo') {
             bonus *= (LOGO_DETECTION_CONFIG.PRIORITIZE_LOGOS ? 1.4 : 1.0);
+        }
+
+        // Specific focal point bonuses
+        if (category === 'face') {
+            bonus *= 4.0;
+        } else if (category === 'facial_feature') {
+            bonus *= 2.5;
+        } else if (category === 'person') {
+            bonus *= 1.8;
+        } else if (category === 'animal' || category === 'bird') {
+            bonus *= 2.0;
+        } else if (category === 'food') {
+            bonus *= 2.2;
+        }
+
+        // Human dominance logic - deprioritize secondary items if human is present
+        if (hasHumanAnywhere && (category === 'electronics' || category === 'kitchen' || category === 'furniture' || category === 'building')) {
+            bonus *= 0.1;
         }
 
         const score = (sizeScore * (AI_MODEL_WEIGHTS?.SIZE_WEIGHT || 0.2) +
             confidenceScore * (AI_MODEL_WEIGHTS?.CONFIDENCE_WEIGHT || 0.4) +
             centralityScore * (AI_MODEL_WEIGHTS?.CENTRALITY_WEIGHT || 0.4)) *
             categoryWeight * bonus * sizePenalty;
+
+
 
         return {
             ...pred,
@@ -526,6 +578,8 @@ function findMainSubject(predictions: any[], imgWidth: number, imgHeight: number
         };
     });
     scoredPredictions.sort((a: any, b: any) => b.score - a.score);
+
+
 
     return scoredPredictions[0] || null;
 }
@@ -724,6 +778,8 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
                 try {
                     const upscaleResult = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
                     sourceFile = upscaleResult.file;
+                    (sourceFile as any).aiUpscaleScale = upscaleResult.scale; // Temporary attachment
+                    (sourceFile as any).aiUpscaleModel = upscaleResult.model;
                 } catch {
                     // Intentionally ignore
                 }
@@ -834,6 +890,10 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
         } else {
             focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
             croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
+        }
+        if (croppedFile && (sourceFile as any).aiUpscaleScale) {
+            (croppedFile as any).aiUpscaleScale = (sourceFile as any).aiUpscaleScale;
+            (croppedFile as any).aiUpscaleModel = (sourceFile as any).aiUpscaleModel;
         }
         return croppedFile!;
     } catch {

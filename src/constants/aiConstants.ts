@@ -381,16 +381,16 @@ export const CATEGORY_MAPPING: Record<string, string> = {
 };
 
 export const CATEGORY_WEIGHTS: Record<string, number> = {
+    'face': 10.0,
+    'person': 6.0,
+    'animal': 5.0,
+    'food': 4.5,
+    'facial_feature': 4.0,
+    'body_part': 3.0,
     'logo': 3.0,
-    'face': 2.5,
-    'facial_feature': 2.2,
-    'body_part': 1.9,
-    'person': 1.8,
-    'animal': 1.6,
     'bird': 1.5,
     'insect': 1.3,
     'vehicle': 1.2,
-    'food': 1.4,
     'bag': 1.1,
     'accessory': 1.0,
     'clothing': 1.0,
@@ -398,14 +398,14 @@ export const CATEGORY_WEIGHTS: Record<string, number> = {
     'sports': 0.8,
     'nature': 0.7,
     'building': 0.6,
-    'electronics': 0.5,
-    'kitchen': 0.5,
+    'electronics': 0.1,
+    'kitchen': 0.1,
     'default': 1.0
 };
 
 export const IGNORED_OBJECTS = [
     'remote', 'keyboard', 'mouse', 'cup', 'bowl', 'smart phone',
-    'fork', 'knife', 'spoon', 'cell phone',
+    'fork', 'knife', 'spoon', 'cell phone', 'mobile phone', 'cellphone', 'smartphone', 'handphone', 'phone',
     'pen', 'pencil', 'paper', 'notebook', 'clock', 'watch', 'calculator',
     'charger', 'cable', 'plug', 'socket', 'outlet', 'switch', 'button',
     'doorknob', 'handle', 'hinge', 'screw', 'nail', 'bolt', 'nut',

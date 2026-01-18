@@ -1,4 +1,4 @@
-
+import { describe, it, expect } from 'vitest';
 import { createProcessingSummary } from '../fileUtils';
 import { PROCESSING_MODES } from '../../constants';
 

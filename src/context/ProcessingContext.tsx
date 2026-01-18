@@ -896,6 +896,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                 success: true,
                 templatesApplied: processingOptions.selectedTemplates.length,
                 categoriesApplied: calculateCategoriesApplied(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES, false, false),
+                processedImagesList: successfulImages,
                 errors: processedImages.filter(img => img.error).map(img => ({
                     name: img.name,
                     error: img.error,
@@ -1088,6 +1089,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                 templatesApplied: processingOptions.selectedTemplates.length + (isFaviconSelected ? 1 : 0) + (isScreenshotSelected ? selectedScreenshotTemplates.length : 0),
                 categoriesApplied: categoriesApplied,
                 formatsExported: ['WEBP', 'PNG', 'JPG', 'ICO'],
+                processedImagesList: processedImages,
                 screenshotCount: screenshotResults ? (screenshotResults as any).successful : 0
             }, processingConfig, t);
 

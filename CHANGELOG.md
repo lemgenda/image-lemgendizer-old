@@ -3,6 +3,19 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.5.0] - 2026-01-18
+----------------------
+
+### Improvements
+
+*   **Smart Crop Prioritization**: Significantly improved subject detection logic by introducing a "Frame Penalty" for background subjects and specific focal point bonuses for faces, animals, and food.
+*   **Subject Detection Accuracy**: Fixed case-sensitivity bugs in category matching and expanded the ignored objects list to prevent common electronics (e.g., phones) from winning over faces.
+*   **Animation Compatibility**: Standardized spinner CSS animations with `-webkit-` prefixes and improved block-level centering for better cross-browser compatibility.
+
+### Technical Improvements
+
+*   **Production Readiness**: Removed all `[SmartCrop]` debug logging and prepared the codebase for production deployment.
+
 [3.4.0] - 2026-01-18
 ----------------------
 

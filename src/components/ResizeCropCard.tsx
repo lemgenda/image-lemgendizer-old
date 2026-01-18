@@ -111,6 +111,7 @@ const ResizeCropCard = ({
                             className="input-field"
                             value={isNaN(Number(resizeDimension)) ? '' : resizeDimension}
                             onChange={(e) => onOptionChange('resizeDimension', e.target.value)}
+                            onFocus={() => onOptionChange('resizeDimension', '')}
                             placeholder={`e.g., ${RESIZE_DIMENSION_RANGE.DEFAULT}`}
                             min={RESIZE_DIMENSION_RANGE.MIN}
                             max={RESIZE_DIMENSION_RANGE.MAX}
@@ -156,6 +157,7 @@ const ResizeCropCard = ({
                                     className="input-field"
                                     value={cropWidth}
                                     onChange={(e) => onOptionChange('cropWidth', e.target.value)}
+                                    onFocus={() => onOptionChange('cropWidth', '')}
                                     placeholder="1080"
                                     min={CROP_DIMENSION_RANGE.MIN}
                                     max={CROP_DIMENSION_RANGE.MAX}
@@ -191,6 +193,7 @@ const ResizeCropCard = ({
                                     className="input-field"
                                     value={cropHeight}
                                     onChange={(e) => onOptionChange('cropHeight', e.target.value)}
+                                    onFocus={() => onOptionChange('cropHeight', '')}
                                     placeholder="1080"
                                     min={CROP_DIMENSION_RANGE.MIN}
                                     max={CROP_DIMENSION_RANGE.MAX}

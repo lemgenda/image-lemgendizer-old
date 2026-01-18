@@ -277,7 +277,13 @@ async function processSingleTemplate(
                 );
                 if (resizeResults.length > 0 && resizeResults[0].resized) {
                     processedFile = resizeResults[0].resized;
-                    wasUpscaled = resizeResults[0].upscaled || false;
+                    if (resizeResults[0].upscaleScale) {
+                        wasUpscaled = true;
+                        (processedFile as any).aiUpscaleScale = resizeResults[0].upscaleScale;
+                        (processedFile as any).aiUpscaleModel = resizeResults[0].upscaleModel;
+                    } else {
+                        wasUpscaled = resizeResults[0].upscaled || false;
+                    }
                 }
             }
         }
@@ -304,6 +310,8 @@ async function processSingleTemplate(
                     processed: true,
                     aiCropped: wasSmartCropped,
                     upscaled: wasUpscaled,
+                    aiUpscaleScale: (processedFile as any).aiUpscaleScale,
+                    aiUpscaleModel: (processedFile as any).aiUpscaleModel,
                     isLogo: false,
                     subjectProtected: false
                 });
@@ -326,6 +334,8 @@ async function processSingleTemplate(
                     processed: true,
                     aiCropped: wasSmartCropped,
                     upscaled: wasUpscaled,
+                    aiUpscaleScale: (processedFile as any).aiUpscaleScale,
+                    aiUpscaleModel: (processedFile as any).aiUpscaleModel,
                     hasTransparency: false,
                     isLogo: false,
                     subjectProtected: false
@@ -350,6 +360,8 @@ async function processSingleTemplate(
                     processed: true,
                     aiCropped: wasSmartCropped,
                     upscaled: wasUpscaled,
+                    aiUpscaleScale: (processedFile as any).aiUpscaleScale,
+                    aiUpscaleModel: (processedFile as any).aiUpscaleModel,
                     hasTransparency: hasTransparency,
                     isLogo: true,
                     subjectProtected: subjectProtected
@@ -374,6 +386,8 @@ async function processSingleTemplate(
                         processed: true,
                         aiCropped: wasSmartCropped,
                         upscaled: wasUpscaled,
+                        aiUpscaleScale: (processedFile as any).aiUpscaleScale,
+                        aiUpscaleModel: (processedFile as any).aiUpscaleModel,
                         hasTransparency: false,
                         isLogo: true,
                         subjectProtected: subjectProtected
@@ -398,6 +412,8 @@ async function processSingleTemplate(
                     processed: true,
                     aiCropped: wasSmartCropped,
                     upscaled: wasUpscaled,
+                    aiUpscaleScale: (processedFile as any).aiUpscaleScale,
+                    aiUpscaleModel: (processedFile as any).aiUpscaleModel,
                     isLogo: false,
                     subjectProtected: false
                 });
@@ -420,6 +436,8 @@ async function processSingleTemplate(
                     processed: true,
                     aiCropped: wasSmartCropped,
                     upscaled: wasUpscaled,
+                    aiUpscaleScale: (processedFile as any).aiUpscaleScale,
+                    aiUpscaleModel: (processedFile as any).aiUpscaleModel,
                     isLogo: false,
                     subjectProtected: false
                 });

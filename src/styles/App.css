@@ -1197,16 +1197,45 @@ body {
    ========================================================================== */
 
 @keyframes spin {
-    0% {
+    from {
         transform: rotate(0deg);
     }
 
-    100% {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@-webkit-keyframes spin {
+    from {
+        -webkit-transform: rotate(0deg);
+    }
+
+    to {
+        -webkit-transform: rotate(360deg);
+    }
+}
+
+@keyframes fa-spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
         transform: rotate(360deg);
     }
 }
 
 /* Force spin even if prefers-reduced-motion is set */
 .fa-spin {
-    animation: spin 2s linear infinite !important;
+    display: inline-block !important;
+    -webkit-animation: fa-spin 2s linear infinite !important;
+    animation: fa-spin 2s linear infinite !important;
+}
+
+/* Ensure spinners inside loading containers have enough space and are block-level for reliable rotation */
+.loading-spinner i.fa-spin {
+    display: block !important;
+    margin: 0 auto var(--space-md) !important;
+    width: fit-content;
 }

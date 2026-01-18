@@ -31,6 +31,14 @@ const ASSETS_TO_COPY = [
         src: 'node_modules/upscaler/dist/browser/umd/upscaler.min.js',
         dest: 'lib/upscaler.min.js'
     },
+    {
+        src: 'node_modules/@tensorflow-models/body-segmentation/dist/body-segmentation.min.js',
+        dest: 'lib/body-segmentation.min.js'
+    },
+    {
+        src: 'node_modules/@tensorflow-models/face-landmarks-detection/dist/face-landmarks-detection.min.js',
+        dest: 'lib/face-landmarks-detection.min.js'
+    },
     // Esrgan Slim Models
     {
         src: 'node_modules/@upscalerjs/esrgan-slim/models/x2/model.json',
