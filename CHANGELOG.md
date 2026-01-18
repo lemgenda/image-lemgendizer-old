@@ -3,6 +3,29 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.4.0] - 2026-01-18
+----------------------
+
+### New Features
+
+*   **Refactored Resize & Crop UI**: Introduced a unified 3-way segmented control for seamless switching between Resize, Smart Crop, and Standard Crop modes.
+*   **WebGPU Stabilization**: Fully resolved WebGPU shader compilation errors (`vec3<f32>`) and initialization timing issues, enabling stable high-performance AI processing.
+*   **AI Smart Preloading**: Implemented intelligent preloading for 2x upscaling models and lazy loading for larger models to optimize bandwidth and startup time.
+*   **Enhanced Watermark Controls**: Refactored Watermark UI into a side-by-side layout with intuitive dropdowns for Position and Size, fully accessible via keyboard.
+
+### Improvements
+
+*   **Processing Summary**: Added detailed reporting of AI upscaling factors (e.g., "Upscaled x2") in the final processing summary.
+*   **Test Suite Reliability**: Achieved 100% test pass rate (26/26 files) by resolving JSDOM Worker issues and fixing brittle UI selectors.
+*   **Accessibility**: Added comprehensive ARIA labels and `htmlFor` associations to all new form controls (Resize, Crop, Watermark).
+*   **Code Quality**: Consolidated component styling into dedicated CSS files and removed inline styles.
+
+### Bug Fixes
+
+*   **Fixed Worker in Tests**: Resolved `ReferenceError: Worker is not defined` in Vitest environment.
+*   **Fixed Crop Selectors**: Updated integration tests to match the new segmented control UI.
+*   **Fixed Template IDs**: Corrected typo in template selection checkbox IDs that caused testing failures.
+
 [3.3.0] - 2026-01-17
 ----------------------
 

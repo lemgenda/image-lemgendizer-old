@@ -359,7 +359,7 @@ This project is licensed under the MIT License - see the [LICENSE](https://lice
 📊 Project Status
 -----------------
 
-**Version**: 3.3.0
+**Version**: 3.4.0
 **Last Updated**: January 2026
 **Active Development**: Yes
 **Production Ready**: Yes
