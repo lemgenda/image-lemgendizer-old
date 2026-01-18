@@ -5,6 +5,16 @@
     overflow: hidden;
 }
 
+.filtered-preview-image {
+    filter: none;
+    opacity: var(--preview-opacity, 1);
+    transition: opacity 0.2s ease, filter 0.3s ease;
+}
+
+.filtered-preview-image.processing {
+    opacity: 0.7;
+}
+
 .gallery-loading-spinner-size {
     width: 20px;
     height: 20px;

@@ -83,3 +83,33 @@ Object.defineProperty(global.HTMLImageElement.prototype, 'naturalWidth', { get: 
 Object.defineProperty(global.HTMLImageElement.prototype, 'naturalHeight', { get: () => 100 });
 Object.defineProperty(global.HTMLImageElement.prototype, 'width', { get: () => 100 });
 Object.defineProperty(global.HTMLImageElement.prototype, 'height', { get: () => 100 });
+
+// Mock Worker
+class MockWorker {
+    url: string;
+    onmessage: (e: MessageEvent) => void;
+    onerror: (e: ErrorEvent) => void;
+
+    constructor(stringUrl: string) {
+        this.url = stringUrl;
+        this.onmessage = () => { };
+        this.onerror = () => { };
+    }
+
+    postMessage(_msg: any) {
+        // Echo back or handle specific messages if needed for tests
+        // For basic load tests, just doing nothing or ack is often enough
+        setTimeout(() => {
+            if (this.onmessage) {
+                this.onmessage({ data: { type: 'complete', result: 'mock-result' } } as MessageEvent);
+            }
+        }, 50);
+    }
+
+    terminate() { }
+    addEventListener() { }
+    removeEventListener() { }
+    dispatchEvent() { return true; }
+}
+
+(global as any).Worker = MockWorker;

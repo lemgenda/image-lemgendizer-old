@@ -39,5 +39,6 @@ lint_output.txt
 
 # Debug folder
 debug/
+debug/*
 
 public/models/

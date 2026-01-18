@@ -101,34 +101,52 @@ export const applyWatermark = async (
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const { type, opacity, position, size } = options;
+
+
+    const { type, opacity, position, size, repeat, fontFamily } = options;
     ctx.save();
     ctx.globalAlpha = opacity;
 
     if (type === 'text' && options.text) {
         // Base font size relative to canvas width
         const baseFontSize = canvas.width * getWatermarkScale(size) * 0.5;
-        const font = `${options.fontSize || baseFontSize}px Arial`;
+        const finalFontSize = options.fontSize || baseFontSize;
+        const font = `${finalFontSize}px ${fontFamily || 'Arial'}`;
         ctx.font = font;
         ctx.fillStyle = options.color || '#ffffff';
         ctx.textBaseline = 'top';
 
         const metrics = ctx.measureText(options.text);
-        const { x, y } = calculatePosition(
-            canvas.width,
-            canvas.height,
-            metrics.width,
-            options.fontSize || baseFontSize,
-            position
-        );
+        const w = metrics.width;
+        const h = finalFontSize;
 
-        ctx.fillText(options.text, x, y);
+        if (repeat) {
+            // Tilting logic
+            const spacingX = w * 1.5;
+            const spacingY = h * 3;
+            ctx.rotate(-45 * Math.PI / 180); // Optional: Rotate for that classic tiled feel
+
+            // Adjust loop ranges because of rotation
+            for (let x = -canvas.width; x < canvas.width * 2; x += spacingX) {
+                for (let y = -canvas.height; y < canvas.height * 2; y += spacingY) {
+                    ctx.fillText(options.text, x, y);
+                }
+            }
+        } else {
+            const { x, y } = calculatePosition(canvas.width, canvas.height, w, h, position);
+            ctx.fillText(options.text, x, y);
+        }
     } else if (type === 'image' && options.image) {
         try {
             const img = await new Promise<HTMLImageElement>((resolve, reject) => {
                 const i = new Image();
-                i.onload = () => resolve(i);
-                i.onerror = () => reject(new Error('Failed to load watermark image'));
+                i.onload = () => {
+                    resolve(i);
+                };
+                i.onerror = () => {
+                    reject(new Error('Failed to load watermark image'));
+                };
+
                 i.src = options.image as string;
             });
 
@@ -143,10 +161,20 @@ export const applyWatermark = async (
                 w = (img.width / img.height) * h;
             }
 
-            const { x, y } = calculatePosition(canvas.width, canvas.height, w, h, position);
-            ctx.drawImage(img, x, y, w, h);
-        } catch (err) {
-            console.error('[WatermarkProcessor] Image failed to load:', err);
+            if (repeat) {
+                const spacingX = w * 1.5;
+                const spacingY = h * 1.5;
+                for (let x = 0; x < canvas.width; x += spacingX) {
+                    for (let y = 0; y < canvas.height; y += spacingY) {
+                        ctx.drawImage(img, x, y, w, h);
+                    }
+                }
+            } else {
+                const { x, y } = calculatePosition(canvas.width, canvas.height, w, h, position);
+                ctx.drawImage(img, x, y, w, h);
+            }
+        } catch {
+            // Fail silently
         }
     }
 

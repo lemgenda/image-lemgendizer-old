@@ -1,4 +1,4 @@
-import { TemplateSelectionCard } from './index';
+import TemplateSelectionCard from './TemplateSelectionCard';
 import type { ProcessingOptions, ImageFile } from '../types';
 
 /**

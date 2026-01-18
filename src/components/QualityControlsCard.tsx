@@ -1,4 +1,4 @@
-import { RangeSliderElement } from './index';
+import RangeSliderElement from './RangeSliderElement';
 import { COMPRESSION_QUALITY_RANGE, NUMBER_INPUT_CONSTANTS } from '../constants';
 import type { ProcessingOptions } from '../types';
 

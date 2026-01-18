@@ -1,5 +1,7 @@
 import type { ProcessingOptions, ImageFile } from '../types';
-import { ScreenShotsCard, TemplateImageSection, FilterSelectionCard } from './index';
+import ScreenShotsCard from './ScreenShotsCard';
+import TemplateImageSection from './TemplateImageSection';
+import FilterSelectionCard from './FilterSelectionCard';
 import { SOCIAL_MEDIA_TEMPLATES } from '../configs/templateConfigs';
 import { IMAGE_FILTERS } from '../constants';
 import '../styles/TemplateSelectionCard.css';

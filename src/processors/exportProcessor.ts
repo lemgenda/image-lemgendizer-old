@@ -732,6 +732,19 @@ ${t ? t('export.summary.categoriesApplied') : 'Categories Applied'}: ${categorie
 ${t ? t('export.summary.formatsExported') : 'Formats Exported'}: ${Array.from(formatsUsed).join(', ')}
 ${t ? t('export.summary.totalFiles') : 'Total Files in Export'}: ${calculateTotalFiles(validOriginalImages, processedImages, settings, mode, faviconFilesCount)}
 
+${validProcessedImages.some(img => img.aiUpscaleScale) ? `
+${t ? t('summary.upscalingUsed') : 'AI UPSCALING'}:${'='.repeat(t ? t('summary.upscalingUsed').length : 12)}
+- ${t ? t('operations.aiUpscalingWithModel', { model: `x${validProcessedImages.find(img => img.aiUpscaleScale).aiUpscaleScale}` }) : `AI upscaling with x${validProcessedImages.find(img => img.aiUpscaleScale).aiUpscaleScale} model`}
+` : ''}
+
+${settings.watermark && settings.watermark.enabled ? `
+${t ? t('export.summary.watermarkInfo') : 'WATERMARK INFO'}:${'='.repeat(t ? t('export.summary.watermarkInfo').length : 14)}
+- ${t ? t('summary.watermarkType') : 'Type'}: ${settings.watermark.type.toUpperCase()}
+- ${settings.watermark.type === 'text' ? `${t ? t('summary.watermarkText') : 'Text'}: ${settings.watermark.text}` : `${t ? t('summary.watermarkImage') : 'Image'}: ${t ? t('summary.customLogo') : 'Custom Logo'}`}
+- ${t ? t('summary.watermarkPosition') : 'Position'}: ${settings.watermark.position}
+- ${t ? t('summary.watermarkOpacity') : 'Opacity'}: ${Math.round(settings.watermark.opacity * 100)}%
+` : ''}
+
 ${t ? t('export.summary.foldersStructure') : 'FOLDERS STRUCTURE'}:${'='.repeat(t ? t('export.summary.foldersStructure').length : 18)}
 ${getExportFolderStructure(mode, settings).map(folder => `- ${folder}`).join('\n')}
 

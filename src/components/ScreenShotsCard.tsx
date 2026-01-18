@@ -291,7 +291,7 @@ const ScreenShotsCard = ({
                                 <div className="progress-bar">
                                     <div
                                         className="progress-fill"
-                                        style={{ width: `${captureProgress}%` }}
+                                        style={{ '--capture-progress': `${captureProgress}%` } as React.CSSProperties}
                                     ></div>
                                 </div>
                                 <p className="progress-text">

@@ -26,6 +26,7 @@ export interface ImageFile {
     processedSize?: number;
     upscaled?: boolean;
     aiCropped?: boolean;
+    aiUpscaleScale?: number;
     isLogo?: boolean;
     subjectProtected?: boolean;
     processed?: boolean;
@@ -94,6 +95,8 @@ export interface WatermarkOptions {
     size: 'small' | 'medium' | 'large' | 'extra-large';
     color?: string;
     fontSize?: number;
+    fontFamily?: string;
+    repeat?: boolean;
 }
 
 export interface ProcessingOptions {
@@ -164,3 +167,20 @@ export type Theme = 'light' | 'dark';
 export type AppTemplate = TemplateConfig;
 export type ExportSettings = any;
 export type CropMode = string;
+
+export interface ProcessingSummary {
+    mode: string;
+    imagesProcessed: number;
+    operations: string[];
+    aiUsed: boolean;
+    upscalingUsed: boolean;
+    totalFiles: number;
+    success: boolean;
+    errors: string[];
+    templatesApplied: number;
+    categoriesApplied: number;
+    formatsExported: string[];
+    screenshotCount?: number;
+    watermarkApplied: boolean;
+    upscaleScale?: number;
+}

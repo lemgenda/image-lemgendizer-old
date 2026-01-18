@@ -92,6 +92,20 @@ ASSETS_TO_COPY.forEach(asset => {
             } else {
                 console.warn('Warning: Could not find powerPreference pattern in tf-backend-webgpu.min.js to patch.');
             }
+
+            // Patch 2: Fix "no matching constructor for vec3<f32>(i32, i32, i32)" error
+            // The issue causes a crash when using WebGPU backend with certain models.
+            // We replace the faulty shader generation string with one that explicitly casts to f32.
+            const faultyShader = 'resData = vec3<f32>(x[xIndex], x[xIndex + 1], x[xIndex + 2]);';
+            const fixedShader = 'resData = vec3<f32>(f32(x[xIndex]), f32(x[xIndex + 1]), f32(x[xIndex + 2]));';
+
+            if (content.includes(faultyShader)) {
+                content = content.replace(faultyShader, fixedShader);
+                console.log('Patched tf-backend-webgpu.min.js: Fixed vec3<f32> constructor shader error.');
+            } else {
+                console.warn('Warning: Could not find vec3<f32> shader pattern to patch.');
+            }
+
             fs.writeFileSync(destPath, content);
             console.log(`Copied and Patched: ${asset.src} -> ${asset.dest}`);
         } else {

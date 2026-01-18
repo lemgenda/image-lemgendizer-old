@@ -200,6 +200,7 @@ function App() {
                   onSelectAll={handleSelectAll}
                   formatFileSize={formatFileSize}
                   selectedFilter={processingOptions.filters?.selectedFilter}
+                  watermarkOptions={processingOptions.watermark}
                 />
               </div>
             </div>
@@ -221,7 +222,7 @@ function App() {
               <div className="progress-bar-container">
                 <div
                   className="progress-bar-fill"
-                  style={{ width: `${modal.progress}%` }}
+                  style={{ '--modal-progress': `${modal.progress}%` } as React.CSSProperties}
                 ></div>
               </div>
               <div className="progress-text">
@@ -327,7 +328,19 @@ function App() {
                     <div className="summary-item">
                       <div className="summary-label">{t('summary.upscalingUsed')}:</div>
                       <div className="summary-value text-success">
-                        <i className="fas fa-expand-arrows-alt mr-1"></i> {t('summary.yes')}
+                        <i className="fas fa-expand-arrows-alt mr-1"></i>
+                        {processingSummary.upscaleScale
+                          ? `${t('summary.yes')} (x${processingSummary.upscaleScale})`
+                          : t('summary.yes')}
+                      </div>
+                    </div>
+                  )}
+
+                  {processingSummary.watermarkApplied && (
+                    <div className="summary-item">
+                      <div className="summary-label">{t('summary.watermarkApplied')}:</div>
+                      <div className="summary-value text-success">
+                        <i className="fas fa-copyright mr-1"></i> {t('summary.yes')}
                       </div>
                     </div>
                   )}

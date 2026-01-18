@@ -138,7 +138,8 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
                         } catch { /* ignored */ }
                     }
 
-                    processedFile = await (resizeImageWithAI as any)(processableFile, dimension, options);
+                    const resizeResult = await (resizeImageWithAI as any)(processableFile, dimension, options);
+                    processedFile = resizeResult.file;
 
                     results.push({
                         original: { ...image, file: imageFile },
@@ -148,6 +149,7 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
                         isTIFF: isTIFF,
                         isLegacy: isBMP || isGIF || isICO,
                         optimized: true,
+                        upscaleScale: resizeResult.scale,
                         aspectRatioPreserved: true,
                         error: conversionError,
                         format: options.format || IMAGE_FORMATS.WEBP
@@ -531,7 +533,8 @@ export const getProcessingConfiguration = (processingOptions: any): any => {
             opacity: parseFloat(processingOptions.watermark?.opacity || '0.5'),
             size: processingOptions.watermark?.size || 'medium',
             color: processingOptions.watermark?.color || '#ffffff',
-            fontSize: parseInt(processingOptions.watermark?.fontSize || '24')
+            fontSize: parseInt(processingOptions.watermark?.fontSize || '24'),
+            repeat: !!processingOptions.watermark?.repeat
         },
         processingMode: processingOptions.processingMode
     };

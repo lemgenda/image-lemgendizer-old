@@ -4,12 +4,15 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { applyImageFilter } from '../processors/filterProcessor';
+import { applyWatermark } from '../processors/watermarkProcessor';
 import { IMAGE_FILTERS } from '../constants';
+import type { WatermarkOptions } from '../types';
 import '../styles/FilteredPreview.css';
 
 interface FilteredPreviewProps {
     src: string;
     filter: string;
+    watermark?: WatermarkOptions;
     alt?: string;
     className?: string;
     style?: React.CSSProperties;
@@ -26,17 +29,20 @@ interface FilteredPreviewProps {
 const FilteredPreview: React.FC<FilteredPreviewProps> = ({
     src,
     filter,
+    watermark,
     alt = "",
     className = "",
-    style = {},
     onLoad,
     onError
 }) => {
     const [displayUrl, setDisplayUrl] = useState<string>(src);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
-    const lastProcessed = useRef<{ src: string, filter: string } | null>(null);
+    const lastProcessed = useRef<{ src: string, filter: string, watermark?: string } | null>(null);
     const blobUrlRef = useRef<string | null>(null);
     const [prevSrc, setPrevSrc] = useState(src);
+
+    // Create a stable string representation of watermark for dependency tracking
+    const watermarkKey = watermark ? JSON.stringify(watermark) : 'none';
 
     // Sync displayUrl when src becomes empty (render phase)
     if (src !== prevSrc) {
@@ -53,19 +59,23 @@ const FilteredPreview: React.FC<FilteredPreviewProps> = ({
             return;
         }
 
-        if (filter === IMAGE_FILTERS.NONE || !filter) {
+        // If no filter AND no enabled watermark
+        if ((filter === IMAGE_FILTERS.NONE || !filter) && (!watermark || !watermark.enabled)) {
             if (blobUrlRef.current) {
                 URL.revokeObjectURL(blobUrlRef.current);
                 blobUrlRef.current = null;
             }
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             if (displayUrl !== src) setDisplayUrl(src);
-            lastProcessed.current = { src, filter: IMAGE_FILTERS.NONE };
+            lastProcessed.current = { src, filter: IMAGE_FILTERS.NONE, watermark: 'none' };
             return;
         }
 
         // If already processed this exact combination
-        if (lastProcessed.current?.src === src && lastProcessed.current?.filter === filter) {
+        if (
+            lastProcessed.current?.src === src &&
+            lastProcessed.current?.filter === filter &&
+            lastProcessed.current?.watermark === watermarkKey
+        ) {
             return;
         }
 
@@ -85,12 +95,19 @@ const FilteredPreview: React.FC<FilteredPreviewProps> = ({
 
                 if (!isMounted) return;
 
-                // Apply filter
+                // 1. Apply filter (on a copy/canvas)
                 const canvas = await applyImageFilter(img, filter);
 
                 if (!isMounted) return;
 
-                // Create blob URL
+                // 2. Apply watermark (if enabled)
+                if (watermark && watermark.enabled) {
+                    await applyWatermark(canvas, watermark);
+                }
+
+                if (!isMounted) return;
+
+                // 3. Create blob URL
                 canvas.toBlob((blob) => {
                     if (!isMounted || !blob) return;
 
@@ -103,7 +120,7 @@ const FilteredPreview: React.FC<FilteredPreviewProps> = ({
 
                     blobUrlRef.current = newBlobUrl;
                     setDisplayUrl(newBlobUrl);
-                    lastProcessed.current = { src, filter };
+                    lastProcessed.current = { src, filter, watermark: watermarkKey };
                     setIsProcessing(false);
                 }, 'image/jpeg', 0.8);
 
@@ -120,7 +137,8 @@ const FilteredPreview: React.FC<FilteredPreviewProps> = ({
         return () => {
             isMounted = false;
         };
-    }, [src, filter, displayUrl]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [src, filter, watermarkKey]);
 
     // Cleanup blob URL on unmount
     useEffect(() => {
@@ -136,15 +154,9 @@ const FilteredPreview: React.FC<FilteredPreviewProps> = ({
             <img
                 src={displayUrl}
                 alt={alt}
-                className={className}
+                className={`filtered-preview-image ${className} ${isProcessing ? 'processing' : ''}`}
                 onLoad={onLoad}
                 onError={onError}
-                style={{
-                    ...style,
-                    filter: 'none', // We apply filter via CamanJS now
-                    opacity: isProcessing ? 0.7 : 1,
-                    transition: 'opacity 0.2s ease, filter 0.3s ease'
-                }}
             />
             {isProcessing && (
                 <div className="gallery-image-loading gallery-image-loading-overlay">

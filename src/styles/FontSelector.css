@@ -1,0 +1,7 @@
+.font-selector-select {
+    font-family: var(--selected-font, inherit);
+}
+
+.font-selector-option {
+    font-family: var(--option-font, inherit);
+}

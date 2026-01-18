@@ -64,43 +64,52 @@ const ResizeCropCard = ({
     return (
         <div className="card">
             <h3 className="card-title">
-                {showResize ? (
-                    <>
-                        <i className="fas fa-expand-alt"></i> {t('resize.title')}
-                    </>
-                ) : (
-                    <>
-                        <i className="fas fa-crop-alt"></i> {cropMode === CROP_MODES.SMART ? t('crop.switchToSmart') : t('crop.switchToStandard')}
-                    </>
-                )}
+                <i className="fas fa-compress-arrows-alt"></i> {t('resize.title')} & {t('crop.title')}
             </h3>
 
-            <div className="mb-md">
+            <div className="mode-toggle-group">
                 <button
-                    className="btn btn-secondary btn-full-width"
-                    onClick={() => onToggleResizeCrop(showResize ? 'crop' : 'resize')}
+                    type="button"
+                    className={`mode-toggle-btn ${showResize ? 'active' : ''}`}
+                    onClick={() => onToggleResizeCrop('resize')}
                 >
-                    {showResize ? (
-                        <>
-                            <i className="fas fa-crop"></i> {t('resize.switchToCrop')}
-                        </>
-                    ) : (
-                        <>
-                            <i className="fas fa-expand-alt"></i> {t('resize.switchToResize')}
-                        </>
-                    )}
+                    <i className="fas fa-expand-alt"></i>
+                    <span>{t('resize.title')}</span>
+                </button>
+                <button
+                    type="button"
+                    className={`mode-toggle-btn ${!showResize && cropMode === CROP_MODES.SMART ? 'active' : ''}`}
+                    onClick={() => {
+                        onToggleResizeCrop('crop');
+                        onToggleCropMode(CROP_MODES.SMART);
+                    }}
+                    disabled={aiLoading}
+                >
+                    <i className="fas fa-brain"></i>
+                    <span>{t('crop.smart')}</span>
+                </button>
+                <button
+                    type="button"
+                    className={`mode-toggle-btn ${!showResize && cropMode === CROP_MODES.STANDARD ? 'active' : ''}`}
+                    onClick={() => {
+                        onToggleResizeCrop('crop');
+                        onToggleCropMode(CROP_MODES.STANDARD);
+                    }}
+                >
+                    <i className="fas fa-crop-alt"></i>
+                    <span>{t('crop.standard')}</span>
                 </button>
             </div>
 
             {showResize ? (
-                <div className="form-group">
+                <div className="form-group resize-dimension-group">
                     <label className="form-label" htmlFor="resize-dimension-input">{t('resize.dimension')}</label>
                     <div className="number-input-wrapper">
                         <input
                             type="number"
                             id="resize-dimension-input"
                             className="input-field"
-                            value={resizeDimension}
+                            value={isNaN(Number(resizeDimension)) ? '' : resizeDimension}
                             onChange={(e) => onOptionChange('resizeDimension', e.target.value)}
                             placeholder={`e.g., ${RESIZE_DIMENSION_RANGE.DEFAULT}`}
                             min={RESIZE_DIMENSION_RANGE.MIN}
@@ -129,34 +138,13 @@ const ResizeCropCard = ({
                 </div>
             ) : (
                 <div className="space-y-md">
-                    <div className="form-group">
-                        <div className="toggle-btn">
-                            <button
-                                type="button"
-                                className={`btn ${cropMode === CROP_MODES.SMART ? 'btn-primary' : 'btn-secondary'}`}
-                                onClick={() => onToggleCropMode(cropMode === CROP_MODES.SMART ? CROP_MODES.STANDARD : CROP_MODES.SMART)}
-                                disabled={aiLoading}
-                            >
-                                {cropMode === CROP_MODES.SMART ? (
-                                    <>
-                                        <i className="fas fa-crop-alt"></i> {t('crop.switchToStandard')}
-                                        {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
-                                    </>
-                                ) : (
-                                    <>
-                                        <i className="fas fa-brain"></i> {t('crop.switchToSmart')}
-                                        {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                        {cropMode === CROP_MODES.SMART && (
-                            <p className="text-sm text-muted mt-sm">
-                                <i className="fas fa-info-circle mr-1"></i>
-                                {t('crop.smartBest')}
-                            </p>
-                        )}
-                    </div>
+                    {cropMode === CROP_MODES.SMART && (
+                        <p className="text-sm text-muted mb-sm">
+                            <i className="fas fa-info-circle mr-1"></i>
+                            {t('crop.smartBest')}
+                            {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
+                        </p>
+                    )}
 
                     <div className="grid grid-cols-2 gap-md">
                         <div className="form-group">
@@ -245,9 +233,6 @@ const ResizeCropCard = ({
                                     </option>
                                 ))}
                             </select>
-                            <p className="form-helper">
-                                {t('crop.helper')}
-                            </p>
                         </div>
                     )}
                 </div>

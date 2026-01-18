@@ -172,6 +172,7 @@ export const AVAILABLE_LANGUAGES = [
 // Processing Mode Constants
 // ================================
 
+import { ProcessingOptions } from '../types';
 export const PROCESSING_MODES = {
     CUSTOM: 'custom',
     TEMPLATES: 'templates',
@@ -236,48 +237,75 @@ export const MODAL_TYPES = {
     SUMMARY: 'summary'
 } as const;
 
-export const DEFAULT_PROCESSING_CONFIG = {
+export const WATERMARK_FONTS = [
+    'Arial',
+    'Roboto',
+    'Open Sans',
+    'Montserrat',
+    'Playfair Display',
+    'Oswald',
+    'Raleway',
+    'Poppins',
+    'Lato',
+    'Merriweather'
+] as const;
+
+/**
+ * Default internal processing configuration.
+ * Categories: output, resize, crop, filters, watermark
+ */
+export const DEFAULT_PROCESSING_CONFIG: ProcessingOptions = {
+    processingMode: 'custom',
+    output: {
+        formats: [IMAGE_FORMATS.WEBP, IMAGE_FORMATS.JPG, IMAGE_FORMATS.PNG],
+        quality: 0.82,
+        targetSize: 0,
+        rename: false,
+        newFileName: '{name}-optimized'
+    },
+    resize: {
+        enabled: false,
+        dimension: '1080p',
+        width: 1920,
+        height: 1080
+    },
+    crop: {
+        enabled: false,
+        width: 1080,
+        height: 1080,
+        mode: 'center',
+        position: 'center'
+    },
     compression: {
-        quality: 85,
+        quality: 0.8,
         fileSize: ''
     },
-    output: {
-        formats: ['webp'],
-        quality: 85,
-        rename: false,
-        newFileName: ''
-    },
-    resizeDimension: '',
-    cropWidth: '',
-    cropHeight: '',
     showResize: true,
     showCrop: false,
+    resizeDimension: '1080p',
+    cropMode: 'center',
+    cropWidth: '1080',
+    cropHeight: '1080',
+    cropPosition: 'center',
     showTemplates: false,
     selectedTemplates: [],
-    processingMode: PROCESSING_MODES.CUSTOM,
-    templateSelectedImage: null,
     smartCrop: false,
-    cropMode: CROP_MODES.SMART,
-    cropPosition: DEFAULT_CROP_POSITION,
-    faviconSiteName: 'My Website',
-    faviconThemeColor: '#ffffff',
-    faviconBackgroundColor: '#ffffff',
-    faviconMode: 'basic',
     filters: {
-        enabled: true,
+        enabled: false,
         selectedFilter: 'none'
     },
     watermark: {
         enabled: false,
-        type: 'text' as const,
-        text: 'LEMGENDA',
-        image: null,
+        type: 'text',
+        text: '© LemGendizer',
         position: 'bottom-right',
         opacity: 0.5,
-        size: 'medium' as const,
+        size: 'medium',
         color: '#ffffff',
-        fontSize: 24
-    }
+        fontSize: 32,
+        fontFamily: 'Arial',
+        repeat: false
+    } as const
 };
 
 export const EXPORT_SETTINGS = {

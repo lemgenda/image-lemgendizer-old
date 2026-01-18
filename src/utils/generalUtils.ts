@@ -177,6 +177,9 @@ export const orchestrateCustomProcessing = async (
 
                     if (resizeResults.length > 0 && resizeResults[0].resized) {
                         processedFile = resizeResults[0].resized;
+                        if (resizeResults[0].upscaleScale) {
+                            (image as any).aiUpscaleScale = resizeResults[0].upscaleScale;
+                        }
                         if (resizeResults[0].error) {
                             throw resizeResults[0].error;
                         }
@@ -233,8 +236,17 @@ export const orchestrateCustomProcessing = async (
 
             const outputFormats = processingConfig.output?.formats || [IMAGE_FORMATS.WEBP];
 
+            // Verify configuration
+
+
             for (const format of outputFormats) {
-                if (format === IMAGE_FORMATS.ORIGINAL) {
+                // Determine if we need to force optimization (for watermark or filter) even on original format
+                const needsProcessing = processingConfig.watermark?.enabled ||
+                    (filter && filter !== IMAGE_FILTERS.NONE);
+
+
+
+                if (format === IMAGE_FORMATS.ORIGINAL && !needsProcessing) {
                     // const originalFormat = (image as any).originalFormat || image.type.split('/')[1];
                     processedImages.push({
                         ...image,
@@ -246,12 +258,17 @@ export const orchestrateCustomProcessing = async (
                     });
                 } else {
                     // 3. Filter & Optimize (Compression / Format Conversion)
+                    // If format is ORIGINAL but we need processing, use the current file's type as target format
+                    const targetFormat = format === IMAGE_FORMATS.ORIGINAL
+                        ? (processedFile.type ? processedFile.type.split('/')[1] : 'png')
+                        : format;
+
                     // This creates the final Blob/File
                     // Final optimization and watermark
                     const optimizedFile: Blob = await processLengendaryOptimize(
                         processedFile,
                         processingConfig.output.quality || 0.8,
-                        format,
+                        targetFormat,
                         filter,
                         (processingConfig.output as any).targetSize,
                         processingConfig // Pass full config which includes watermark

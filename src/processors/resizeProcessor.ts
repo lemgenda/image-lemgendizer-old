@@ -34,6 +34,7 @@ let memoryCleanupInterval: NodeJS.Timeout | null = null;
 let aiUpscalingDisabled = false;
 let textureManagerFailures = 0;
 let cleanupInProgress = false;
+let loadingPromise: Promise<void> | null = null;
 
 /* --- Helpers --- */
 
@@ -148,35 +149,72 @@ const dataURLToCanvas = (dataURL: string): Promise<HTMLCanvasElement> => {
 };
 
 /**
- * Loads upscaler from CDN
+ * Loads upscaler and required libraries from local path
  * @returns {Promise<void>}
  */
-const loadUpscalerFromCDN = (): Promise<void> => {
-    return new Promise((resolve) => {
-        if ((window as any).Upscaler) {
-            resolve();
+const loadUpscalerLibraries = (): Promise<void> => {
+    if (loadingPromise) return loadingPromise;
+
+    loadingPromise = (async () => {
+        if ((window as any).Upscaler && (window as any).tf) {
             return;
         }
 
-        const script = document.createElement('script');
-        script.src = `${AI_SETTINGS.LOCAL_LIB_PATH}upscaler.min.js`;
-        script.onload = () => resolve();
-        script.onerror = () => resolve();
-        document.head.appendChild(script);
-    });
+        const loadScript = (src: string): Promise<void> => {
+            return new Promise((res) => {
+                // Check if script is already loaded
+                if (document.querySelector(`script[src="${src}"]`)) {
+                    res();
+                    return;
+                }
+
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = () => res();
+                s.onerror = () => {
+                    console.warn(`[AI] Failed to load script: ${src}`);
+                    res(); // Fail silently to try next steps or fallback
+                };
+                document.head.appendChild(s);
+            });
+        };
+
+        if (!(window as any).tf) {
+            await loadScript(`${AI_SETTINGS.LOCAL_LIB_PATH}tf.min.js`);
+        }
+        // Load WebGPU backend
+        await loadScript(`${AI_SETTINGS.LOCAL_LIB_PATH}tf-backend-webgpu.min.js`);
+
+        try {
+            // Check if WebGPU is already active to avoid redundant registration logs
+            const currentBackend = (window as any).tf?.getBackend();
+            if (currentBackend !== 'webgpu') {
+                // Attempt to use WebGPU
+                await (window as any).tf.setBackend('webgpu');
+                await (window as any).tf.ready();
+                await (window as any).tf.ready();
+            } else {
+                await (window as any).tf.ready();
+            }
+        } catch (e) {
+            console.warn('[AI] WebGPU initialization failed, falling back to default:', e);
+            // Fallback will likely vary (webgl is usually default if webgpu fails or isn't set)
+            try {
+                await (window as any).tf.setBackend('webgl');
+                await (window as any).tf.ready();
+            } catch (err) {
+                console.warn('[AI] WebGL fallback also failed:', err);
+            }
+        }
+
+        if (!(window as any).Upscaler) {
+            await loadScript(`${AI_SETTINGS.LOCAL_LIB_PATH}upscaler.min.js`);
+        }
+    })();
+
+    return loadingPromise;
 };
 
-/**
- * Loads upscaler model script (deprecated for local, but keeping signature)
- * @param {string} _src - Script source URL
- * @returns {Promise<void>}
- */
-const loadUpscalerModelScript = (_src: string): Promise<void> => {
-    // We already copied models to /models/esrgan-slim/
-    // This function was used for CDN loading of specific model files.
-    // Upscalerjs-esrgan-slim doesn't need to be loaded as a script if we pass the model path.
-    return Promise.resolve();
-};
 
 /**
  * Creates enhanced fallback upscaler
@@ -305,6 +343,20 @@ export const processSVGResize = async (svgFile: File, width: number, height: num
 
 
 /**
+ * Preloads upscaler model for a specific scale
+ * @param {number} scale - Scale factor
+ * @returns {Promise<void>}
+ */
+export const preloadUpscalerModel = async (scale: number): Promise<void> => {
+    try {
+        await loadUpscalerForScale(scale);
+    } catch (err) {
+        console.warn(`[AI] Failed to preload upscaler x${scale}:`, err);
+    }
+};
+
+
+/**
  * Loads upscaler for specific scale
  * @param {number} scale - Scale factor
  * @returns {Promise<Object>} Upscaler instance
@@ -328,31 +380,20 @@ export const loadUpscalerForScale = async (scale: number): Promise<any> => {
     cleanupInProgress = true;
 
     try {
-        if (!(window as any).Upscaler) await loadUpscalerFromCDN();
+        if (!(window as any).Upscaler) await loadUpscalerLibraries();
 
-        let modelGlobalName: string = '';
-        switch (scale) {
-            case 2:
-                await loadUpscalerModelScript('https://cdn.jsdelivr.net/npm/@upscalerjs/esrgan-slim@latest/dist/umd/2x.min.js');
-                modelGlobalName = 'ESRGANSlim2x';
-                break;
-            case 3:
-                await loadUpscalerModelScript('https://cdn.jsdelivr.net/npm/@upscalerjs/esrgan-slim@latest/dist/umd/3x.min.js');
-                modelGlobalName = 'ESRGANSlim3x';
-                break;
-            case 4:
-                await loadUpscalerModelScript('https://cdn.jsdelivr.net/npm/@upscalerjs/esrgan-slim@latest/dist/umd/4x.min.js');
-                modelGlobalName = 'ESRGANSlim4x';
-                break;
-            default:
-                throw new Error(`Unsupported scale: ${scale}`);
-        }
-
-        if (!(window as any)[modelGlobalName]) throw new Error(`Model ${modelGlobalName} not loaded`);
+        const modelPath = `${AI_SETTINGS.LOCAL_MODEL_PATH}esrgan-slim/x${scale}/model.json`;
 
         const upscaler = new (window as any).Upscaler({
-            model: (window as any)[modelGlobalName],
+            model: {
+                path: modelPath,
+                scale: scale
+            },
         });
+
+        // Warmup the model with a tiny tensor if possible
+        // Note: upscalerjs doesn't expose the internal tf directly easily here
+        // but we can at least ensure instance is created.
 
         upscalerInstances[scale] = upscaler;
         upscalerUsageCount[scale] = 1;
@@ -360,7 +401,8 @@ export const loadUpscalerForScale = async (scale: number): Promise<any> => {
         cleanupInProgress = wasCleanupInProgress;
         return upscaler;
 
-    } catch {
+    } catch (err) {
+        console.warn(`[AI] Failed to load local model for x${scale}, falling back:`, err);
         const fallbackUpscaler = createEnhancedFallbackUpscaler(scale);
         upscalerInstances[scale] = fallbackUpscaler;
         upscalerUsageCount[scale] = 1;
@@ -414,7 +456,8 @@ export const safeUpscale = async (upscaler: any, img: HTMLImageElement, scale: n
         try {
             upscaler.upscale(img, {
                 patchSize: 32,
-                padding: 2
+                padding: 2,
+                output: 'tensor' // Force tensor output to avoid readSync warning on WebGPU
             }).then((result: any) => {
                 clearTimeout(timeoutId);
                 upscalerLastUsed[scale] = Date.now();
@@ -567,9 +610,10 @@ export const upscaleImageEnhancedFallback = async (imageFile: File, scale: numbe
  * @param {string} originalName - Original file name
  * @returns {Promise<File>} Upscaled image file
  */
-export const upscaleImageWithAI = async (imageFile: File, scale: number, originalName: string): Promise<File> => {
+export const upscaleImageWithAI = async (imageFile: File, scale: number, originalName: string): Promise<{ file: File; scale?: number }> => {
     if (aiUpscalingDisabled) {
-        return upscaleImageEnhancedFallback(imageFile, scale, originalName);
+        const fallbackFile = await upscaleImageEnhancedFallback(imageFile, scale, originalName);
+        return { file: fallbackFile, scale };
     }
 
     const wasCleanupInProgress = cleanupInProgress;
@@ -590,7 +634,8 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
         if (safeDimensions.wasAdjusted || safeDimensions.width > MAX_SAFE_DIMENSION || safeDimensions.height > MAX_SAFE_DIMENSION) {
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
-            return upscaleImageEnhancedFallback(imageFile, safeDimensions.scale, originalName);
+            const fallbackFile = await upscaleImageEnhancedFallback(imageFile, safeDimensions.scale, originalName);
+            return { file: fallbackFile, scale: safeDimensions.scale };
         }
 
         const availableScales = AVAILABLE_UPSCALE_FACTORS;
@@ -598,7 +643,8 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
         if (!availableScales.includes(scale as any) || scale > maxScaleFactor) {
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
-            return upscaleImageEnhancedFallback(imageFile, Math.min(scale, 4), originalName);
+            const fallbackFile = await upscaleImageEnhancedFallback(imageFile, Math.min(scale, 4), originalName);
+            return { file: fallbackFile, scale: Math.min(scale, 4) };
         }
 
         let upscaler;
@@ -609,7 +655,8 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
             if (textureManagerFailures >= MAX_TEXTURE_FAILURES) aiUpscalingDisabled = true;
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
-            return upscaleImageEnhancedFallback(imageFile, scale, originalName);
+            const fallbackFile = await upscaleImageEnhancedFallback(imageFile, scale, originalName);
+            return { file: fallbackFile, scale };
         }
 
         let upscaleResult;
@@ -620,11 +667,23 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
             if (textureManagerFailures >= MAX_TEXTURE_FAILURES) aiUpscalingDisabled = true;
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
-            return upscaleImageEnhancedFallback(imageFile, scale, originalName);
+            const fallbackFile = await upscaleImageEnhancedFallback(imageFile, scale, originalName);
+            return { file: fallbackFile, scale };
         }
 
         let canvas: HTMLCanvasElement;
-        if (upscaleResult instanceof HTMLCanvasElement) {
+
+        // Handle Tensor output (preferred for WebGPU performance)
+        // Check if it looks like a tensor (has shape and data methods/properties)
+        if (upscaleResult && typeof upscaleResult.data === 'function' && upscaleResult.shape) {
+            const tensor = upscaleResult; // It's a raw tensor
+            canvas = document.createElement('canvas');
+            const [height, width] = tensor.shape;
+            canvas.width = width;
+            canvas.height = height;
+            await (window as any).tf.browser.toPixels(tensor, canvas);
+            tensor.dispose();
+        } else if (upscaleResult instanceof HTMLCanvasElement) {
             canvas = upscaleResult;
         } else if (upscaleResult.tensor) {
             canvas = await tensorToCanvas(upscaleResult.tensor);
@@ -635,7 +694,8 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
         } else {
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
-            return upscaleImageEnhancedFallback(imageFile, scale, originalName);
+            const fallbackFile = await upscaleImageEnhancedFallback(imageFile, scale, originalName);
+            return { file: fallbackFile, scale };
         }
 
         URL.revokeObjectURL(objectUrl);
@@ -653,9 +713,7 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
         );
 
         const upscaledFile = new File([blob], newName, { type: MIME_TYPE_MAP.webp });
-        textureManagerFailures = Math.max(0, textureManagerFailures - 1);
-        cleanupInProgress = wasCleanupInProgress;
-        return upscaledFile;
+        return { file: upscaledFile, scale };
 
     } catch {
         textureManagerFailures++;
@@ -674,7 +732,8 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
 
             const safeDimensions = calculateSafeDimensions(img.naturalWidth, img.naturalHeight, scale);
             URL.revokeObjectURL(objectUrl);
-            return upscaleImageEnhancedFallback(imageFile, safeDimensions.scale, originalName);
+            const fallbackFile = await upscaleImageEnhancedFallback(imageFile, safeDimensions.scale, originalName);
+            return { file: fallbackFile, scale: safeDimensions.scale };
         } catch {
             throw new Error('AI upscaling failed');
         }
@@ -689,7 +748,7 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
  * @param {Object} options - Processing options
  * @returns {Promise<File>} Resized image file
  */
-export const resizeImageWithAI = async (imageFile: File, targetDimension: number, _options?: any): Promise<File> => {
+export const resizeImageWithAI = async (imageFile: File, targetDimension: number, _options?: any): Promise<{ file: File; scale?: number }> => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(imageFile);
 
@@ -716,11 +775,14 @@ export const resizeImageWithAI = async (imageFile: File, targetDimension: number
 
     const needsUpscaling = newWidth > img.naturalWidth || newHeight > img.naturalHeight;
     let sourceFile = imageFile;
+    let finalScale: number | undefined;
 
     if (needsUpscaling) {
         const upscaleFactor = calculateUpscaleFactor(img.naturalWidth, img.naturalHeight, newWidth, newHeight);
         if (upscaleFactor > 1) {
-            sourceFile = await upscaleImageWithAI(sourceFile, upscaleFactor, imageFile.name);
+            const aiResult = await upscaleImageWithAI(sourceFile, upscaleFactor, imageFile.name);
+            sourceFile = aiResult.file;
+            finalScale = aiResult.scale;
         }
     }
 
@@ -758,7 +820,7 @@ export const resizeImageWithAI = async (imageFile: File, targetDimension: number
         type: MIME_TYPE_MAP.webp
     });
 
-    return processedFile;
+    return { file: processedFile, scale: finalScale };
 };
 
 /**

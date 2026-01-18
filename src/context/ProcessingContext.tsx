@@ -5,13 +5,14 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ProcessingOptions, ImageFile, ProcessingMode } from '../types';
+import type { ProcessingOptions, ImageFile, ProcessingMode, ProcessingSummary } from '../types';
 import {
     getProcessingConfiguration,
     createExportZip,
     createScreenshotZip,
     downloadZip,
-    generateExportSettings
+    generateExportSettings,
+    preloadUpscalerModel
 } from '../processors';
 import {
     createImageObjects,
@@ -74,21 +75,6 @@ interface TemplateCategory {
     name: string;
     icon: string;
     description?: string;
-}
-
-interface ProcessingSummary {
-    mode: string;
-    imagesProcessed: number;
-    operations: string[];
-    aiUsed: boolean;
-    upscalingUsed: boolean;
-    totalFiles: number;
-    success: boolean;
-    errors: string[];
-    templatesApplied: number;
-    categoriesApplied: number;
-    formatsExported: string[];
-    screenshotCount?: number;
 }
 
 interface ProcessingContextValue {
@@ -235,7 +221,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         faviconMode: 'basic' as 'basic' | 'complete',
         watermark: {
             ...DEFAULT_PROCESSING_CONFIG.watermark
-        }
+        } as any
     });
     // userInteractedWithModal state removed
 
@@ -264,6 +250,12 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         };
         preloadLibraries();
     }, [processingOptions.processingMode, screenshotUrl, t]);
+
+    useEffect(() => {
+        if (processingOptions.showResize) {
+            preloadUpscalerModel(2);
+        }
+    }, [processingOptions.showResize]);
 
     const closeModal = useCallback(() => {
         if (autoCloseTimeoutRef.current) {
@@ -906,7 +898,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
                 categoriesApplied: calculateCategoriesApplied(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES, false, false),
                 errors: processedImages.filter(img => img.error).map(img => ({
                     name: img.name,
-                    error: img.error
+                    error: img.error,
+                    aiUpscaleScale: img.aiUpscaleScale
                 })),
                 failedCount: processedImages.filter(img => img.error).length
             }, processingConfig, t);
@@ -1128,7 +1121,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         setProcessingOptions(prev => ({
             ...prev,
             showResize: type === 'resize',
-            showCrop: type === 'crop'
+            showCrop: type === 'crop',
+            cropMode: type === 'crop' ? CROP_MODES.SMART : prev.cropMode
         }));
     };
 
@@ -1255,7 +1249,6 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         isLoading,
         aiModelLoaded,
         aiLoading,
-        processingSummary,
         processingOptions,
         fileInputRef,
         showModal,
@@ -1305,6 +1298,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps) => {
         selectedImagesForProcessing,
         templateCategories,
         templateSelectedImageObj,
+
+        processingSummary,
 
         // Expose Setters for edge cases
         setProcessingOptions

@@ -1,4 +1,8 @@
-import { QualityControlsCard, ResizeCropCard, FormatSelectionCard, FilterSelectionCard, WatermarkCard } from './index';
+import QualityControlsCard from './QualityControlsCard';
+import ResizeCropCard from './ResizeCropCard';
+import FormatSelectionCard from './FormatSelectionCard';
+import FilterSelectionCard from './FilterSelectionCard';
+import WatermarkCard from './WatermarkCard';
 import { CROP_MODES, IMAGE_FILTERS } from '../constants';
 import type { ProcessingOptions, ImageFile } from '../types';
 
@@ -88,8 +92,7 @@ const CustomProcessingTab = ({
 
                 <WatermarkCard
                     watermark={processingOptions.watermark}
-                    onOptionChange={onOptionChange}
-                    t={t}
+                    onOptionChange={onOptionChange as (category: string, key: string, value: any) => void}
                 />
             </div>
 
@@ -101,7 +104,7 @@ const CustomProcessingTab = ({
                 />
             </div>
 
-            <div className="text-center">
+            <div className="text-center mb-lg">
                 <button
                     className="btn btn-primary btn-lg"
                     disabled={isProcessDisabled}

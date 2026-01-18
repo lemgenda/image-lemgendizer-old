@@ -50,29 +50,20 @@ describe('Crop Flow Integration', () => {
             screen.getByText('crop-test.png');
         }, { timeout: 5000 });
 
-        // Check if Crop is actve
-        const cropWidthInput = screen.queryByLabelText(/Crop Width/i);
+        // 3. Enable Standard Crop
+        // The new UI uses a segmented control. "Standard Crop" button should be clicked.
+        const standardCropBtn = screen.getByRole('button', { name: /Standard Crop/i });
+        fireEvent.click(standardCropBtn);
 
-        if (!cropWidthInput) {
-            const toggleButton = screen.getByRole('button', { name: /Crop Mode/i });
-            fireEvent.click(toggleButton);
-        }
-
-        // 3. Set Dimensions & Position
-        // Assuming input fields for width/height and a selector/buttons for position
-        const widthInput = screen.getByLabelText(/crop width|width/i); // heuristic
+        // 4. Set Dimensions & Position
+        // Inputs should be visible now
+        const widthInput = screen.getByLabelText(/Width/i);
         fireEvent.change(widthInput, { target: { value: '800' } });
 
-        const heightInput = screen.getByLabelText(/crop height|height/i);
+        const heightInput = screen.getByLabelText(/Height/i);
         fireEvent.change(heightInput, { target: { value: '600' } });
 
-        // Check for Smart Crop toggle (Button)
-        // If it says "Switch to Standard", current mode is Smart.
-        // We want Standard to select position.
-        const smartToggle = screen.queryByRole('button', { name: /Standard Crop/i });
-        if (smartToggle) {
-            fireEvent.click(smartToggle);
-        }
+        // Position select should be visible in Standard Crop mode
 
         // Now find the position grid or select
         // It is a select dropdown with label "Crop Position"

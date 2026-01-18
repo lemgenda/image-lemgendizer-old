@@ -109,6 +109,17 @@ button.gallery-image-card.selected {
     height: 100%;
     object-fit: contain;
     display: block;
+    transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+.preview-hidden {
+    opacity: 0.7;
+    display: none;
+}
+
+.preview-visible {
+    opacity: 1;
+    display: block;
 }
 
 .gallery-image-loading {

@@ -3,7 +3,7 @@
  * @description UI component for displaying and managing the gallery of uploaded images.
  */
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
     PROCESSING_MODES
 } from '../constants';
@@ -15,7 +15,7 @@ import {
     generateSVGPreview
 } from '../utils';
 import { FilteredPreview } from '.';
-import type { ImageFile, ProcessingMode } from '../types';
+import type { ImageFile, ProcessingMode, WatermarkOptions } from '../types';
 import '../styles/UploadGallerySection.css';
 
 interface PreviewData {
@@ -35,6 +35,7 @@ interface UploadGallerySectionProps {
     onRemoveSelected: () => void;
     formatFileSize: (size: number) => string;
     selectedFilter?: string;
+    watermarkOptions?: WatermarkOptions;
 }
 
 /**
@@ -52,12 +53,19 @@ function UploadGallerySection({
     onSelectAll,
     onRemoveSelected,
     formatFileSize,
-    selectedFilter = 'none'
+    selectedFilter = 'none',
+    watermarkOptions
 }: UploadGallerySectionProps) {
     const { t } = useTranslation();
     const [imagePreviews, setImagePreviews] = useState<Record<string, PreviewData>>({});
     const [failedPreviews, setFailedPreviews] = useState<Set<string>>(new Set());
     const [loadingPreviews, setLoadingPreviews] = useState<Set<string>>(new Set());
+    const previewsRef = useRef<Record<string, PreviewData>>({});
+
+    // Keep ref in sync
+    useEffect(() => {
+        previewsRef.current = imagePreviews;
+    }, [imagePreviews]);
 
     const createNewPreviewFromFile = useCallback((image: ImageFile): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -243,7 +251,8 @@ function UploadGallerySection({
 
     useEffect(() => {
         return () => {
-            Object.values(imagePreviews).forEach(preview => {
+            const currentPreviews = previewsRef.current;
+            Object.values(currentPreviews).forEach((preview: PreviewData) => {
                 if (preview.url && preview.url.startsWith('blob:')) {
                     try {
                         URL.revokeObjectURL(preview.url);
@@ -251,7 +260,7 @@ function UploadGallerySection({
                 }
             });
         };
-    }, [imagePreviews]);
+    }, []);
 
     return (
         <div className="gallery-card">
@@ -336,18 +345,14 @@ function UploadGallerySection({
                                             <FilteredPreview
                                                 src={previewUrl}
                                                 filter={selectedFilter}
+                                                watermark={watermarkOptions}
                                                 alt=""
-                                                className="gallery-image-preview"
-                                                onLoad={(e) => {
-                                                    (e.currentTarget as HTMLImageElement).style.opacity = '1';
+                                                className={`gallery-image-preview ${showRealPreview ? 'preview-visible' : 'preview-hidden'}`}
+                                                onLoad={() => {
+                                                    // Class handles opacity now
                                                 }}
                                                 onError={() => {
                                                     setFailedPreviews(prev => new Set(prev).add(image.id));
-                                                }}
-                                                style={{
-                                                    opacity: showRealPreview ? 1 : 0.7,
-                                                    display: showRealPreview ? 'block' : 'none',
-                                                    transition: 'filter 0.3s ease'
                                                 }}
                                             />
 

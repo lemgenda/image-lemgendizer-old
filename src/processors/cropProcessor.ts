@@ -722,7 +722,8 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
             const upscaleFactor = calculateUpscaleFactor(img.width, img.height, targetWidth, targetHeight);
             if (upscaleFactor > 1 && upscaleFactor <= MAX_SCALE_FACTOR) {
                 try {
-                    sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
+                    const upscaleResult = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
+                    sourceFile = upscaleResult.file;
                 } catch {
                     // Intentionally ignore
                 }
@@ -987,7 +988,8 @@ export const processSimpleSmartCrop = async (imageFile: File, targetWidth: numbe
             );
             if (upscaleFactor > 1) {
                 try {
-                    sourceFile = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
+                    const upscaleResult = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
+                    sourceFile = upscaleResult.file;
                 } catch { /* ignored */ }
             }
         }

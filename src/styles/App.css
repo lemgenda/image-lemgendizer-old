@@ -195,6 +195,7 @@
     background-color: var(--color-primary);
     transition: width var(--transition-normal) ease;
     border-radius: 4px;
+    width: var(--modal-progress, 0%);
 }
 
 .progress-text {
@@ -1190,13 +1191,19 @@ body {
 .alert i {
     color: var(--color-primary);
 }
+
 /* ==========================================================================
    ANIMATION OVERRIDES
    ========================================================================== */
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Force spin even if prefers-reduced-motion is set */

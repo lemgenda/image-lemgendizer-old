@@ -148,7 +148,7 @@ export const ensureFileObject = async (image: any): Promise<File> => {
             const response = await fetch(image.url);
             if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
             const blob = await response.blob();
-             
+
             return new File([blob], image.name || 'image', { type: blob.type });
         } catch {
 
@@ -750,8 +750,21 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
         errors: result.errors || [],
         templatesApplied: result.templatesApplied || 0,
         categoriesApplied: result.categoriesApplied || 0,
-        formatsExported: result.formatsExported || ['WEBP', 'PNG', 'JPG']
+        formatsExported: result.formatsExported || ['WEBP', 'PNG', 'JPG'],
+        watermarkApplied: options.watermark?.enabled || false,
+        watermark: options.watermark ? {
+            text: options.watermark.text,
+            size: options.watermark.size || 'medium',
+            color: options.watermark.color || '#ffffff',
+            fontSize: parseInt(String(options.watermark.fontSize || '24')),
+            repeat: !!options.watermark.repeat,
+            fontFamily: options.watermark.fontFamily
+        } : undefined
     };
+
+    if (options.watermark?.enabled) {
+        summary.operations.push(t('summary.watermarkApplied'));
+    }
 
     if (options.output.quality && options.output.quality < 1) {
         // Assuming output quality reflects compression quality for general images
@@ -769,7 +782,19 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
         summary.aiUsed = true;
     }
 
-    // Logic for upscaling check would go here if tracked in result or options
+    // Logic for upscaling check
+    const processedImagesList = (result as any).processedImagesList || [];
+    const upscaledImage = processedImagesList.find((img: any) => img.aiUpscaleScale);
+
+    if (upscaledImage) {
+        summary.upscalingUsed = true;
+        summary.aiUsed = true;
+        summary.upscaleScale = upscaledImage.aiUpscaleScale;
+        summary.operations.push(t('operations.aiUpscalingWithModel', { model: `x${upscaledImage.aiUpscaleScale}` }));
+    } else if (summary.upscalingUsed) {
+        summary.operations.push(t('operations.autoUpscaling'));
+        summary.aiUsed = true;
+    }
 
     // Check for Applied Filter
     // options comes from getProcessingConfiguration so it has a filters object
