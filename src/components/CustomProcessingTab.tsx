@@ -4,6 +4,7 @@ import FormatSelectionCard from './FormatSelectionCard';
 import FilterSelectionCard from './FilterSelectionCard';
 import ColorCorrectionCard from './ColorCorrectionCard';
 import WatermarkCard from './WatermarkCard';
+import { AIEnhancementsCard } from './index';
 import { CROP_MODES, IMAGE_FILTERS } from '../constants';
 import type { ProcessingOptions, ImageFile } from '../types';
 
@@ -95,6 +96,8 @@ const CustomProcessingTab = ({
                     watermark={processingOptions.watermark}
                     onOptionChange={onOptionChange as (category: string, key: string, value: any) => void}
                 />
+
+                <AIEnhancementsCard />
 
                 <div className="col-span-2">
                     <ColorCorrectionCard />

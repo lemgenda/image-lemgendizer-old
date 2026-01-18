@@ -4,3 +4,4 @@ export * from './exportProcessor';
 export * from './cropProcessor';
 export * from './resizeProcessor';
 export * from './filterProcessor';
+export * from './aiEnhancementsProcessor';

@@ -14,12 +14,25 @@ export interface AIWorkerConfig {
     localModelPath: string;
     modelType: string;
     useWebGPU: boolean;
+    warmup?: boolean;
+    preloadMaxim?: boolean;
 }
+
+export type AIModelStatus = 'none' | 'loading' | 'warming' | 'ready' | 'error';
+
+let statusCallback: ((model: string, status: AIModelStatus) => void) | null = null;
+
+/**
+ * Registers a callback for AI model status updates
+ */
+export const setAIStatusListener = (callback: (model: string, status: AIModelStatus) => void) => {
+    statusCallback = callback;
+};
 
 /**
  * Initializes the AI Worker if not already active
  */
-export const initAIWorker = (): Promise<void> => {
+export const initAIWorker = (configOverrides?: Partial<AIWorkerConfig>): Promise<void> => {
     if (workerLoadPromise) return workerLoadPromise;
 
     workerLoadPromise = new Promise((resolve, reject) => {
@@ -34,26 +47,31 @@ export const initAIWorker = (): Promise<void> => {
                 type: 'classic' // Use classic to allow importScripts
             });
 
-            // Set up one-time listener for the load event
-            const handleLoadMessage = (e: MessageEvent) => {
-                const { type, error } = e.data;
+            // Set up listener for all messages
+            const handleMessage = (e: MessageEvent) => {
+                const { type, model, status, error } = e.data;
+
                 if (type === 'loaded') {
-                    aiWorker?.removeEventListener('message', handleLoadMessage);
                     resolve();
+                } else if (type === 'status' && statusCallback) {
+                    statusCallback(model, status);
+                } else if (type === 'error' && !workerLoadPromise) {
+                    // Only reject if we haven't resolved yet
                 } else if (type === 'error') {
-                    aiWorker?.removeEventListener('message', handleLoadMessage);
+                    aiWorker?.removeEventListener('message', handleMessage);
                     reject(new Error(error));
                 }
             };
 
-            aiWorker.addEventListener('message', handleLoadMessage);
+            aiWorker.addEventListener('message', handleMessage);
 
             // Send configuration to start loading
             const config: AIWorkerConfig = {
                 localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
                 localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
                 modelType: AI_SETTINGS.MODEL_TYPE,
-                useWebGPU: true // Default to true, worker handles fallback
+                useWebGPU: true,
+                ...configOverrides
             };
 
             aiWorker.postMessage({ type: 'load', config });
@@ -116,6 +134,42 @@ export const detectObjectsInWorker = async (
 };
 
 /**
+ * Enhances an image using MAXIM in the worker
+ */
+export const enhanceInWorker = async (
+    imageData: ImageData,
+    task: string
+): Promise<{ data: Float32Array; shape: [number, number]; task: string }> => {
+    await initAIWorker();
+
+    return new Promise((resolve, reject) => {
+        if (!aiWorker) return reject(new Error('AI Worker not initialized'));
+
+        const handleEnhanceMessage = (e: MessageEvent) => {
+            const { type, data, shape, task: resTask, error } = e.data;
+            if (type === 'upscale_result' && resTask === task) {
+                aiWorker?.removeEventListener('message', handleEnhanceMessage);
+                resolve({ data, shape, task: resTask });
+            } else if (type === 'error') {
+                aiWorker?.removeEventListener('message', handleEnhanceMessage);
+                reject(new Error(error));
+            }
+        };
+
+        aiWorker.addEventListener('message', handleEnhanceMessage);
+        aiWorker.postMessage({
+            type: 'enhance',
+            imageData,
+            task,
+            config: {
+                localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
+                localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
+            }
+        }, [imageData.data.buffer]);
+    });
+};
+
+/**
  * Upscales an image using the AI Worker
  */
 export const upscaleInWorker = async (
@@ -146,7 +200,7 @@ export const upscaleInWorker = async (
 
             const handleUpscaleMessage = (e: MessageEvent) => {
                 const { type, data, shape, scale: resScale, error } = e.data;
-                if (type === 'upscale_result') {
+                if (type === 'upscale_result' && resScale === scale && !e.data.task) {
                     aiWorker?.removeEventListener('message', handleUpscaleMessage);
                     resolve({ data, shape, scale: resScale });
                 } else if (type === 'error') {
@@ -166,6 +220,23 @@ export const upscaleInWorker = async (
             aiWorker.postMessage({ type: 'upscale', imageData, config }, [imageData.data.buffer]);
         } catch (err) {
             reject(err);
+        }
+    });
+};
+
+
+
+/**
+ * Preloads a MAXIM model in the worker
+ */
+export const preloadMaximInWorker = async (task: string): Promise<void> => {
+    await initAIWorker();
+    aiWorker?.postMessage({
+        type: 'preload',
+        config: {
+            localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
+            localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
+            task
         }
     });
 };
@@ -201,7 +272,7 @@ export const warmupAIModels = async (): Promise<void> => {
         aiWorker?.postMessage({ type: 'warmup' });
 
         // Timeout as fallback for warmup
-        setTimeout(resolve, 10000);
+        setTimeout(resolve, 15000);
     });
 };
 

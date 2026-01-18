@@ -21,7 +21,8 @@ import {
   AdvancedRenameTab,
   TabPanel,
   ErrorBoundary,
-  SVGFilters
+  SVGFilters,
+  AIEnhancementsBar
 } from './components';
 import type { ProcessingOptions, ProcessingMode } from './types';
 import {
@@ -38,6 +39,7 @@ import './styles/TabPanel.css';
 function App() {
   const { t } = useTranslation();
   const {
+    isStartupInitializing,
     isScreenshotMode,
     isFaviconSelected,
     isScreenshotSelected,
@@ -401,6 +403,21 @@ function App() {
               <i className="fas fa-brain fa-spin fa-3x"></i>
               <p>{t('loading.aiModel')}</p>
               <p className="text-muted">{t('loading.oncePerSession')}</p>
+            </div>
+          </div>
+        )}
+
+        {isStartupInitializing && (
+          <div className="splash-screen">
+            <div className="splash-content">
+              <div className="splash-logo">
+                <i className="fas fa-brain fa-spin"></i>
+              </div>
+              <h1 className="splash-title">{t('app.title')}</h1>
+              <p className="splash-loading-text">{t('loading.initializingAI')}</p>
+              <div className="splash-model-status">
+                <AIEnhancementsBar />
+              </div>
             </div>
           </div>
         )}

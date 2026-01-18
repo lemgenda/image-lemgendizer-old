@@ -115,6 +115,11 @@ export interface WatermarkOptions {
     repeat?: boolean;
 }
 
+export interface AIEnhancementsOptions {
+    enabled: boolean;
+    tasks: string[]; // Ordered list of MAXIM_TASKS
+}
+
 export interface ProcessingOptions {
     processingMode: ProcessingMode;
     output: OutputOptions;
@@ -140,6 +145,7 @@ export interface ProcessingOptions {
     filters?: FilterOptions;
     colorCorrection?: ColorCorrectionOptions;
     watermark?: WatermarkOptions;
+    aiEnhancements?: AIEnhancementsOptions;
 }
 
 // Template System

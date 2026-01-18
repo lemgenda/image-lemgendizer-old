@@ -4,23 +4,28 @@
  */
 
 interface AIWorkerMessage {
-    type: 'load' | 'detect' | 'upscale' | 'preload' | 'dispose' | 'warmup';
+    type: 'load' | 'detect' | 'upscale' | 'preload' | 'dispose' | 'warmup' | 'enhance';
     imageData?: ImageData;
     config?: any;
     scale?: number;
+    task?: string;
 }
 
 interface AIWorkerResponse {
-    type: 'loaded' | 'result' | 'upscale_result' | 'error' | 'warmup_complete';
+    type: 'loaded' | 'result' | 'upscale_result' | 'error' | 'warmup_complete' | 'status';
     data?: any;
     error?: string;
     isLoaded?: boolean;
+    model?: string;
+    status?: 'loading' | 'warming' | 'ready' | 'error';
 }
 
 
 let aiModel: any = null;
 let bodySegmenter: any = null;
+let faceDetector: any = null;
 let upscalerInstances: Record<number, any> = {};
+let maximInstances: Record<string, any> = {};
 let isModelLoading = false;
 let isWarmingUp = false;
 
@@ -40,6 +45,40 @@ console.warn = (...args: any[]) => {
         return;
     }
     originalWarn.apply(console, args);
+};
+
+const sendStatus = (model: string, status: 'loading' | 'warming' | 'ready' | 'error') => {
+    ctx.postMessage({ type: 'status', model, status });
+};
+
+/**
+ * Loads a MAXIM model for a specific task
+ */
+const loadMaximModel = async (task: string, config: any) => {
+    if (maximInstances[task]) return maximInstances[task];
+
+    sendStatus(task, 'loading');
+    const libPath = config.localLibPath || '/lib/';
+    const modelPath = config.localModelPath || '/models/';
+
+    if (!(self as any).Upscaler) {
+        importScripts(`${libPath}upscaler.min.js`);
+    }
+
+    if ((self as any).Upscaler) {
+        const upscaler = new (self as any).Upscaler({
+            model: {
+                path: `${modelPath}maxim/${task}/model.json`,
+                scale: 1
+            }
+        });
+        await upscaler.getModel(); // Ensure it loads
+        maximInstances[task] = upscaler;
+        sendStatus(task, 'ready');
+        return upscaler;
+    }
+    sendStatus(task, 'error');
+    throw new Error(`UpscalerJS not found for MAXIM task: ${task}`);
 };
 
 /**
@@ -83,6 +122,7 @@ const loadModel = async (config: any) => {
         if (!(self as any).cocoSsd) {
             importScripts(`${libPath}coco-ssd.min.js`);
         }
+        sendStatus('coco', 'loading');
 
         // Load Face Landmarks Detection
         if (!(self as any).faceLandmarksDetection) {
@@ -109,9 +149,11 @@ const loadModel = async (config: any) => {
             });
 
             if (aiModel) {
-                const zeros = (self as any).tf.zeros([10, 10, 3], 'int32');
+                const tf = (self as any).tf;
+                const zeros = tf.zeros([10, 10, 3], 'int32');
                 await aiModel.detect(zeros);
                 zeros.dispose();
+                sendStatus('coco', 'ready');
             }
         }
 
@@ -139,11 +181,19 @@ const loadModel = async (config: any) => {
                     refineLandmarks: false,
                     maxFaces: 5
                 };
-                (self as any).faceDetector = await (self as any).faceLandmarksDetection.createDetector(model, detectorConfig);
+                faceDetector = await (self as any).faceLandmarksDetection.createDetector(model, detectorConfig);
 
             } catch {
                 /* ignored */
             }
+        }
+
+        // Preload core MAXIM models if requested
+        if (config.preloadMaxim) {
+            try {
+                await loadMaximModel('enhancement', config);
+                await loadMaximModel('deblurring', config);
+            } catch { /* ignored */ }
         }
 
         isModelLoading = false;
@@ -228,9 +278,9 @@ const detectObjects = async (imageData: ImageData) => {
     }
 
     // 3. Run Face Detection
-    if ((self as any).faceDetector) {
+    if (faceDetector) {
         try {
-            const faces = await (self as any).faceDetector.estimateFaces(imageData);
+            const faces = await faceDetector.estimateFaces(imageData);
             if (faces && faces.length > 0) {
                 for (const face of faces) {
                     const box = face.box;
@@ -256,6 +306,9 @@ const detectObjects = async (imageData: ImageData) => {
 const loadUpscaler = async (scale: number, config: any) => {
     if (upscalerInstances[scale]) return upscalerInstances[scale];
 
+    const modelKey = `upscaler${scale}x`;
+    sendStatus(modelKey, 'loading');
+
     const libPath = config.localLibPath || '/lib/';
     const modelPath = config.localModelPath || '/models/';
 
@@ -270,9 +323,12 @@ const loadUpscaler = async (scale: number, config: any) => {
                 scale: scale
             }
         });
+        await upscaler.getModel();
         upscalerInstances[scale] = upscaler;
+        sendStatus(modelKey, 'ready');
         return upscaler;
     }
+    sendStatus(modelKey, 'error');
     throw new Error(`UpscalerJS not found at ${libPath}upscaler.min.js`);
 };
 
@@ -283,17 +339,12 @@ const upscaleImage = async (imageData: ImageData, scale: number, config: any) =>
     try {
         const upscaler = await loadUpscaler(scale, config);
 
-        // Convert ImageData to tensor for UpscalerJS if needed,
-        // or let UpscalerJS handle it from ImageData if supported in worker.
-        // Most UpscalerJS versions in workers can take ImageData or Tensors.
-
         const result = await upscaler.upscale(imageData, {
-            patchSize: 64, // Increased patch size for worker
+            patchSize: 64,
             padding: 4,
             output: 'tensor'
         });
 
-        // Convert result back to ImageData or send as Float32Array
         let outputData: any;
         let shape: [number, number];
 
@@ -319,12 +370,36 @@ const upscaleImage = async (imageData: ImageData, scale: number, config: any) =>
 };
 
 /**
+ * Enhances a tile with MAXIM model
+ */
+const enhanceImage = async (imageData: ImageData, task: string, config: any) => {
+    try {
+        const upscaler = await loadMaximModel(task, config);
+        const result = await upscaler.upscale(imageData, {
+            output: 'tensor'
+        });
+
+        const outputData = await result.data();
+        const shape = [result.shape[0], result.shape[1]];
+        result.dispose();
+
+        ctx.postMessage({
+            type: 'upscale_result',
+            data: outputData,
+            shape,
+            task
+        }, [outputData.buffer]);
+    } catch (error: any) {
+        ctx.postMessage({ type: 'error', error: `Enhancement Error: ${error.message}` });
+    }
+};
+
+/**
  * Warms up all loaded models with dummy data
  */
 const warmupModels = async () => {
     if (isWarmingUp) return;
     isWarmingUp = true;
-
 
     try {
         const tf = (self as any).tf;
@@ -332,35 +407,44 @@ const warmupModels = async () => {
 
         // 1. Warmup Detection (Coco-SSD)
         if (aiModel) {
+            sendStatus('coco', 'warming');
             const zeros = tf.zeros([224, 224, 3], 'int32');
             await aiModel.detect(zeros);
             zeros.dispose();
-
+            sendStatus('coco', 'ready');
         }
 
-        // 2. Warmup Segmentation
+        // 2. Warmup Segmentation & Face
         if (bodySegmenter) {
             const zeros = tf.zeros([256, 256, 3], 'int32');
             await bodySegmenter.segmentPeople(zeros);
             zeros.dispose();
-
         }
-
-        // 3. Warmup Face Detection
-        if ((self as any).faceDetector) {
+        if (faceDetector) {
             const zeros = tf.zeros([256, 256, 3], 'int32');
-            await (self as any).faceDetector.estimateFaces(zeros);
+            await faceDetector.estimateFaces(zeros);
             zeros.dispose();
-
         }
 
-        // 4. Warmup Upscalers (if any loaded)
+        // 3. Warmup Upscalers
         for (const scale in upscalerInstances) {
+            const modelKey = `upscaler${scale}x`;
+            sendStatus(modelKey, 'warming');
             const upscaler = upscalerInstances[scale];
             const zeros = tf.zeros([32, 32, 3], 'int32');
             await upscaler.upscale(zeros, { output: 'tensor' }).then((t: any) => t.dispose());
             zeros.dispose();
+            sendStatus(modelKey, 'ready');
+        }
 
+        // 4. Warmup MAXIM models
+        for (const task in maximInstances) {
+            sendStatus(task, 'warming');
+            const upscaler = maximInstances[task];
+            const zeros = tf.zeros([128, 128, 3], 'float32');
+            await upscaler.upscale(zeros, { output: 'tensor' }).then((t: any) => t.dispose());
+            zeros.dispose();
+            sendStatus(task, 'ready');
         }
 
         ctx.postMessage({ type: 'warmup_complete' });
@@ -370,6 +454,7 @@ const warmupModels = async () => {
         isWarmingUp = false;
     }
 };
+
 const disposeModel = () => {
     if (aiModel && aiModel.dispose) {
         try { aiModel.dispose(); } catch { /* ignored */ }
@@ -377,10 +462,10 @@ const disposeModel = () => {
     aiModel = null;
     isModelLoading = false;
 
-    if ((self as any).faceDetector && (self as any).faceDetector.dispose) {
-        try { (self as any).faceDetector.dispose(); } catch { /* ignored */ }
+    if (faceDetector && faceDetector.dispose) {
+        try { faceDetector.dispose(); } catch { /* ignored */ }
     }
-    (self as any).faceDetector = null;
+    faceDetector = null;
 
     if (bodySegmenter && bodySegmenter.dispose) {
         try { bodySegmenter.dispose(); } catch { /* ignored */ }
@@ -398,11 +483,19 @@ const disposeModel = () => {
         }
     }
     upscalerInstances = {};
+
+    for (const task in maximInstances) {
+        const upscaler = maximInstances[task];
+        if (upscaler && upscaler.dispose) {
+            try { upscaler.dispose(); } catch { /* ignored */ }
+        }
+    }
+    maximInstances = {};
 };
 
 
 ctx.onmessage = async (e: MessageEvent<AIWorkerMessage>) => {
-    const { type, imageData, config } = e.data;
+    const { type, imageData, config, task } = e.data;
 
     switch (type) {
         case 'load':
@@ -422,9 +515,20 @@ ctx.onmessage = async (e: MessageEvent<AIWorkerMessage>) => {
                 ctx.postMessage({ type: 'error', error: 'Missing parameters for upscale' });
             }
             break;
+        case 'enhance':
+            if (imageData && task) {
+                await enhanceImage(imageData, task, config);
+            } else {
+                ctx.postMessage({ type: 'error', error: 'Missing parameters for enhancement' });
+            }
+            break;
         case 'preload':
-            if (config && config.scale) {
-                await loadUpscaler(config.scale, config);
+            if (config) {
+                if (config.scale) {
+                    await loadUpscaler(config.scale, config);
+                } else if (config.task) {
+                    await loadMaximModel(config.task, config);
+                }
             }
             break;
         case 'warmup':

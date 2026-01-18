@@ -4,7 +4,8 @@ import {
     processSmartCrop,
     processSimpleSmartCrop,
     processLengendaryOptimize,
-    processTemplateImages
+    processTemplateImages,
+    enhanceImageWithMaxim
 } from '../processors';
 import { generateNewFileName } from './renameUtils';
 import { safeCleanupGPUMemory } from './memoryUtils';
@@ -237,6 +238,40 @@ export const orchestrateCustomProcessing = async (
 
                     if (cropResults.length > 0 && cropResults[0].cropped) {
                         processedFile = cropResults[0].cropped;
+                    }
+                }
+            }
+
+            // 2. AI Enhancements (MAXIM)
+            if (processingConfig.aiEnhancements?.enabled && processingConfig.aiEnhancements.tasks.length > 0) {
+                // Convert current processed file to canvas for MAXIM
+                const img = new Image();
+                img.src = URL.createObjectURL(processedFile);
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                });
+
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0);
+                    URL.revokeObjectURL(img.src);
+
+                    const enhancedCanvas = await enhanceImageWithMaxim(
+                        canvas,
+                        processingConfig.aiEnhancements.tasks
+                    );
+
+                    // Convert enhanced canvas back to blob for next steps
+                    const enhancedBlob = await new Promise<Blob | null>((resolve) => {
+                        enhancedCanvas.toBlob(blob => resolve(blob), 'image/webp', 0.95);
+                    });
+
+                    if (enhancedBlob) {
+                        processedFile = new File([enhancedBlob], image.name, { type: 'image/webp' });
                     }
                 }
             }

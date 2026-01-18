@@ -447,3 +447,13 @@ export const SMART_CROP_CONFIG = {
     USE_FACIAL_FEATURES: true,
     ENABLE_EDGE_DETECTION: true
 } as const;
+
+export const MAXIM_TASKS = {
+    DENOISING: 'denoising',
+    DEBLURRING: 'deblurring',
+    DERAINING: 'deraining',
+    DEHAZING_INDOOR: 'dehazing-indoor',
+    DEHAZING_OUTDOOR: 'dehazing-outdoor',
+    LOW_LIGHT: 'enhancement', // also mapped to enhancement
+    RETOUCHING: 'retouching'
+} as const;

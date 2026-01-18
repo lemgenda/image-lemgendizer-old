@@ -25,3 +25,5 @@ export { default as WatermarkCard } from './WatermarkCard';
 export { default as FontSelector } from './FontSelector';
 export { default as ColorSelector } from './ColorSelector';
 export { default as FontSizeSelector } from './FontSizeSelector';
+export { default as AIEnhancementsBar } from './AIEnhancementsBar';
+export { default as AIEnhancementsCard } from './AIEnhancementsCard';

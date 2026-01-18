@@ -157,4 +157,22 @@ if (fs.existsSync(localModelsSrc)) {
     console.log('Copied local models (COCO-SSD) to public/models');
 }
 
+// Copy MAXIM models (recursive to include bin files)
+const maximConfig = [
+    { pkg: 'maxim-deblurring', dest: 'maxim/deblurring' },
+    { pkg: 'maxim-retouching', dest: 'maxim/enhancement' },
+    { pkg: 'maxim-denoising', dest: 'maxim/denoising' }
+];
+
+maximConfig.forEach(({ pkg, dest }) => {
+    const src = path.join(ROOT_DIR, `node_modules/@upscalerjs/${pkg}/models`);
+    const dst = path.join(MODELS_DIR, dest);
+    if (fs.existsSync(src)) {
+        copyDir(src, dst);
+        console.log(`Copied ${pkg} models to ${dest}`);
+    } else {
+        console.warn(`Warning: MAXIM package ${pkg} not found.`);
+    }
+});
+
 console.log('--- Assets Copy Complete ---');

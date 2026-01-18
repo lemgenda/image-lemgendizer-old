@@ -327,7 +327,16 @@ export const DEFAULT_PROCESSING_CONFIG: ProcessingOptions = {
         fontSize: 32,
         fontFamily: 'Arial',
         repeat: false
-    } as const
+    } as const,
+    aiEnhancements: {
+        enabled: false,
+        tasks: []
+    }
+};
+
+export const MAXIM_MODEL_URLS = {
+    ENHANCEMENT: 'enhancement',
+    DEBLUR: 'deblurring'
 };
 
 export const EXPORT_SETTINGS = {

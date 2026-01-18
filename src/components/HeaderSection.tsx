@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import LanguageSwitcherElement from './LanguageSwitcherElement';
 import LemGendaIconElement from './LemGendaIconElement';
 import ThemeSwitcherElement from './ThemeSwitcherElement';
+import AIEnhancementsBar from './AIEnhancementsBar';
 import '../styles/HeaderSection.css';
 
 /**
@@ -26,6 +27,7 @@ function HeaderSection() {
                 </div>
             </div>
             <div className="header-right">
+                <AIEnhancementsBar />
                 <ThemeSwitcherElement />
                 <LanguageSwitcherElement />
             </div>

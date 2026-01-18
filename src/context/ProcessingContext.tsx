@@ -14,7 +14,7 @@ import {
     generateExportSettings,
     preloadUpscalerModel
 } from '../processors';
-import { warmupAIModels } from '../utils/aiWorkerUtils';
+import { warmupAIModels, initAIWorker, setAIStatusListener, type AIModelStatus } from '../utils/aiWorkerUtils';
 import {
     createImageObjects,
     createProcessingSummary,
@@ -33,8 +33,7 @@ import {
     getImageDimensions,
     safeCleanupGPUMemory,
     generateSpecialFormatPreview,
-    checkImageTransparencyQuick,
-    loadAIModel
+    checkImageTransparencyQuick
 } from '../utils';
 import {
     getTemplateCategories,
@@ -92,8 +91,10 @@ interface ProcessingContextValue {
     selectedImages: string[];
     modal: ModalState;
     isLoading: boolean;
+    isStartupInitializing: boolean;
     aiModelLoaded: boolean;
     aiLoading: boolean;
+    aiModelStatus: Record<string, AIModelStatus>;
     processingSummary: ProcessingSummary | null;
     processingOptions: ProcessingOptions;
     fileInputRef: React.RefObject<HTMLInputElement | null>;
@@ -127,6 +128,8 @@ interface ProcessingContextValue {
     applyRenamePatternToCustom: () => void;
     processCustomImages: () => Promise<void>;
     processTemplates: () => Promise<void>;
+    handleAIEnhancementToggle: (task: string) => void;
+    handleAIEnhancementReorder: (tasks: string[]) => void;
     handleCaptureScreenshots: (url: string, templates: string[]) => Promise<any>;
     selectedImagesForProcessing: ImageFile[];
     templateCategories: TemplateCategory[];
@@ -193,8 +196,10 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         progressStep: ''
     });
     const [isLoading, setIsLoading] = useState(false);
+    const [isStartupInitializing, setIsStartupInitializing] = useState(true);
     const [aiModelLoaded, setAiModelLoaded] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
+    const [aiModelStatus, setAiModelStatus] = useState<Record<string, AIModelStatus>>({});
     const [processingSummary, setProcessingSummary] = useState<ProcessingSummary | null>(null);
     const [processingOptions, setProcessingOptions] = useState<ProcessingOptions>({
         ...DEFAULT_PROCESSING_CONFIG,
@@ -299,26 +304,58 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         }
     }, [closeModal]);
 
+    // AI Model Startup Sequence
+    useEffect(() => {
+        const startupAI = async () => {
+            try {
+                // Set up listener for granular status updates
+                setAIStatusListener((model, status) => {
+                    setAiModelStatus(prev => ({
+                        ...prev,
+                        [model]: status
+                    }));
+                });
+
+                // Initialize worker with preloads
+                await initAIWorker({
+                    warmup: true,
+                    preloadMaxim: true
+                });
+
+                setAiModelLoaded(true);
+
+                // Wait for core warmup to complete
+                await warmupAIModels();
+
+                // Small delay for UI smoothness
+                setTimeout(() => {
+                    setIsStartupInitializing(false);
+                }, 800);
+
+            } catch (err) {
+                console.error('AI Startup Error:', err);
+                setIsStartupInitializing(false);
+                setAiModelLoaded(false);
+            }
+        };
+
+        startupAI();
+    }, []);
+
     useEffect(() => {
         const loadAIModelIfNeeded = async () => {
             const needsAI = (processingOptions.cropMode === CROP_MODES.SMART && !aiModelLoaded) ||
                 (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && !aiModelLoaded);
 
-            if (!needsAI) return;
+            if (!needsAI || isStartupInitializing) return;
 
             try {
                 setAiLoading(true);
 
-                const model = await loadAIModel();
-
-                if (model && (model.modelType || typeof model.detect === 'function')) {
-                    setAiModelLoaded(true);
-                    setAiLoading(false);
-                    // Trigger background warmup for all models
-                    warmupAIModels();
-                } else {
-                    throw new Error('AI model failed to load');
-                }
+                await initAIWorker();
+                setAiModelLoaded(true);
+                setAiLoading(false);
+                warmupAIModels();
             } catch {
 
                 setAiLoading(false);
@@ -340,7 +377,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         };
 
         loadAIModelIfNeeded();
-    }, [processingOptions.cropMode, processingOptions.processingMode, t, aiModelLoaded, showModal]);
+    }, [processingOptions.cropMode, processingOptions.processingMode, t, aiModelLoaded, showModal, isStartupInitializing]);
 
     // Track current images for cleanup on unmount
     const imagesRef = useRef(images);
@@ -819,6 +856,31 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             [key]: value
         }));
     };
+    const handleAIEnhancementToggle = useCallback((task: string) => {
+        setProcessingOptions(prev => {
+            const currentTasks = prev.aiEnhancements?.tasks || [];
+            const isSelected = currentTasks.includes(task);
+            const newTasks = isSelected
+                ? currentTasks.filter(t => t !== task)
+                : [...currentTasks, task];
+            return {
+                ...prev,
+                aiEnhancements: {
+                    enabled: newTasks.length > 0,
+                    tasks: newTasks
+                }
+            };
+        });
+    }, []);
+    const handleAIEnhancementReorder = useCallback((tasks: string[]) => {
+        setProcessingOptions(prev => ({
+            ...prev,
+            aiEnhancements: {
+                enabled: tasks.length > 0,
+                tasks: tasks
+            }
+        }));
+    }, []);
 
     const processCustomImages = async () => {
         const selectedImagesForProcessing = getSelectedImagesForProcessing(
@@ -1073,7 +1135,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 selectedImagesForProcessing[0],
                 templatesToProcess,
                 allTemplates,
-                true,
+                processingOptions.cropMode === CROP_MODES.SMART,
                 aiModelLoaded,
                 null,
                 processingOptionsWithExtras
@@ -1306,8 +1368,10 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         selectedImages,
         modal,
         isLoading,
+        isStartupInitializing,
         aiModelLoaded,
         aiLoading,
+        aiModelStatus,
         processingOptions,
         fileInputRef,
         showModal,
@@ -1353,6 +1417,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         incrementValue,
         decrementValue,
         downloadScreenshotZip,
+        handleAIEnhancementToggle,
+        handleAIEnhancementReorder,
         handleCaptureScreenshots,
 
 
