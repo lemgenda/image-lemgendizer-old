@@ -51,6 +51,21 @@ const sendStatus = (model: string, status: 'loading' | 'warming' | 'ready' | 'er
     ctx.postMessage({ type: 'status', model, status });
 };
 
+let upscalerScriptPromise: Promise<void> | null = null;
+const loadUpscalerScript = (libPath: string) => {
+    if ((self as any).Upscaler) return Promise.resolve();
+    if (upscalerScriptPromise) return upscalerScriptPromise;
+    upscalerScriptPromise = new Promise((resolve, reject) => {
+        try {
+            importScripts(`${libPath}upscaler.min.js`);
+            resolve();
+        } catch (e) {
+            reject(e);
+        }
+    });
+    return upscalerScriptPromise;
+};
+
 /**
  * Loads a MAXIM model for a specific task
  */
@@ -61,19 +76,21 @@ const loadMaximModel = async (task: string, config: any) => {
     const libPath = config.localLibPath || '/lib/';
     const modelPath = config.localModelPath || '/models/';
 
-    if (!(self as any).Upscaler) {
-        importScripts(`${libPath}upscaler.min.js`);
-    }
+    const startLoad = performance.now();
+    await loadUpscalerScript(libPath);
 
     if ((self as any).Upscaler) {
         const upscaler = new (self as any).Upscaler({
             model: {
                 path: `${modelPath}maxim/${task}/model.json`,
-                scale: 1
+                scale: 1,
+                modelType: 'graph' // EXPLICITLY set for MAXIM models to avoid Layers format error
             }
         });
         await upscaler.getModel(); // Ensure it loads
         maximInstances[task] = upscaler;
+        const duration = performance.now() - startLoad;
+        console.log(`[AI Worker] MAXIM Model '${task}' LOADED in ${duration.toFixed(2)}ms`);
         sendStatus(task, 'ready');
         return upscaler;
     }
@@ -85,7 +102,66 @@ const loadMaximModel = async (task: string, config: any) => {
  * Loads the AI Model dependencies and initializes the model
  */
 const loadModel = async (config: any) => {
-    if (aiModel) {
+    const libPath = config.localLibPath || '/lib/';
+    const modelPath = config.localModelPath || '/models/';
+    const modelType = config.modelType || 'lite_mobilenet_v2';
+
+    // 1. MUST load TFJS & WebGPU first as all other models depend on it
+    if (!(self as any).tf) {
+        importScripts(`${libPath}tf.min.js`);
+    }
+
+    const tf = (self as any).tf;
+    const currentBackend = tf ? tf.getBackend() : 'none';
+    console.log(`[AI Worker] Backend Check - Current: ${currentBackend}, Requested WebGPU: ${config.useWebGPU !== false}`);
+
+    if (tf && config.useWebGPU !== false) {
+        // If it's already webgpu, we're good. If not (cpu or webgl), try to force webgpu.
+        if (currentBackend !== 'webgpu') {
+            try {
+                if (navigator.gpu) {
+                    console.log('[AI Worker] Prioritizing WebGPU backend...');
+                    // Cache bust using renamed file
+                    importScripts(`${libPath}tf-backend-webgpu-patched.min.js`);
+                    await tf.setBackend('webgpu');
+                    await tf.ready();
+                    console.log(`[AI Worker] WebGPU backend READY. Active Backend: ${tf.getBackend()}`);
+                } else {
+                    console.log('[AI Worker] navigator.gpu NOT available. Falling back to CPU (WebGL strictly disabled).');
+                    await tf.setBackend('cpu');
+                    await tf.ready();
+                }
+            } catch (e) {
+                console.warn('[AI Worker] WebGPU initialization failed, falling back to CPU (WebGL strictly disabled):', e);
+                await tf.setBackend('cpu');
+                await tf.ready();
+            }
+        } else {
+            console.log('[AI Worker] WebGPU already active.');
+            await tf.ready();
+        }
+    } else if (tf) {
+        await tf.setBackend('cpu'); // Force CPU if WebGPU not preferred
+        await tf.ready();
+    }
+
+    // 2. Preloading strategy
+    if (config.preloadMaxim) {
+        // Models for production: enhancement, deblurring as requested
+        const startTotalPreload = performance.now();
+        console.log('[AI Worker] Starting parallel preloading of CORE models...');
+
+        await Promise.allSettled([
+            loadMaximModel('enhancement', config),
+            loadMaximModel('deblurring', config),
+            loadUpscaler(2, config)
+        ]);
+
+        const totalPreloadTime = performance.now() - startTotalPreload;
+        console.log(`[AI Worker] CORE preloading COMPLETE in ${totalPreloadTime.toFixed(2)}ms`);
+    }
+
+    if (aiModel && !config.warmup) {
         ctx.postMessage({ type: 'loaded', isLoaded: true });
         return;
     }
@@ -94,115 +170,53 @@ const loadModel = async (config: any) => {
     isModelLoading = true;
 
     try {
-        const libPath = config.localLibPath || '/lib/';
-        const modelPath = config.localModelPath || '/models/';
-        const modelType = config.modelType || 'lite_mobilenet_v2';
-
-        // Load TFJS
-        if (!(self as any).tf) {
-            importScripts(`${libPath}tf.min.js`);
-
-            // Load WebGPU Backend
-            if (config.useWebGPU !== false) {
-                try {
-                    if (navigator.gpu) {
-                        importScripts(`${libPath}tf-backend-webgpu.min.js`);
-                        await (self as any).tf.setBackend('webgpu');
-                        await (self as any).tf.ready();
-                    } else {
-                        await (self as any).tf.setBackend('webgl');
-                    }
-                } catch {
-                    /* ignored */
-                }
-            }
-        }
-
-        // Load Coco-SSD
+        // 3. Load other models
         if (!(self as any).cocoSsd) {
+            sendStatus('coco', 'loading');
             importScripts(`${libPath}coco-ssd.min.js`);
         }
-        sendStatus('coco', 'loading');
+        if (!(self as any).faceLandmarksDetection) { try { importScripts(`${libPath}face-landmarks-detection.min.js`); } catch { /* ignored */ } }
+        if (!(self as any).bodySegmentation) { try { importScripts(`${libPath}body-segmentation.min.js`); } catch { /* ignored */ } }
 
-        // Load Face Landmarks Detection
-        if (!(self as any).faceLandmarksDetection) {
-            try {
-                importScripts(`${libPath}face-landmarks-detection.min.js`);
-            } catch {
-                /* ignored */
-            }
-        }
-
-        // Load Body Segmentation
-        if (!(self as any).bodySegmentation) {
-            try {
-                importScripts(`${libPath}body-segmentation.min.js`);
-            } catch {
-                /* ignored */
-            }
-        }
-
-        if ((self as any).cocoSsd) {
+        // Coco-SSD
+        if ((self as any).cocoSsd && !aiModel) {
+            const startLoad = performance.now();
             aiModel = await (self as any).cocoSsd.load({
                 base: modelType,
                 modelUrl: `${modelPath}coco-ssd/${modelType}/model.json`
             });
-
-            if (aiModel) {
-                const tf = (self as any).tf;
-                const zeros = tf.zeros([10, 10, 3], 'int32');
-                await aiModel.detect(zeros);
-                zeros.dispose();
-                sendStatus('coco', 'ready');
-            }
+            const duration = performance.now() - startLoad;
+            console.log(`[AI Worker] Coco-SSD Model LOADED in ${duration.toFixed(2)}ms`);
+            sendStatus('coco', 'ready');
         }
 
-        // Initialize Body Segmenter
-        if ((self as any).bodySegmentation) {
+        // Body Segmenter
+        if ((self as any).bodySegmentation && !bodySegmenter) {
             try {
+                sendStatus('body', 'loading');
                 const model = (self as any).bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
-                const segmenterConfig = {
-                    runtime: 'tfjs',
-                    modelType: 'general'
-                };
-                bodySegmenter = await (self as any).bodySegmentation.createSegmenter(model, segmenterConfig);
-
-            } catch {
-                /* ignored */
-            }
+                bodySegmenter = await (self as any).bodySegmentation.createSegmenter(model, { runtime: 'tfjs', modelType: 'general' });
+                sendStatus('body', 'ready');
+            } catch { sendStatus('body', 'error'); }
         }
 
-        // Initialize Face Detector
-        if ((self as any).faceLandmarksDetection) {
+        // Face Detector
+        if ((self as any).faceLandmarksDetection && !faceDetector) {
             try {
+                sendStatus('face', 'loading');
                 const model = (self as any).faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
-                const detectorConfig = {
-                    runtime: 'tfjs',
-                    refineLandmarks: false,
-                    maxFaces: 5
-                };
-                faceDetector = await (self as any).faceLandmarksDetection.createDetector(model, detectorConfig);
-
-            } catch {
-                /* ignored */
-            }
+                faceDetector = await (self as any).faceLandmarksDetection.createDetector(model, { runtime: 'tfjs', refineLandmarks: false, maxFaces: 5 });
+                sendStatus('face', 'ready');
+            } catch { sendStatus('face', 'error'); }
         }
 
-        // Preload core MAXIM models if requested
-        if (config.preloadMaxim) {
-            try {
-                await loadMaximModel('enhancement', config);
-                await loadMaximModel('deblurring', config);
-            } catch { /* ignored */ }
+        // 4. Trigger Warmup if requested AND Await it
+        if (config.warmup) {
+            await warmupModels();
         }
 
         isModelLoading = false;
         ctx.postMessage({ type: 'loaded', isLoaded: true });
-
-        // Optional: Trigger background warmup if requested
-        if (config.warmup) {
-            warmupModels();
-        }
 
     } catch (error: any) {
         isModelLoading = false;
@@ -317,6 +331,7 @@ const loadUpscaler = async (scale: number, config: any) => {
     }
 
     if ((self as any).Upscaler) {
+        const startLoad = performance.now();
         const upscaler = new (self as any).Upscaler({
             model: {
                 path: `${modelPath}esrgan-slim/x${scale}/model.json`,
@@ -325,6 +340,8 @@ const loadUpscaler = async (scale: number, config: any) => {
         });
         await upscaler.getModel();
         upscalerInstances[scale] = upscaler;
+        const duration = performance.now() - startLoad;
+        console.log(`[AI Worker] ESRGAN Upscaler x${scale} LOADED in ${duration.toFixed(2)}ms`);
         sendStatus(modelKey, 'ready');
         return upscaler;
     }
@@ -373,14 +390,27 @@ const upscaleImage = async (imageData: ImageData, scale: number, config: any) =>
  * Enhances a tile with MAXIM model
  */
 const enhanceImage = async (imageData: ImageData, task: string, config: any) => {
+    const tf = (self as any).tf;
+    if (tf && tf.engine) tf.engine().startScope();
     try {
         const upscaler = await loadMaximModel(task, config);
-        const result = await upscaler.upscale(imageData, {
+
+        // Convert ImageData to float32 tensor explicitly
+        // MAXIM models typically expect [0,1] float32 inputs
+        const inputTensor = tf.browser.fromPixels(imageData).toFloat().div(255); // Normalize to [0,1] if needed, verify model expectancy
+        // Actually, UpscalerJS usually handles this, but for GraphModel we might need to be explicit if it fails
+
+        const result = await upscaler.upscale(inputTensor, {
             output: 'tensor'
         });
 
+        // Clean up input immediately to free VRAM for data download
+        inputTensor.dispose();
+
         const outputData = await result.data();
         const shape = [result.shape[0], result.shape[1]];
+
+        // Dispose tensor immediately after data extraction
         result.dispose();
 
         ctx.postMessage({
@@ -391,6 +421,8 @@ const enhanceImage = async (imageData: ImageData, task: string, config: any) => 
         }, [outputData.buffer]);
     } catch (error: any) {
         ctx.postMessage({ type: 'error', error: `Enhancement Error: ${error.message}` });
+    } finally {
+        if (tf && tf.engine) tf.engine().endScope();
     }
 };
 
@@ -405,51 +437,144 @@ const warmupModels = async () => {
         const tf = (self as any).tf;
         if (!tf) return;
 
+        console.log('[AI Worker] Starting AI Engine Warmup Sequence...');
+
         // 1. Warmup Detection (Coco-SSD)
         if (aiModel) {
-            sendStatus('coco', 'warming');
-            const zeros = tf.zeros([224, 224, 3], 'int32');
-            await aiModel.detect(zeros);
-            zeros.dispose();
-            sendStatus('coco', 'ready');
+            try {
+                const startWarmup = performance.now();
+                sendStatus('coco', 'warming');
+                const zeros = tf.zeros([224, 224, 3], 'int32');
+                await aiModel.detect(zeros);
+                zeros.dispose();
+                const duration = performance.now() - startWarmup;
+                console.log(`[AI Worker] Coco-SSD Model WARMED UP in ${duration.toFixed(2)}ms`);
+                sendStatus('coco', 'ready');
+            } catch (err: any) {
+                console.warn(`[AI Worker] Coco-SSD Warmup skipped/failed: ${err.message}`);
+                sendStatus('coco', 'error');
+            }
         }
 
         // 2. Warmup Segmentation & Face
         if (bodySegmenter) {
-            const zeros = tf.zeros([256, 256, 3], 'int32');
-            await bodySegmenter.segmentPeople(zeros);
-            zeros.dispose();
+            try {
+                sendStatus('body', 'warming');
+                const zeros = tf.zeros([256, 256, 3], 'int32');
+                await bodySegmenter.segmentPeople(zeros);
+                zeros.dispose();
+                sendStatus('body', 'ready');
+            } catch { sendStatus('body', 'error'); }
         }
         if (faceDetector) {
-            const zeros = tf.zeros([256, 256, 3], 'int32');
-            await faceDetector.estimateFaces(zeros);
-            zeros.dispose();
+            try {
+                sendStatus('face', 'warming');
+                const zeros = tf.zeros([256, 256, 3], 'int32');
+                await faceDetector.estimateFaces(zeros);
+                zeros.dispose();
+                sendStatus('face', 'ready');
+            } catch { sendStatus('face', 'error'); }
         }
 
         // 3. Warmup Upscalers
-        for (const scale in upscalerInstances) {
-            const modelKey = `upscaler${scale}x`;
-            sendStatus(modelKey, 'warming');
-            const upscaler = upscalerInstances[scale];
-            const zeros = tf.zeros([32, 32, 3], 'int32');
-            await upscaler.upscale(zeros, { output: 'tensor' }).then((t: any) => t.dispose());
-            zeros.dispose();
-            sendStatus(modelKey, 'ready');
+        const upscalerKeys = Object.keys(upscalerInstances);
+        if (upscalerKeys.length > 0) {
+            console.log(`[AI Worker] Warming up ${upscalerKeys.length} ESRGAN upscalers...`);
+            for (const scale of upscalerKeys) {
+                try {
+                    const startWarmup = performance.now();
+                    const modelKey = `upscaler${scale}x`;
+                    sendStatus(modelKey, 'warming');
+                    const upscaler = upscalerInstances[parseInt(scale)];
+                    const zeros = tf.zeros([32, 32, 3], 'int32');
+                    const result = await upscaler.upscale(zeros, { output: 'tensor' });
+                    if (result && typeof result.dispose === 'function') result.dispose();
+                    zeros.dispose();
+                    const duration = performance.now() - startWarmup;
+                    console.log(`[AI Worker] ESRGAN Upscaler x${scale} WARMED UP in ${duration.toFixed(2)}ms`);
+                    sendStatus(modelKey, 'ready');
+                } catch (err: any) {
+                    console.warn(`[AI Worker] ESRGAN Upscaler x${scale} Warmup FAILED: ${err.message}`);
+                    sendStatus(`upscaler${scale}x`, 'error');
+                }
+            }
         }
 
         // 4. Warmup MAXIM models
-        for (const task in maximInstances) {
-            sendStatus(task, 'warming');
-            const upscaler = maximInstances[task];
-            const zeros = tf.zeros([128, 128, 3], 'float32');
-            await upscaler.upscale(zeros, { output: 'tensor' }).then((t: any) => t.dispose());
-            zeros.dispose();
-            sendStatus(task, 'ready');
+        const maximKeys = Object.keys(maximInstances);
+        if (maximKeys.length > 0) {
+            console.log(`[AI Worker] Warming up ${maximKeys.length} MAXIM models...`);
+            // helper: Set all to warming immediately so UI reflects busy state even for queued output
+            maximKeys.forEach(key => sendStatus(key, 'warming'));
+
+            for (const task of maximKeys) {
+                // Use explicit scope management for each model
+                if (tf && tf.engine) tf.engine().startScope();
+                let zeros: any = null;
+                let result: any = null;
+                let memStart: any = null;
+
+                try {
+                    const startWarmup = performance.now();
+                    memStart = tf.memory();
+                    sendStatus(task, 'warming');
+                    const upscaler = maximInstances[task];
+
+                    // Increased warmup size to 128x128 to avoid zero-dimension reshapes in downsampled layers
+                    // 64x64 was too small for some models at deep downsampling levels.
+                    zeros = tf.zeros([128, 128, 3], 'float32');
+
+                    // Run inference - result is a Tensor or Tensor[]
+                    result = await upscaler.upscale(zeros, { output: 'tensor' });
+
+                    // Await the backend to finish execution
+                    // We don't need dataSync() here as the await above ensures the command buffer is submitted
+                    // and accessing .data() later (if needed) would sync.
+                    // For warmup, just execution is enough.
+
+                    const duration = performance.now() - startWarmup;
+                    console.log(`[AI Worker] MAXIM Model '${task}' WARMED UP in ${duration.toFixed(2)}ms`);
+                    sendStatus(task, 'ready');
+                } catch (err: any) {
+                    console.error(`[AI Worker] MAXIM Model '${task}' Warmup FAILED:`, err);
+                    if (err && typeof err === 'object') {
+                        console.error('Error Details:', {
+                            message: err.message,
+                            name: err.name,
+                            stack: err.stack,
+                            ...err
+                        });
+                    }
+                    sendStatus(task, 'error');
+                } finally {
+                    // Explicitly dispose created tensors if they exist
+                    if (zeros) zeros.dispose();
+                    if (result) {
+                        if (Array.isArray(result)) {
+                            result.forEach(t => t.dispose());
+                        } else if (result.dispose) {
+                            result.dispose();
+                        }
+                    }
+
+                    // End scope to cleanup intermediates
+                    if (tf && tf.engine) tf.engine().endScope();
+
+                    const memEnd = tf.memory();
+                    console.log(`[AI Worker] Memory Delta for '${task}': Tensors: ${memEnd.numTensors - (memStart?.numTensors || 0)}, GPU Bytes: ${(memEnd.numBytesInGPU - (memStart?.numBytesInGPU || 0)) / 1024 / 1024} MB`);
+                }
+            }
         }
 
+        console.log('[AI Worker] AI Engine Warmup Sequence COMPLETED.');
+        // Increased delay to ensure all status messages are processed by UI before hiding splash
+        setTimeout(() => {
+            ctx.postMessage({ type: 'warmup_complete' });
+        }, 300);
+    } catch (err: any) {
+        console.error('[AI Worker] Fatal error during overall warmup:', err);
+        // Still send completion so splash doesn't hang forever
         ctx.postMessage({ type: 'warmup_complete' });
-    } catch {
-        /* ignored */
     } finally {
         isWarmingUp = false;
     }

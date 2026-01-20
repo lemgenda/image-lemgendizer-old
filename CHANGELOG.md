@@ -3,6 +3,19 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.7.5] - 2026-01-20
+----------------------
+
+### Improvements
+
+*   **Performance Optimization**: Significant reduction in AI processing time (approx. 2x speedup) for tile processing.
+*   **Production Readiness**: Silenced verbose debug logging in the AI worker patch script.
+
+### Bug Fixes
+
+*   **Fixed Reshape Error**: Resolved `Reshape` size mismatch errors during MAXIM model warmup.
+*   **Fixed Shader Error**: Resolved `AgFusedEinsumProgram` invalid shader binding errors (missing `u_inShape` uniform).
+
 [3.6.0] - 2026-01-18
 ----------------------
 

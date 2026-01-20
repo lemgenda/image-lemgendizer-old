@@ -930,7 +930,11 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 processedImages = await orchestrateCustomProcessing(
                     selectedImagesForProcessing,
                     processingConfig,
-                    aiModelLoaded
+                    aiModelLoaded,
+                    t,
+                    (progress: number, step: string) => {
+                        updateProcessingModal(progress, step);
+                    }
                 );
 
                 if (!processedImages || processedImages.length === 0) {

@@ -562,6 +562,10 @@ export const getProcessingConfiguration = (processingOptions: any): any => {
             sharpen: parseFloat(processingOptions.colorCorrection.sharpen || 0),
             stackBlur: parseFloat(processingOptions.colorCorrection.stackBlur || 0)
         } : undefined,
+        aiEnhancements: processingOptions.aiEnhancements || {
+            enabled: false,
+            tasks: []
+        },
         processingMode: processingOptions.processingMode
     };
 };

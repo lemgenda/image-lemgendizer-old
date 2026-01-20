@@ -137,7 +137,9 @@ export const cleanUrl = (url: string): string => {
 export const orchestrateCustomProcessing = async (
     images: ImageFile[],
     processingConfig: ProcessingOptions & { batchRename?: BatchRenameOptions },
-    aiModelLoaded: boolean
+    aiModelLoaded: boolean,
+    t: any,
+    onProgress?: (progress: number, step: string) => void
 ): Promise<ImageFile[]> => {
     const processedImages: ImageFile[] = [];
 
@@ -262,7 +264,29 @@ export const orchestrateCustomProcessing = async (
 
                     const enhancedCanvas = await enhanceImageWithMaxim(
                         canvas,
-                        processingConfig.aiEnhancements.tasks
+                        processingConfig.aiEnhancements.tasks,
+                        onProgress ? (task, current, total) => {
+                            // Calculate base progress for current image (0-100)
+                            const tileProgress = (current / total) * 100;
+                            // Scale to overall process (30% to 60%)
+                            const overallProgress = 30 + (i / images.length * 30) + (tileProgress / images.length * 0.3);
+
+                            // Translate task name (e.g., 'deblurring' -> 'Deblurring')
+                            const taskName = t(`ai.model.${task}`, { defaultValue: task.charAt(0).toUpperCase() + task.slice(1) });
+
+                            // User requested format: "Processing image X of Y. [Task] tile A of B"
+                            const msg = t('processing.imageProgress', {
+                                current: i + 1,
+                                total: images.length,
+                                details: t('processing.taskTileProgress', {
+                                    task: taskName,
+                                    current: current,
+                                    total: total
+                                })
+                            });
+
+                            onProgress(overallProgress, msg);
+                        } : undefined
                     );
 
                     // Convert enhanced canvas back to blob for next steps
@@ -272,6 +296,8 @@ export const orchestrateCustomProcessing = async (
 
                     if (enhancedBlob) {
                         processedFile = new File([enhancedBlob], image.name, { type: 'image/webp' });
+                        // Track applied enhancements for summary
+                        (image as any).aiEnhancements = processingConfig.aiEnhancements.tasks;
                     }
                 }
             }

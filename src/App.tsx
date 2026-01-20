@@ -102,6 +102,10 @@ function App() {
         <SVGFilters />
         <HeaderSection />
 
+        <div className="ai-status-row" style={{ display: 'flex', justifyContent: 'flex-end', padding: '0.2rem 2rem' }}>
+          <AIEnhancementsBar />
+        </div>
+
         <main className="app-main">
           <UploadSection
             onImagesSelected={handleImageUpload}
@@ -371,7 +375,7 @@ function App() {
           )}
         </ModalElement>
 
-        {isLoading && (
+        {isLoading && !modal.isOpen && (
           <div className="loading-overlay">
             <div className="loading-spinner">
               {isScreenshotSelected ? (
@@ -416,7 +420,7 @@ function App() {
               <h1 className="splash-title">{t('app.title')}</h1>
               <p className="splash-loading-text">{t('loading.initializingAI')}</p>
               <div className="splash-model-status">
-                <AIEnhancementsBar />
+                <AIEnhancementsBar onlyActive={true} />
               </div>
             </div>
           </div>

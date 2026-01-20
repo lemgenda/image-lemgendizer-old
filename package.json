@@ -1,6 +1,6 @@
 {
   "name": "image-lemgendizer",
-  "version": "3.7.0",
+  "version": "3.7.5",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -15,7 +15,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "type-check": "tsc --noEmit",
-    "lint": "npm run type-check && eslint . --max-warnings 0",
+    "lint": "npm run type-check && eslint src scripts --max-warnings 0",
     "prepare": "husky",
     "lint-staged": "lint-staged",
     "copy-assets": "node scripts/copy-ai-assets.cjs",
@@ -34,10 +34,14 @@
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow-models/face-landmarks-detection": "^1.0.6",
     "@tensorflow/tfjs": "4.22.0",
-    "@tensorflow/tfjs-backend-webgpu": "4.22.0",
+    "@tensorflow/tfjs-backend-webgpu": "^4.22.0",
     "@upscalerjs/esrgan-slim": "^1.0.0-beta.12",
     "@upscalerjs/maxim-deblurring": "^0.1.0",
+    "@upscalerjs/maxim-dehazing-indoor": "^0.1.0",
+    "@upscalerjs/maxim-dehazing-outdoor": "^0.1.0",
     "@upscalerjs/maxim-denoising": "^0.1.0",
+    "@upscalerjs/maxim-deraining": "^0.1.0",
+    "@upscalerjs/maxim-enhancement": "^0.1.0",
     "@upscalerjs/maxim-retouching": "^0.1.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

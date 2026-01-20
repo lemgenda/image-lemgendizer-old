@@ -29,23 +29,47 @@ export const setAIStatusListener = (callback: (model: string, status: AIModelSta
     statusCallback = callback;
 };
 
+let isWorkerFullyConfigured = false;
+
 /**
  * Initializes the AI Worker if not already active
  */
 export const initAIWorker = (configOverrides?: Partial<AIWorkerConfig>): Promise<void> => {
-    if (workerLoadPromise) return workerLoadPromise;
+    // If we have a promise and no new overrides that require a re-config, return existing promise
+    if (workerLoadPromise && (!configOverrides || isWorkerFullyConfigured)) {
+        return workerLoadPromise;
+    }
+
+    // If worker exists but we have new and important overrides (like preloads)
+    if (aiWorker && configOverrides && (configOverrides.preloadMaxim || configOverrides.warmup)) {
+        const config: AIWorkerConfig = {
+            localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
+            localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
+            modelType: AI_SETTINGS.MODEL_TYPE,
+            useWebGPU: true,
+            ...configOverrides
+        };
+        aiWorker.postMessage({ type: 'load', config });
+        isWorkerFullyConfigured = true;
+
+        // If we already have a promise, we don't want to create a new one,
+        // just update the worker state.
+        if (workerLoadPromise) return workerLoadPromise;
+    }
 
     workerLoadPromise = new Promise((resolve, reject) => {
-        if (aiWorker) {
+        if (aiWorker && isWorkerFullyConfigured) {
             resolve();
             return;
         }
 
         try {
-            // Instantiate the worker
-            aiWorker = new Worker(new URL('../workers/ai.worker.ts', import.meta.url), {
-                type: 'classic' // Use classic to allow importScripts
-            });
+            if (!aiWorker) {
+                // Instantiate the worker
+                aiWorker = new Worker(new URL('../workers/ai.worker.ts', import.meta.url), {
+                    type: 'classic' // Use classic to allow importScripts
+                });
+            }
 
             // Set up listener for all messages
             const handleMessage = (e: MessageEvent) => {
@@ -73,6 +97,10 @@ export const initAIWorker = (configOverrides?: Partial<AIWorkerConfig>): Promise
                 useWebGPU: true,
                 ...configOverrides
             };
+
+            if (configOverrides?.preloadMaxim || configOverrides?.warmup) {
+                isWorkerFullyConfigured = true;
+            }
 
             aiWorker.postMessage({ type: 'load', config });
 
@@ -147,16 +175,21 @@ export const enhanceInWorker = async (
 
         const handleEnhanceMessage = (e: MessageEvent) => {
             const { type, data, shape, task: resTask, error } = e.data;
+            if (type === 'upscale_result') {
+                console.log(`[AIWorkerUtils] Received upscale_result for task: ${resTask} (requested: ${task})`);
+            }
             if (type === 'upscale_result' && resTask === task) {
                 aiWorker?.removeEventListener('message', handleEnhanceMessage);
                 resolve({ data, shape, task: resTask });
             } else if (type === 'error') {
+                console.error(`[AIWorkerUtils] Received error from worker: ${error}`);
                 aiWorker?.removeEventListener('message', handleEnhanceMessage);
                 reject(new Error(error));
             }
         };
 
         aiWorker.addEventListener('message', handleEnhanceMessage);
+        console.log(`[AIWorkerUtils] Posting 'enhance' message to worker for task: ${task}`);
         aiWorker.postMessage({
             type: 'enhance',
             imageData,

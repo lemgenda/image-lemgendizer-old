@@ -803,6 +803,24 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
         summary.aiUsed = true;
     }
 
+    // Check for AI Enhancements (MAXIM)
+    const enhancedImage = processedImagesList.find((img: any) => img.aiEnhancements && img.aiEnhancements.length > 0);
+    if (enhancedImage) {
+        summary.aiUsed = true;
+        const distinctTasks = new Set<string>();
+        processedImagesList.forEach((img: any) => {
+            if (img.aiEnhancements) {
+                img.aiEnhancements.forEach((task: string) => distinctTasks.add(task));
+            }
+        });
+
+        distinctTasks.forEach(task => {
+            // Try to translate task name, fallback to capitalized task
+            const translatedTask = t(`ai.model.${task}`, { defaultValue: task.charAt(0).toUpperCase() + task.slice(1) });
+            summary.operations.push(translatedTask);
+        });
+    }
+
     // Check for Applied Filter
     // options comes from getProcessingConfiguration so it has a filters object
     const opts = options as any;

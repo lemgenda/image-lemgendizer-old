@@ -1393,3 +1393,9 @@ body {
     margin: 0 auto var(--space-md) !important;
     width: fit-content;
 }
+
+.fa-stack-1x,
+.fa-stack-2x {
+    --fa-width: 60% !important;
+    width: var(--fa-width) !important;
+}

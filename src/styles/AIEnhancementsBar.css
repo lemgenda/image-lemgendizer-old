@@ -1,81 +1,87 @@
 .ai-enhancements-bar {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.6rem;
     padding: 0 0.5rem;
     overflow: visible;
-}
-
-.ai-enhancements-bar::-webkit-scrollbar {
-    display: none;
 }
 
 .ai-item {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.1rem;
-    min-width: fit-content;
-    transition: transform 0.2s ease;
     position: relative;
+    cursor: default;
+    transition: transform 0.2s ease;
 }
 
 .ai-item:hover {
     transform: translateY(-2px);
 }
 
-.ai-label {
-    font-size: 0.55rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    letter-spacing: 0.05em;
-    white-space: nowrap;
-    opacity: 0;
-    left: 50%;
-    transform: translateX(-50%) translateY(2px);
-    transition: all 0.2s ease;
-    pointer-events: none;
-    position: absolute;
-    top: 100%;
-    /* Closer to icon */
-}
-
-.ai-item:hover .ai-label {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-}
-
 .ai-icon-wrapper {
-    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
+    font-size: 14px;
 }
 
-/* Base stack styles */
-.fa-stack {
-    display: inline-block;
-    height: 1.25em;
-    line-height: 1.25em;
-    position: relative;
-    vertical-align: middle;
-    width: 1.5em;
+/* Tooltip - Strictly hidden until hover */
+.ai-status-tooltip {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+
+    font-size: 0.55rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #fff !important;
+    background: #333 !important;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 9999;
+
+    display: none !important;
+    pointer-events: none;
 }
 
-.fa-stack i.fa-stack-2x {
-    font-size: 1.2em;
-    /* Smaller icons */
+.ai-item:hover .ai-status-tooltip {
+    display: block !important;
 }
 
-/* Animation: Spin */
-.ai-spin {
-    animation: fa-spin 2s infinite linear;
+/* States & Standardized Colors - Aggressive targeting */
+.ai-state-idle i {
+    color: #ddd !important;
+    opacity: 0.6;
 }
 
-/* Animation: Pulse */
+.ai-state-loading i,
+.ai-state-warming i {
+    color: #007bff !important;
+    /* Blue */
+}
+
+.ai-state-ready i {
+    color: #28a745 !important;
+    /* Green */
+}
+
+.ai-state-error i {
+    color: #dc3545 !important;
+    /* Red */
+}
+
+/* Interaction feedback */
+.ai-state-loading,
+.ai-state-warming {
+    cursor: wait;
+}
+
+/* Animations */
 .ai-pulse {
     animation: ai-pulse-anim 1.5s infinite ease-in-out;
 }
@@ -95,65 +101,4 @@
         transform: scale(1);
         opacity: 1;
     }
-}
-
-/* States */
-.state-idle {
-    color: lightgrey !important;
-    filter: grayscale(1);
-    opacity: 0.4;
-}
-
-.state-loading,
-.state-warming {
-    cursor: wait;
-}
-
-.state-ready {
-    /* No shadow as requested */
-    opacity: 1;
-}
-
-.state-error {
-    color: var(--error) !important;
-}
-
-/* Color definitions for models */
-.model-coco.state-ready,
-.model-coco.state-loading,
-.model-coco.state-warming {
-    color: #00648F;
-}
-
-.model-upscaler.state-ready,
-.model-upscaler.state-loading,
-.model-upscaler.state-warming {
-    color: #0081B8;
-    ;
-}
-
-.model-maxim.state-ready,
-.model-maxim.state-loading,
-.model-maxim.state-warming {
-    color: #009DE0;
-}
-
-/* Custom stack adjustments for upscalers */
-.upscaler-stack-1x {
-    margin-top: -0.6em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-}
-
-.upscaler-x {
-    margin-left: 0.6em;
-    font-size: 0.45em;
-}
-
-.upscaler-num {
-    margin-right: 0.6em;
-    font-size: 0.6em;
 }

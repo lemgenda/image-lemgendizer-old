@@ -39,7 +39,21 @@ describe('imageProcessor', () => {
             expect(config.crop.height).toBe(1080);
             expect(config.crop.mode).toBe(CROP_MODES.SMART as CropMode);
             expect(config.templates.mode).toBe(PROCESSING_MODES.TEMPLATES as ProcessingMode);
+            expect(config.templates.mode).toBe(PROCESSING_MODES.TEMPLATES as ProcessingMode);
             expect(config.templates.selected).toEqual(['template1', 'template2']);
+        });
+
+        it('should correctly map aiEnhancements options', () => {
+            const options = {
+                aiEnhancements: {
+                    enabled: true,
+                    tasks: ['deblurring']
+                }
+            };
+            const config = getProcessingConfiguration(options as any);
+
+            expect(config.aiEnhancements.enabled).toBe(true);
+            expect(config.aiEnhancements.tasks).toEqual(['deblurring']);
         });
 
         it('should handle missing output formats by defaulting to webp', () => {

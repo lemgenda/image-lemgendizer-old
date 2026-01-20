@@ -7,7 +7,7 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'public', 'src/vendor', 'debug'],
+    ignores: ['dist', 'public', 'public/lib', '**/tf-backend-webgpu-patched.min.js', 'src/vendor', 'debug'],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

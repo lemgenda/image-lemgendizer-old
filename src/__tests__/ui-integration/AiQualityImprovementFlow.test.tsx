@@ -66,10 +66,9 @@ describe('AI Quality Improvement Flow', () => {
         await screen.findByRole('button', { name: /image1\.png/i }, { timeout: 15000 });
 
         // 3. Toggle enhancements using REAL UI (AIEnhancementsCard)
-        // Find 'Deblurring' button in unselected list (it should have a + icon or be a button with text)
-        // Note: The selected tasks are rendered differently (with numbers).
-        const deblurText = await screen.findByText(/Deblurring/i);
-        const deblurButton = deblurText.closest('button');
+        // Find 'Deblurring' button in unselected list.
+        // We use findByRole to disambiguate from the status bar tooltip.
+        const deblurButton = await screen.findByRole('button', { name: /^Deblurring$/i });
 
         expect(deblurButton).toBeTruthy();
         if (deblurButton) {
@@ -90,8 +89,7 @@ describe('AI Quality Improvement Flow', () => {
         }, { timeout: 10000 });
 
         // Toggle another one: 'Denoising'
-        const denoiseText = await screen.findByText(/Denoising/i);
-        const denoiseButton = denoiseText.closest('button');
+        const denoiseButton = await screen.findByRole('button', { name: /^Denoising$/i });
 
         expect(denoiseButton).toBeTruthy();
         if (denoiseButton) {
