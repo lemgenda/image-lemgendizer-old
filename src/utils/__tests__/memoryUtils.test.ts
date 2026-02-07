@@ -1,25 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-    safeCleanupGPUMemory,
     cleanupBlobUrls,
 } from '../memoryUtils';
 import type { ImageFile } from '../../types';
 
 describe('memoryUtils', () => {
-    let mockTf: any;
 
     beforeEach(() => {
-        // Mock global TF object
-        mockTf = {
-            memory: vi.fn().mockReturnValue({ numBytesInGPU: 1024 * 1024 * 100 }), // 100MB
-            disposeVariables: vi.fn(),
-            engine: vi.fn().mockReturnValue({
-                startScope: vi.fn(),
-                endScope: vi.fn()
-            }),
-            ENV: { reset: vi.fn() }
-        };
-        (global as any).window.tf = mockTf;
 
         // Mock URL
         if (!(global as any).URL) (global as any).URL = {};
@@ -30,12 +17,6 @@ describe('memoryUtils', () => {
         vi.restoreAllMocks();
     });
 
-    describe('GPU Memory Management', () => {
-        it('should safe cleanup variables when triggered', () => {
-            safeCleanupGPUMemory();
-            expect(mockTf.disposeVariables).toHaveBeenCalled();
-        });
-    });
 
     describe('Resource Cleanup', () => {
         it('should revoke blob URLs', () => {

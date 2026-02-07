@@ -115,6 +115,11 @@ export interface WatermarkOptions {
     repeat?: boolean;
 }
 
+export interface RestorationOptions {
+    enabled: boolean;
+    modelName: string; // e.g., 'mprnet-deraining-restoration-fp16', 'mirnet_v2-lowlight-restoration-fp16'
+}
+
 export interface ProcessingOptions {
     processingMode: ProcessingMode;
     output: OutputOptions;
@@ -140,6 +145,7 @@ export interface ProcessingOptions {
     filters?: FilterOptions;
     colorCorrection?: ColorCorrectionOptions;
     watermark?: WatermarkOptions;
+    restoration?: RestorationOptions;
 }
 
 // Template System

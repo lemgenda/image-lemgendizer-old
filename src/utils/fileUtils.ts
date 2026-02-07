@@ -681,57 +681,6 @@ export const generateSpecialFormatPreview = async (image: any): Promise<string> 
 };
 
 /**
- * Generates processing summary
- * @param {Object} summaryData - Summary data
- * @param {TFunction} t - Translation function
- * @returns {Object} Processing summary
- */
-export const generateProcessingSummary = (summaryData: any, t: TFunction) => {
-    const summary: any = {
-        mode: summaryData.mode,
-        imagesProcessed: summaryData.imagesProcessed,
-        formatsExported: summaryData.formatsExported,
-        operations: [],
-        aiUsed: summaryData.aiUsed,
-        upscalingUsed: false,
-        totalFiles: summaryData.totalFiles
-    };
-
-    if (summaryData.resizeDimension) {
-        summary.operations.push(t('operations.resized', { dimension: summaryData.resizeDimension }));
-        summary.upscalingUsed = true;
-    }
-    if (summaryData.cropWidth && summaryData.cropHeight) {
-        const cropKey = summaryData.cropMode === CROP_MODES.SMART ? 'operations.aiSmartCropping' : 'operations.standardCrop';
-        const cropLabel = t(cropKey);
-        summary.operations.push(`${cropLabel} ${summaryData.cropWidth}x${summaryData.cropHeight}`);
-        summary.upscalingUsed = true;
-    }
-    if (summaryData.compressionQuality < 100) {
-        summary.operations.push(t('operations.compressed', { quality: summaryData.compressionQuality }));
-    }
-    if (summaryData.rename && summaryData.newFileName) {
-        summary.operations.push(t('operations.renamed', { pattern: summaryData.newFileName }));
-    }
-
-    if (summary.upscalingUsed) {
-        summary.operations.push(t('operations.autoUpscaling'));
-    }
-
-    if (summaryData.mode === PROCESSING_MODES.TEMPLATES) {
-        summary.templatesApplied = summaryData.templatesApplied;
-        summary.categoriesApplied = summaryData.categoriesApplied;
-        summary.operations = [
-            t('operations.templatesApplied', { count: summary.templatesApplied }),
-            t('operations.autoUpscaling'),
-            t('operations.aiSmartCropping')
-        ];
-    }
-
-    return summary;
-};
-
-/**
  * Creates processing summary
  * @param {Object} result - Processing result
  * @param {Object} options - Processing options
@@ -762,72 +711,114 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
         } : undefined
     };
 
-    if (options.watermark?.enabled) {
-        summary.operations.push(t('summary.watermarkApplied'));
-    }
-
-    if (options.output.quality && options.output.quality < 1) {
-        // Assuming output quality reflects compression quality for general images
-    }
-
-    // Checking legacy compression object if it exists on options (casting)
-    const legacyOptions = options as any;
-    if (legacyOptions.compression && legacyOptions.compression.quality < 1) {
-        const qualityPercent = Math.round(legacyOptions.compression.quality * 100);
-        summary.operations.push(t('operations.compressed', { quality: qualityPercent }));
-    }
-
-    if (options.crop && options.crop.enabled && options.crop.mode === CROP_MODES.SMART) {
-        summary.operations.push(t('operations.aiSmartCropping'));
-        summary.aiUsed = true;
-    }
-
-    // Logic for upscaling check
     const processedImagesList = (result as any).processedImagesList || [];
-    const upscaledImage = processedImagesList.find((img: any) => img.aiUpscaleScale);
 
+    // --- ORDERED OPERATIONS LIST ---
+
+    // 1. Resize (with upscale info)
+    const upscaledImage = processedImagesList.find((img: any) => img.aiUpscaleScale);
     if (upscaledImage) {
         summary.upscalingUsed = true;
         summary.aiUsed = true;
         summary.upscaleScale = upscaledImage.aiUpscaleScale;
 
-        let modelInfo = `x${upscaledImage.aiUpscaleScale}`;
-        if (upscaledImage.aiUpscaleModel) {
-            summary.upscaleModel = upscaledImage.aiUpscaleModel;
-            modelInfo += ` (${upscaledImage.aiUpscaleModel})`;
+        if (upscaledImage.isSmartCropUpscale || (upscaledImage as any).isSmartCropUpscale) {
+            summary.operations.push(t('operations.aiSmartCropUpscale', { scale: upscaledImage.aiUpscaleScale }));
+        } else if (upscaledImage.aiUpscaleModel?.includes('UltraZoom')) {
+            summary.operations.push(t('operations.aiUltraZoom', { scale: upscaledImage.aiUpscaleScale }));
+        } else {
+            let modelInfo = `x${upscaledImage.aiUpscaleScale}`;
+            if (upscaledImage.aiUpscaleModel) {
+                summary.upscaleModel = upscaledImage.aiUpscaleModel;
+                modelInfo += ` (${upscaledImage.aiUpscaleModel})`;
+            }
+            summary.operations.push(t('operations.aiUpscalingWithModel', { model: modelInfo }));
         }
-
-        summary.operations.push(t('operations.aiUpscalingWithModel', { model: modelInfo }));
-    } else if (summary.upscalingUsed) {
-        summary.operations.push(t('operations.autoUpscaling'));
-        summary.aiUsed = true;
+    } else if (options.resize?.enabled && options.resize.dimension) {
+        summary.operations.push(t('operations.resized', { dimension: options.resize.dimension }));
     }
 
-    // Check for Applied Filter
-    // options comes from getProcessingConfiguration so it has a filters object
-    const opts = options as any;
-    if (opts.filters && opts.filters.selectedFilter && opts.filters.selectedFilter !== IMAGE_FILTERS.NONE) {
-        const filterName = t(`filters.name.${opts.filters.selectedFilter}`);
+    // 2. Crop (dimensions)
+    if (options.crop && options.crop.enabled) {
+        if (options.crop.mode === CROP_MODES.SMART) {
+            summary.aiUsed = true;
+            const smartCroppedImage = processedImagesList.find((img: any) => img.aiSmartCrop);
+            if (smartCroppedImage) {
+                summary.operations.push(t('operations.aiYoloSmartCrop', {
+                    width: options.crop.width,
+                    height: options.crop.height
+                }));
+            } else {
+                summary.operations.push(t('operations.aiSmartCropping'));
+            }
+        } else {
+            // Standard Crop
+            summary.operations.push(`${t('operations.standardCrop')} (${options.crop.width}x${options.crop.height})`);
+        }
+    }
+
+    // 3. Restoration (list models)
+    if (options.restoration?.enabled && options.restoration.modelName) {
+        summary.aiUsed = true;
+        summary.operations.push(t('operations.restorationApplied', { model: options.restoration.modelName }));
+    }
+
+    // 4. Filter / Color Correction
+    if (options.filters && options.filters.selectedFilter && options.filters.selectedFilter !== IMAGE_FILTERS.NONE) {
+        const filterName = t(`filters.name.${options.filters.selectedFilter}`);
         summary.operations.push(t('operations.filterApplied', { filter: filterName }));
     }
-
-    if (summary.upscalingUsed) {
-        summary.operations.push(t('operations.autoUpscaling'));
-        summary.aiUsed = true;
+    if (options.colorCorrection?.enabled) {
+        summary.operations.push(t('operations.colorCorrectionApplied'));
     }
 
+    // 5. Compression (percentage)
+    let compressionQuality = 80; // Default
+    if (options.output.quality && options.output.quality <= 1) {
+        compressionQuality = Math.round(options.output.quality * 100);
+    } else if (options.output.quality > 1) {
+        compressionQuality = options.output.quality;
+    }
+    // Only show if explicitly configured or not default 100/lossless (usually we show it always for clarity)
+    summary.operations.push(t('operations.compressed', { quality: compressionQuality }));
+
+
+    // 6. Watermark
+    if (options.watermark?.enabled) {
+        summary.operations.push(t('summary.watermarkApplied'));
+    }
+
+    // 7. Format Conversion
+    if (summary.formatsExported && summary.formatsExported.length > 0) {
+        const formats = summary.formatsExported.map((f: string) => f.toUpperCase()).join(', ');
+        summary.operations.push(t('operations.formatsExported', { formats }));
+    }
+
+    // 8. Rename
+    const isBatchRename = options.processingMode === PROCESSING_MODES.BATCH_RENAME;
+    const hasRename = options.output?.rename && options.output?.newFileName;
+
+    if (isBatchRename && options.batchRename) {
+        // Show pattern logic if complex, or just "Batch Rename Applied"
+        const pattern = options.batchRename.pattern || 'Pattern';
+        summary.operations.push(t('operations.renamed', { pattern }));
+    } else if (hasRename) {
+        const pattern = options.output.newFileName;
+        summary.operations.push(t('operations.renamed', { pattern }));
+    }
+
+    // Templates special case (mixes into operations or stands alone?)
+    // User requested order for standard pipeline. Templates usually don't have restoration/resize in the same way.
+    if (summary.mode === PROCESSING_MODES.TEMPLATES && summary.templatesApplied > 0) {
+        summary.operations.push(t('operations.templatesApplied', { count: summary.templatesApplied }));
+    }
+
+    // Generator special cases
     if (options.includeFavicon) {
         summary.operations.push(t('button.generateFavicon'));
     }
-
     if (options.includeScreenshots && options.screenshotUrl) {
         summary.operations.push(`${t('button.generateScreenshots')} for ${options.screenshotUrl}`);
-    }
-
-    if (summary.mode === PROCESSING_MODES.TEMPLATES) {
-        if (summary.templatesApplied > 0) {
-            summary.operations.push(t('operations.templatesApplied', { count: summary.templatesApplied }));
-        }
     }
 
     return summary;

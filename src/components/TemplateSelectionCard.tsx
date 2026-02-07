@@ -2,6 +2,7 @@ import type { ProcessingOptions, ImageFile } from '../types';
 import ScreenShotsCard from './ScreenShotsCard';
 import TemplateImageSection from './TemplateImageSection';
 import FilterSelectionCard from './FilterSelectionCard';
+import RestorationCard from './RestorationCard';
 import { SOCIAL_MEDIA_TEMPLATES } from '../configs/templateConfigs';
 import { IMAGE_FILTERS } from '../constants';
 import '../styles/TemplateSelectionCard.css';
@@ -253,6 +254,15 @@ const TemplateSelectionCard = ({
                         </div>
                     );
                 })}
+            </div>
+
+            <div className="mb-lg">
+                <RestorationCard
+                    modelName={processingOptions.restoration?.modelName || ''}
+                    enabled={!!processingOptions.restoration?.enabled}
+                    onOptionChange={onOptionChange as (category: string, key: string, value: any) => void}
+                    t={t}
+                />
             </div>
 
             <div className="mb-lg">

@@ -284,14 +284,14 @@ export const DEFAULT_PROCESSING_CONFIG: ProcessingOptions = {
     },
     resize: {
         enabled: false,
-        dimension: '1080p',
-        width: 1920,
-        height: 1080
+        dimension: '',
+        width: 0,
+        height: 0
     },
     crop: {
         enabled: false,
-        width: 1080,
-        height: 1080,
+        width: 0,
+        height: 0,
         mode: 'center',
         position: 'center'
     },
@@ -301,10 +301,10 @@ export const DEFAULT_PROCESSING_CONFIG: ProcessingOptions = {
     },
     showResize: true,
     showCrop: false,
-    resizeDimension: '1080p',
+    resizeDimension: '',
     cropMode: 'center',
-    cropWidth: '1080',
-    cropHeight: '1080',
+    cropWidth: '',
+    cropHeight: '',
     cropPosition: 'center',
     showTemplates: false,
     selectedTemplates: [],
@@ -327,7 +327,11 @@ export const DEFAULT_PROCESSING_CONFIG: ProcessingOptions = {
         fontSize: 32,
         fontFamily: 'Arial',
         repeat: false
-    } as const
+    } as const,
+    restoration: {
+        enabled: false,
+        modelName: 'mprnet-deraining-fp16'
+    }
 };
 
 export const EXPORT_SETTINGS = {
@@ -416,7 +420,8 @@ export const ERROR_MESSAGES = {
     SCREENSHOT_URL_REQUIRED: 'Please enter a website URL for screenshots.',
     SCREENSHOT_URL_INVALID: 'Please enter a valid website URL (e.g., example.com or https://example.com).',
     SCREENSHOT_SERVICE_UNAVAILABLE: 'Screenshot service is temporarily unavailable. Please try again later.',
-    MODEL_LOAD_FAILED: 'Failed to load AI model'
+    MODEL_LOAD_FAILED: 'Failed to load AI model',
+    RESTORATION_FAILED: 'Restoration failed'
 };
 
 // ================================

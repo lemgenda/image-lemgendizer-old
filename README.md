@@ -24,7 +24,12 @@ Visit: [**https://lemgenda.github.io/image-lemgendizer-old/**](https://lemgenda
 
 *   **AI-Powered Features**: Smart cropping with TensorFlow.js object detection
 *   **WebGPU Acceleration**: High-performance GPU-accelerated AI processing for supported hardware
-*   **AI Upscaling**: Enhance image resolution with ESRGAN models
+*   **AI Image Restoration**: Advanced FP32 restoration models for high-fidelity output
+    *   **Dehazing**: Specialized Indoor (FFA-Net) and Outdoor models
+    *   **Deraining**: Effective rain removal using MPRNet
+    *   **Low-Light Enhancement**: Professional visibility boost with MIRNetV2
+    *   **Deblurring & Denoising**: State-of-the-art NAFNet models
+*   **AI Upscaling**: Enhance image resolution with ESRGAN models (2x, 3x, 4x)
 
 *   **Image Filters**: 20+ professional filters including Vintage, HDR, Night Vision, and creative presets
 *   **Real-time Preview**: Live filter preview before processing
@@ -359,8 +364,8 @@ This project is licensed under the MIT License - see the [LICENSE](https://lice
 📊 Project Status
 -----------------
 
-**Version**: 3.6.0
-**Last Updated**: January 2026
+**Version**: 3.7.0
+**Last Updated**: February 2026
 **Active Development**: Yes
 **Production Ready**: Yes
 

@@ -4,6 +4,7 @@ import FormatSelectionCard from './FormatSelectionCard';
 import FilterSelectionCard from './FilterSelectionCard';
 import ColorCorrectionCard from './ColorCorrectionCard';
 import WatermarkCard from './WatermarkCard';
+import RestorationCard from './RestorationCard';
 import { CROP_MODES, IMAGE_FILTERS } from '../constants';
 import type { ProcessingOptions, ImageFile } from '../types';
 
@@ -88,6 +89,13 @@ const CustomProcessingTab = ({
                     onToggleResizeCrop={onToggleResizeCrop}
                     onToggleCropMode={onToggleCropMode}
                     onOptionChange={(key: string, value: any) => onSingleOptionChange(key as keyof ProcessingOptions, value)}
+                    t={t}
+                />
+
+                <RestorationCard
+                    modelName={processingOptions.restoration?.modelName || ''}
+                    enabled={!!processingOptions.restoration?.enabled}
+                    onOptionChange={onOptionChange as (category: string, key: string, value: any) => void}
                     t={t}
                 />
 

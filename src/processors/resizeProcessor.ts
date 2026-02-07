@@ -298,8 +298,8 @@ export const loadUpscalerForScale = async (scale: number): Promise<any> => {
     return {
         isWorker: true,
         scale,
-        upscale: async (img: HTMLImageElement) => {
-            return upscaleInWorker(img, scale);
+        upscale: async (img: HTMLImageElement, onProgress?: (progress: any) => void) => {
+            return upscaleInWorker(img, scale, onProgress);
         }
     };
 };
@@ -319,9 +319,9 @@ export const releaseUpscalerForScale = (_scale: number): void => {
  * @param {number} scale - Scale factor
  * @returns {Promise<Object>} Upscale result
  */
-export const safeUpscale = async (upscaler: any, img: HTMLImageElement, scale: number): Promise<any> => {
+export const safeUpscale = async (upscaler: any, img: HTMLImageElement, scale: number, onProgress?: (progress: any) => void): Promise<any> => {
     if (upscaler.isWorker) {
-        return upscaleInWorker(img, scale);
+        return upscaleInWorker(img, scale, onProgress);
     }
 
     // Fallback for non-worker upscalers (like enhanced fallback)
@@ -462,7 +462,12 @@ export const upscaleImageEnhancedFallback = async (imageFile: File, scale: numbe
  * @param {string} originalName - Original file name
  * @returns {Promise<File>} Upscaled image file
  */
-export const upscaleImageWithAI = async (imageFile: File, scale: number, originalName: string): Promise<{ file: File; scale?: number; model?: string }> => {
+export const upscaleImageWithAI = async (
+    imageFile: File,
+    scale: number,
+    originalName: string,
+    onProgress?: (progress: any) => void
+): Promise<{ file: File; scale?: number; model?: string }> => {
     if (aiUpscalingDisabled) {
         const fallbackFile = await upscaleImageEnhancedFallback(imageFile, scale, originalName);
         return { file: fallbackFile, scale, model: 'enhanced-fallback' };
@@ -513,7 +518,7 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
 
         let upscaleResult;
         try {
-            upscaleResult = await safeUpscale(upscaler, img, scale);
+            upscaleResult = await safeUpscale(upscaler, img, scale, onProgress);
         } catch {
             textureManagerFailures++;
             if (textureManagerFailures >= MAX_TEXTURE_FAILURES) aiUpscalingDisabled = true;
@@ -531,35 +536,22 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
             const [height, width] = upscaleResult.shape;
             canvas.width = width;
             canvas.height = height;
-            const tf = (window as any).tf;
-            if (tf) {
-                // Reconstruct tensor to use toPixels for high quality
-                const tensor = tf.tensor(upscaleResult.data, [...upscaleResult.shape, 3], 'float32');
-                await tf.browser.toPixels(tensor, canvas);
-                tensor.dispose();
-            } else {
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    const imageData = ctx.createImageData(width, height);
-                    const data = upscaleResult.data;
-                    // Note: This assumes data is already in 0-255 range
-                    for (let i = 0, j = 0; i < data.length; i += 3, j += 4) {
-                        imageData.data[j] = data[i];
-                        imageData.data[j + 1] = data[i + 1];
-                        imageData.data[j + 2] = data[i + 2];
-                        imageData.data[j + 3] = 255;
-                    }
-                    ctx.putImageData(imageData, 0, 0);
+
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                const imageData = ctx.createImageData(width, height);
+                const data = upscaleResult.data;
+                // Note: This assumes data is already in 0-255 range
+                for (let i = 0, j = 0; i < data.length; i += 3, j += 4) {
+                    imageData.data[j] = data[i];
+                    imageData.data[j + 1] = data[i + 1];
+                    imageData.data[j + 2] = data[i + 2];
+                    imageData.data[j + 3] = 255;
                 }
+                ctx.putImageData(imageData, 0, 0);
             }
         } else if (upscaleResult && typeof upscaleResult.data === 'function' && upscaleResult.shape) {
-            const tensor = upscaleResult;
-            canvas = document.createElement('canvas');
-            const [height, width] = tensor.shape;
-            canvas.width = width;
-            canvas.height = height;
-            await (window as any).tf.browser.toPixels(tensor, canvas);
-            tensor.dispose();
+            throw new Error("Tensor based result not supported without TFJS");
         } else if (upscaleResult instanceof HTMLCanvasElement) {
             canvas = upscaleResult;
         } else if (upscaleResult.tensor) {
@@ -590,7 +582,11 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
         );
 
         const upscaledFile = new File([blob], newName, { type: MIME_TYPE_MAP.webp });
-        return { file: upscaledFile, scale, model: 'esrgan-slim' };
+        return {
+            file: upscaledFile,
+            scale: upscaleResult.scale || scale,
+            model: upscaleResult.model || 'esrgan-slim'
+        };
 
     } catch {
         textureManagerFailures++;
@@ -625,7 +621,12 @@ export const upscaleImageWithAI = async (imageFile: File, scale: number, origina
  * @param {Object} options - Processing options
  * @returns {Promise<File>} Resized image file
  */
-export const resizeImageWithAI = async (imageFile: File, targetDimension: number, _options?: any): Promise<{ file: File; scale?: number }> => {
+export const resizeImageWithAI = async (
+    imageFile: File,
+    targetDimension: number,
+    _options?: any,
+    onProgress?: (progress: any) => void
+): Promise<{ file: File; scale?: number }> => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(imageFile);
 
@@ -657,7 +658,7 @@ export const resizeImageWithAI = async (imageFile: File, targetDimension: number
     if (needsUpscaling) {
         const upscaleFactor = calculateUpscaleFactor(img.naturalWidth, img.naturalHeight, newWidth, newHeight);
         if (upscaleFactor > 1) {
-            const aiResult = await upscaleImageWithAI(sourceFile, upscaleFactor, imageFile.name);
+            const aiResult = await upscaleImageWithAI(sourceFile, upscaleFactor, imageFile.name, onProgress);
             sourceFile = aiResult.file;
             finalScale = aiResult.scale;
         }

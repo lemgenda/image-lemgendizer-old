@@ -3,6 +3,26 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.7.0] - 2026-02-07
+----------------------
+
+### Major Changes
+
+*   **AI Restoration Overhaul**: Significantly expanded the AI restoration suite with high-precision FP32 models.
+    *   **Advanced Dehazing**: Introduced specialized Indoor (FFA-Net) and Outdoor dehazing models for superior clarity.
+    *   **Low-Light Correction**: Integrated MIRNetV2 for professional-grade low-light enhancement.
+    *   **Unified UI**: Standardized "AI Image Restoration" terminology and labels across all tabs.
+*   **Production Hardening**: Exhaustive audit of the AI worker and core processing pipeline.
+    *   **Type Safety**: Resolved all remaining TypeScript errors and linting regressions in `ai.worker.ts`.
+    *   **Worker Stability**: Fixed variable scopes, removed dead code, and optimized loop closures for high-load browser processing.
+    *   **Full Test Verification**: Achieved 100% pass rate across the entire Vitest suite (132/132 tests passing).
+
+### Technical Improvements
+
+*   **Translation Synchronization**: Synchronized Croatian and English translations to ensure 100% parity for new AI restoration features.
+*   **Asset Management**: Standardized model naming conventions and synchronized public assets with UI definitions.
+*   **Build Optimization**: Verified clean production builds with zero linting warnings using `--max-warnings 0`.
+
 [3.6.0] - 2026-01-18
 ----------------------
 

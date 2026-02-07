@@ -62,7 +62,12 @@ if (typeof window !== 'undefined' && !(window as any).UTIF) {
 /**
  * Processes LemGendary resize operation
  */
-export const processLemGendaryResize = async (images: any[], dimension: number, options: { quality?: number; format?: string } = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }): Promise<any[]> => {
+export const processLemGendaryResize = async (
+    images: any[],
+    dimension: number,
+    options: { quality?: number; format?: string } = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP },
+    onProgress?: (progress: any) => void
+): Promise<any[]> => {
 
     const results: any[] = [];
 
@@ -138,7 +143,7 @@ export const processLemGendaryResize = async (images: any[], dimension: number, 
                         } catch { /* ignored */ }
                     }
 
-                    const resizeResult = await (resizeImageWithAI as any)(processableFile, dimension, options);
+                    const resizeResult = await (resizeImageWithAI as any)(processableFile, dimension, options, onProgress);
                     processedFile = resizeResult.file;
 
                     results.push({
@@ -229,14 +234,15 @@ export const processLemGendaryCrop = async (
                     } catch { /* ignored */ }
                 }
 
-                if (options.cropMode === CROP_MODES.SMART) {
+
+                if (options.cropMode === CROP_MODES.SMART || options.cropMode === 'smart') {
                     croppedFile = await (processSmartCrop as any)(processableFile, width, height, {
                         ...options,
                         cropMode: CROP_MODES.SMART,
                         cropPosition
                     });
                 } else {
-                    croppedFile = await (processStandardCrop as any)(processableFile, width, height, cropPosition, options);
+                    croppedFile = await (processStandardCrop as any)(processableFile, width, height, { ...options, cropPosition });
                 }
             }
 
@@ -516,13 +522,13 @@ export const getProcessingConfiguration = (processingOptions: any): any => {
             newFileName: processingOptions.output?.newFileName || ''
         },
         resize: {
-            enabled: processingOptions.showResize || false,
-            dimension: processingOptions.resizeDimension ? parseInt(processingOptions.resizeDimension) : 1200
+            enabled: (processingOptions.showResize && !!processingOptions.resizeDimension) || false,
+            dimension: processingOptions.resizeDimension ? (parseInt(processingOptions.resizeDimension) || 0) : 1200
         },
         crop: {
-            enabled: !!processingOptions.showCrop,
-            width: parseInt(processingOptions.cropWidth || '1080'),
-            height: parseInt(processingOptions.cropHeight || '1080'),
+            enabled: (!!processingOptions.showCrop && !!processingOptions.cropWidth && !!processingOptions.cropHeight),
+            width: parseInt(processingOptions.cropWidth || '1080') || 1080,
+            height: parseInt(processingOptions.cropHeight || '1080') || 1080,
             mode: processingOptions.cropMode || CROP_MODES.STANDARD,
             position: processingOptions.cropPosition || 'center'
         },
@@ -561,6 +567,10 @@ export const getProcessingConfiguration = (processingOptions: any): any => {
             clip: parseFloat(processingOptions.colorCorrection.clip || 0),
             sharpen: parseFloat(processingOptions.colorCorrection.sharpen || 0),
             stackBlur: parseFloat(processingOptions.colorCorrection.stackBlur || 0)
+        } : undefined,
+        restoration: processingOptions.restoration ? {
+            enabled: !!processingOptions.restoration.enabled,
+            modelName: processingOptions.restoration.modelName || 'mprnet-deraining-restoration-fp16'
         } : undefined,
         processingMode: processingOptions.processingMode
     };

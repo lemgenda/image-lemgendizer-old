@@ -106,54 +106,88 @@
    GLOBAL LOADING STATES
    ========================================================================== */
 
+/* Invisible Overlay Container (Layout Only) */
 .loading-overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.65);
+    background: transparent;
+    /* Removed backdrop */
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 10000;
-    backdrop-filter: blur(5px);
-    transition: all 0.3s ease;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     animation: fadeIn 0.4s ease-out;
+    pointer-events: none;
+    /* Allow interaction behind? No, usually loading blocks. But user said 'remove overlay'. I'll stick to visual removal first. */
 }
 
+/* Premium Glassmorphic Card */
 .loading-spinner {
     text-align: center;
     color: var(--color-text-primary);
-    background: var(--color-bg-primary);
-    padding: var(--space-xxl);
+    background: rgba(255, 255, 255, 0.75);
+    /* Translucent light mode */
+    padding: var(--space-xl);
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
+    box-shadow:
+        0 20px 25px -5px rgba(0, 0, 0, 0.1),
+        0 10px 10px -5px rgba(0, 0, 0, 0.04),
+        0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+    /* Inner border glow */
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-md);
-    max-width: 450px;
-    border: 1px solid var(--border-color);
-    animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    gap: var(--space-lg);
+    max-width: 480px;
+    width: 90%;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    animation: slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: auto;
+    /* Re-enable interaction for the modal itself */
+}
+
+[data-theme="dark"] .loading-spinner {
+    background: rgba(30, 41, 59, 0.7);
+    /* Translucent dark mode */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow:
+        0 25px 50px -12px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
 }
 
 .loading-spinner i {
     color: var(--color-primary);
-    filter: drop-shadow(0 0 10px rgba(37, 99, 235, 0.3));
+    font-size: 3.5rem;
+    /* Larger icon */
+    margin-bottom: var(--space-xs);
+    filter: drop-shadow(0 0 15px rgba(37, 99, 235, 0.4));
+    animation: pulseIcon 2s infinite ease-in-out;
 }
 
 .loading-spinner p {
     margin: 0;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--color-text-primary);
-    font-size: 1.125rem;
+    font-size: 1.25rem;
+    letter-spacing: -0.01em;
 }
 
 .loading-spinner .text-muted {
-    color: var(--color-text-muted);
-    font-weight: 400;
-    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    /* Darker text for better contrast on glass */
+    font-weight: 500;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+[data-theme="dark"] .loading-spinner .text-muted {
+    color: var(--color-text-secondary);
 }
 
 @keyframes fadeIn {
@@ -166,14 +200,31 @@
     }
 }
 
-@keyframes slideUp {
+@keyframes slideUpFade {
     from {
-        transform: translateY(30px);
+        transform: translateY(40px) scale(0.95);
         opacity: 0;
     }
 
     to {
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes pulseIcon {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.1);
+        opacity: 0.85;
+    }
+
+    100% {
+        transform: scale(1);
         opacity: 1;
     }
 }

@@ -15,3 +15,4 @@ export * from './themeUtils';
 export * from './tiffUtils';
 export * from './validationUtils';
 export * from './aiWorkerUtils';
+export * from './restorationUtils';

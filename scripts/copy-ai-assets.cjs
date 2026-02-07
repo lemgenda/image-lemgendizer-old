@@ -6,155 +6,72 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const LIB_DIR = path.join(PUBLIC_DIR, 'lib');
 const MODELS_DIR = path.join(PUBLIC_DIR, 'models');
 
-// Ensure directories exist
 [LIB_DIR, MODELS_DIR].forEach(dir => {
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
-const ASSETS_TO_COPY = [
-    // Libraries
-    {
-        src: 'node_modules/@tensorflow/tfjs/dist/tf.min.js',
-        dest: 'lib/tf.min.js'
-    },
-    {
-        src: 'node_modules/@tensorflow/tfjs-backend-webgpu/dist/tf-backend-webgpu.min.js',
-        dest: 'lib/tf-backend-webgpu.min.js'
-    },
-    {
-        src: 'node_modules/@tensorflow-models/coco-ssd/dist/coco-ssd.min.js',
-        dest: 'lib/coco-ssd.min.js'
-    },
-    {
-        src: 'node_modules/upscaler/dist/browser/umd/upscaler.min.js',
-        dest: 'lib/upscaler.min.js'
-    },
-    {
-        src: 'node_modules/@tensorflow-models/body-segmentation/dist/body-segmentation.min.js',
-        dest: 'lib/body-segmentation.min.js'
-    },
-    {
-        src: 'node_modules/@tensorflow-models/face-landmarks-detection/dist/face-landmarks-detection.min.js',
-        dest: 'lib/face-landmarks-detection.min.js'
-    },
-    // Esrgan Slim Models
-    {
-        src: 'node_modules/@upscalerjs/esrgan-slim/models/x2/model.json',
-        dest: 'models/esrgan-slim/x2/model.json'
-    },
-    {
-        src: 'node_modules/@upscalerjs/esrgan-slim/models/x2/2/model.json', // Check if this exists, nested
-        dest: 'models/esrgan-slim/x2/2/model.json',
-        optional: true
-    },
-    {
-        src: 'node_modules/@upscalerjs/esrgan-slim/models/x3/model.json',
-        dest: 'models/esrgan-slim/x3/model.json'
-    },
-    {
-        src: 'node_modules/@upscalerjs/esrgan-slim/models/x4/model.json',
-        dest: 'models/esrgan-slim/x4/model.json'
-    }
+const ORT_SOURCE = path.join(ROOT_DIR, 'node_modules/onnxruntime-web/dist');
+const ORT_FILES = [
+    'ort.all.min.js',
+    'ort.all.min.js.map',
+    'ort-wasm.wasm',
+    'ort-wasm-simd.wasm',
+    'ort-wasm-threaded.wasm',
+    'ort-wasm-simd-threaded.wasm',
+    'ort-wasm-simd-threaded.mjs',
+    'ort-wasm-simd-threaded.jsep.wasm',
+    'ort-wasm-simd-threaded.jsep.mjs'
 ];
 
-// Helper to copy directory recursively
-function copyDir(src, dest) {
-    if (!fs.existsSync(src)) return;
-    if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+console.log('--- Copying AI Assets (Unified Schema) ---');
 
-    const entries = fs.readdirSync(src, { withFileTypes: true });
-
-    for (const entry of entries) {
-        const srcPath = path.join(src, entry.name);
-        const destPath = path.join(dest, entry.name);
-
-        if (entry.isDirectory()) {
-            copyDir(srcPath, destPath);
-        } else {
-            fs.copyFileSync(srcPath, destPath);
+if (fs.existsSync(ORT_SOURCE)) {
+    ORT_FILES.forEach(file => {
+        const src = path.join(ORT_SOURCE, file);
+        const dest = path.join(LIB_DIR, file);
+        if (fs.existsSync(src)) {
+            fs.copyFileSync(src, dest);
+            console.log(`[ORT] Copied: ${file}`);
         }
-    }
+    });
 }
 
-console.log('--- Copying AI Assets ---');
+const modelsToCopy = [
+    { src: 'local_models/restoration/MIRNetV2-LowLight.onnx', dest: 'models/restoration/MIRNetV2-LowLight.onnx' },
+    { src: 'local_models/restoration/MPRNet-Deraining.onnx', dest: 'models/restoration/MPRNet-Deraining.onnx' },
+    { src: 'local_models/restoration/NAFNet-Denoising.onnx', dest: 'models/restoration/NAFNet-Denoising.onnx' },
+    { src: 'local_models/restoration/NAFNet-Debluring(REDS).onnx', dest: 'models/restoration/NAFNet-Debluring(REDS).onnx' },
+    { src: 'local_models/restoration/FFANet-Dehazing(Indoor).onnx', dest: 'models/restoration/FFANet-Dehazing(Indoor).onnx' },
+    { src: 'local_models/restoration/FFANet-Dehazing(Outdoor).onnx', dest: 'models/restoration/FFANet-Dehazing(Outdoor).onnx' },
 
-ASSETS_TO_COPY.forEach(asset => {
-    const srcPath = path.join(ROOT_DIR, asset.src);
-    const destPath = path.join(PUBLIC_DIR, asset.dest);
+    { src: 'local_models/ultrazoom/UltraZoom_x2.onnx', dest: 'models/ultrazoom/UltraZoom_x2.onnx' },
+    { src: 'local_models/ultrazoom/UltraZoom_x3.onnx', dest: 'models/ultrazoom/UltraZoom_x3.onnx' },
+    { src: 'local_models/ultrazoom/UltraZoom_x4.onnx', dest: 'models/ultrazoom/UltraZoom_x4.onnx' },
+    { src: 'local_models/yolo/yolov8n-fp16.onnx', dest: 'models/yolo/yolov8n-fp16.onnx' }
+];
+
+modelsToCopy.forEach(item => {
+    const srcPath = path.join(ROOT_DIR, item.src);
+    const destPath = path.join(PUBLIC_DIR, item.dest);
 
     if (fs.existsSync(srcPath)) {
         const destDir = path.dirname(destPath);
-        if (!fs.existsSync(destDir)) {
-            fs.mkdirSync(destDir, { recursive: true });
+        if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+
+        fs.copyFileSync(srcPath, destPath);
+        const size = fs.statSync(destPath).size / 1024 / 1024;
+        console.log(`[Model] Copied: ${item.dest} (${size.toFixed(2)} MB)`);
+
+        const srcDataPath = srcPath + '.data';
+        const destDataPath = destPath + '.data';
+        if (fs.existsSync(srcDataPath)) {
+            fs.copyFileSync(srcDataPath, destDataPath);
+            const dataSize = fs.statSync(destDataPath).size / 1024 / 1024;
+            console.log(`[Model] Copied associated data: ${item.dest}.data (${dataSize.toFixed(2)} MB)`);
         }
-        if (asset.dest.includes('tf-backend-webgpu.min.js')) {
-            let content = fs.readFileSync(srcPath, 'utf8');
-            // Patch powerPreference to suppress Windows warning
-            // Pattern: powerPreference:t.env().get("WEBGPU_USE_LOW_POWER_GPU")?"low-power":"high-performance"
-            const regex = /powerPreference:.\.env\(\)\.get\("WEBGPU_USE_LOW_POWER_GPU"\)\?"low-power":"high-performance"/g;
-            if (regex.test(content)) {
-                content = content.replace(regex, ''); // Removes the property entirely, leaving e={}
-                console.log('Patched tf-backend-webgpu.min.js to suppress powerPreference warning.');
-            } else {
-                console.warn('Warning: Could not find powerPreference pattern in tf-backend-webgpu.min.js to patch.');
-            }
-
-            // Patch 2: Fix "no matching constructor for vec3<f32>(i32, i32, i32)" error
-            // Use Regex to be robust against minification variable names
-            const vec3Regex = /resData=vec3<f32>\(([^,]+),([^,]+),([^)]+)\);/g;
-            if (vec3Regex.test(content)) {
-                content = content.replace(vec3Regex, 'resData=vec3<f32>(f32($1),f32($2),f32($3));');
-                console.log('Patched tf-backend-webgpu.min.js: Fixed vec3<f32> constructor shader error (Regex).');
-            } else {
-                // Try alternate formatting (spaces) just in case
-                const vec3RegexSpaces = /resData = vec3<f32>\(([^,]+), ([^,]+), ([^)]+)\);/g;
-                if (vec3RegexSpaces.test(content)) {
-                    content = content.replace(vec3RegexSpaces, 'resData = vec3<f32>(f32($1), f32($2), f32($3));');
-                    console.log('Patched tf-backend-webgpu.min.js: Fixed vec3<f32> constructor shader error (Regex/Spaces).');
-                } else {
-                    console.warn('Warning: Could not find vec3<f32> shader pattern to patch.');
-                }
-            }
-
-            // Patch 3: Disable Einsum to preventing crashing/glitches
-            // Simple rename of the kernel so it's not found
-            if (content.includes('kernelName:"Einsum"')) {
-                content = content.replace('kernelName:"Einsum"', 'kernelName:"Einsum_Disabled"');
-                console.log('Patched tf-backend-webgpu.min.js: Disabled Einsum kernel (Simple Rename).');
-            } else if (content.includes("kernelName:'Einsum'")) {
-                content = content.replace("kernelName:'Einsum'", "kernelName:'Einsum_Disabled'");
-                console.log('Patched tf-backend-webgpu.min.js: Disabled Einsum kernel (Simple Rename Single Quote).');
-            } else {
-                console.warn('Warning: Could not find Einsum kernel registration to patch.');
-            }
-
-            fs.writeFileSync(destPath, content);
-            console.log(`Copied and Patched: ${asset.src} -> ${asset.dest}`);
-        } else {
-            fs.copyFileSync(srcPath, destPath);
-            console.log(`Copied: ${asset.src} -> ${asset.dest}`);
-        }
-    } else if (!asset.optional) {
-        console.warn(`Warning: Source file not found: ${asset.src}`);
+    } else {
+        console.warn(`[Warning] Source model not found: ${item.src}`);
     }
 });
-
-// Also copy the entire models directory from @upscalerjs/esrgan-slim if it exists
-const esrganModelsSrc = path.join(ROOT_DIR, 'node_modules/@upscalerjs/esrgan-slim/models');
-const esrganModelsDest = path.join(MODELS_DIR, 'esrgan-slim');
-if (fs.existsSync(esrganModelsSrc)) {
-    copyDir(esrganModelsSrc, esrganModelsDest);
-    console.log('Copied all ESRGAN-slim models');
-}
-
-// Copy downloaded local models (COCO-SSD)
-const localModelsSrc = path.join(ROOT_DIR, 'local_models');
-const localModelsDest = path.join(MODELS_DIR);
-if (fs.existsSync(localModelsSrc)) {
-    copyDir(localModelsSrc, localModelsDest);
-    console.log('Copied local models (COCO-SSD) to public/models');
-}
 
 console.log('--- Assets Copy Complete ---');

@@ -126,4 +126,38 @@ describe('orchestrateCustomProcessing', () => {
         // Should append -{counter} automatically -> Simple-001 (default padding 3, start 1)
         expect(results[0].name).toBe('Simple-001.webp');
     });
+
+    it('should call onProgress callback during processing', async () => {
+        const images: ImageFile[] = [{
+            file: new File([''], 'test.png', { type: 'image/png' }),
+            name: 'test.png',
+            type: 'image/png',
+            size: 0,
+            id: '1',
+            preview: '',
+            originalWidth: 100,
+            originalHeight: 100
+        }];
+
+        const processingConfig: Partial<ProcessingOptions> = {
+            processingMode: PROCESSING_MODES.CUSTOM,
+            output: {
+                formats: [IMAGE_FORMATS.WEBP],
+                quality: 85,
+                rename: false,
+                newFileName: ''
+            },
+            compression: { quality: 80, fileSize: '100' }
+        };
+
+        const onProgress = vi.fn();
+        await orchestrateCustomProcessing(images, processingConfig as ProcessingOptions, false, onProgress);
+
+        expect(onProgress).toHaveBeenCalled();
+        expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+            processedCount: 0,
+            totalCount: 1,
+            currentOperation: expect.any(String)
+        }));
+    });
 });

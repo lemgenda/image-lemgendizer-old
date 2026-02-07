@@ -226,9 +226,11 @@ function App() {
                   style={{ '--modal-progress': `${modal.progress}%` } as React.CSSProperties}
                 ></div>
               </div>
-              <div className="progress-text">
-                <span>{modal.progressStep}</span>
-                <span>{modal.progress}%</span>
+              <div className="progress-text" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{modal.progressStep}</span>
+                  <span>{modal.progress.toFixed(1)}%</span>
+                </div>
               </div>
             </div>
           )}

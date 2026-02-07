@@ -13,13 +13,6 @@ import {
     terminateAIWorker
 } from './aiWorkerUtils';
 
-// Declare global types for CDN-loaded libraries
-declare global {
-    interface Window {
-        tf: any;
-        cocoSsd: any;
-    }
-}
 
 let aiModel: any = null;
 let upscalerInstances: Record<string, any> = {};
@@ -43,18 +36,12 @@ export const initializeGPUMemoryMonitor = (): void => {
 /**
  * Monitors GPU memory usage and triggers cleanup when necessary.
  */
+/**
+ * Monitors GPU memory usage and triggers cleanup when necessary.
+ */
 const monitorGPUMemory = (): void => {
-    if (cleanupInProgress) return;
-
-    if (window.tf && window.tf.memory()) {
-        const memoryInfo = window.tf.memory();
-        currentMemoryUsage = (memoryInfo.numBytesInGPU || 0) / (1024 * 1024);
-
-        const upscalersInUse = Object.values(upscalerUsageCount).some(count => count > 0);
-        if (currentMemoryUsage > 3000 && !upscalersInUse) {
-            safeCleanupGPUMemory();
-        }
-    }
+    // WebGPU memory monitoring not directly exposed like TFJS.
+    // We rely on explicit cleanup calls.
 };
 
 /**
@@ -65,27 +52,21 @@ export const safeCleanupGPUMemory = (): void => {
     cleanupInProgress = true;
 
     try {
-        if (window.tf) {
-            const upscalersInUse = Object.values(upscalerUsageCount).some(count => count > 0);
-            if (!upscalersInUse) {
-                const now = Date.now();
-                Object.keys(upscalerInstances).forEach(key => {
-                    if (upscalerUsageCount[key] === 0 &&
-                        (!upscalerLastUsed[key] || (now - upscalerLastUsed[key] > UPSCALER_IDLE_TIMEOUT))) {
-                        const upscaler = upscalerInstances[key];
-                        if (upscaler && upscaler.dispose) {
-                            try { upscaler.dispose(); } catch { /* ignored */ }
-                        }
-                        delete upscalerInstances[key];
-                        delete upscalerUsageCount[key];
-                        delete upscalerLastUsed[key];
-                    }
-                });
-                window.tf.disposeVariables();
-                window.tf.engine().startScope();
-                window.tf.engine().endScope();
+        // ONNX Runtime WebGPU cleanup handled by session release
+        // Cleanup untracked upscalers
+        const now = Date.now();
+        Object.keys(upscalerInstances).forEach(key => {
+            if (upscalerUsageCount[key] === 0 &&
+                (!upscalerLastUsed[key] || (now - upscalerLastUsed[key] > UPSCALER_IDLE_TIMEOUT))) {
+                const upscaler = upscalerInstances[key];
+                if (upscaler && upscaler.dispose) {
+                    try { upscaler.dispose(); } catch { /* ignored */ }
+                }
+                delete upscalerInstances[key];
+                delete upscalerUsageCount[key];
+                delete upscalerLastUsed[key];
             }
-        }
+        });
         currentMemoryUsage = 0;
     } catch {
         // Ignore cleanup errors
@@ -102,35 +83,21 @@ export const cleanupGPUMemory = (): void => {
     cleanupInProgress = true;
 
     try {
-        if (window.tf) {
-            const upscalersInUse = Object.values(upscalerUsageCount).some(count => count > 0);
-            if (upscalersInUse) {
-                cleanupInProgress = false;
-                return;
-            }
-
-            if (aiModel && aiModel.dispose) {
-                aiModel.dispose();
-                aiModel = null;
-            }
-
-            Object.keys(upscalerInstances).forEach(key => {
-                const upscaler = upscalerInstances[key];
-                if (upscaler && upscaler.dispose) {
-                    try { upscaler.dispose(); } catch { /* ignored */ }
-                }
-            });
-
-            upscalerInstances = {};
-            upscalerUsageCount = {};
-            upscalerLastUsed = {};
-
-            window.tf.disposeVariables();
-            window.tf.engine().startScope();
-            window.tf.engine().endScope();
-
-            if (window.tf.ENV) window.tf.ENV.reset();
+        if (aiModel && aiModel.dispose) {
+            aiModel.dispose();
+            aiModel = null;
         }
+
+        Object.keys(upscalerInstances).forEach(key => {
+            const upscaler = upscalerInstances[key];
+            if (upscaler && upscaler.dispose) {
+                try { upscaler.dispose(); } catch { /* ignored */ }
+            }
+        });
+
+        upscalerInstances = {};
+        upscalerUsageCount = {};
+        upscalerLastUsed = {};
 
         currentMemoryUsage = 0;
         textureManagerFailures = 0;
@@ -177,7 +144,8 @@ export const loadAIModel = async (): Promise<any> => {
 
         aiModelLoading = false;
         return aiModel;
-    } catch {
+    } catch (error) {
+        console.error('[MemoryUtils] Failed to load AI model, falling back to simple model:', error);
         aiModel = createSimpleAIModel();
         aiModelLoading = false;
         return aiModel;

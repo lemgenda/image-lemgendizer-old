@@ -1,6 +1,6 @@
 {
   "name": "image-lemgendizer",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -30,12 +30,6 @@
     "@fortawesome/fontawesome-free": "^7.1.0",
     "@fortawesome/free-solid-svg-icons": "^7.1.0",
     "@fortawesome/react-fontawesome": "^3.1.1",
-    "@tensorflow-models/body-segmentation": "^1.0.2",
-    "@tensorflow-models/coco-ssd": "^2.2.3",
-    "@tensorflow-models/face-landmarks-detection": "^1.0.6",
-    "@tensorflow/tfjs": "4.22.0",
-    "@tensorflow/tfjs-backend-webgpu": "4.22.0",
-    "@upscalerjs/esrgan-slim": "^1.0.0-beta.12",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.18.2",
@@ -46,12 +40,12 @@
     "i18next": "^25.7.3",
     "i18next-browser-languagedetector": "^8.2.0",
     "jszip": "^3.10.1",
+    "onnxruntime-web": "^1.23.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-dropzone": "^14.3.8",
     "react-i18next": "^16.5.0",
     "react-modal": "^3.16.3",
-    "upscaler": "^1.0.0-beta.19",
     "utif": "^3.1.0"
   },
   "devDependencies": {
@@ -89,8 +83,7 @@
   "overrides": {
     "sourcemap-codec": "npm:@jridgewell/sourcemap-codec",
     "source-map": "^0.7.4",
-    "@tensorflow/tfjs": "4.22.0",
     "rimraf": "^6.1.2",
-    "glob": "^10.4.5"
+    "glob": "^13.0.1"
   }
 }

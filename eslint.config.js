@@ -7,7 +7,22 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'public', 'src/vendor', 'debug'],
+    ignores: [
+      'dist',
+      'public',
+      'src/vendor',
+      'debug',
+      '.venv',
+      'MIRNet_v1',
+      'MIRNetv2',
+      'MPRNet_deraining',
+      'MPRNet_repo',
+      'NAFNet_repo',
+      'Restormer',
+      'restormer_weights_temp',
+      'DeblurGANv2',
+      'DiffBIR'
+    ],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

@@ -107,8 +107,13 @@ export const detectObjectsInWorker = async (
                 }
             };
 
+            const config = {
+                localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
+                localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH
+            };
+
             aiWorker.addEventListener('message', handleDetectionMessage);
-            aiWorker.postMessage({ type: 'detect', imageData }, [imageData.data.buffer]);
+            aiWorker.postMessage({ type: 'detect', imageData, config }, [imageData.data.buffer]);
         } catch (err) {
             reject(err);
         }
@@ -120,8 +125,9 @@ export const detectObjectsInWorker = async (
  */
 export const upscaleInWorker = async (
     imageSource: HTMLImageElement | HTMLCanvasElement | ImageData,
-    scale: number
-): Promise<{ data: Float32Array; shape: [number, number]; scale: number }> => {
+    scale: number,
+    onProgress?: (progress: any) => void
+): Promise<{ data: any; shape: [number, number]; scale: number; model?: string }> => {
     await initAIWorker();
 
     return new Promise((resolve, reject) => {
@@ -145,10 +151,14 @@ export const upscaleInWorker = async (
             }
 
             const handleUpscaleMessage = (e: MessageEvent) => {
-                const { type, data, shape, scale: resScale, error } = e.data;
+                const { type, data, shape, scale: resScale, model, error } = e.data;
                 if (type === 'upscale_result') {
                     aiWorker?.removeEventListener('message', handleUpscaleMessage);
-                    resolve({ data, shape, scale: resScale });
+                    resolve({ data, shape, scale: resScale, model });
+                } else if (type === 'progress') {
+                    if (onProgress && data) {
+                        onProgress(data);
+                    }
                 } else if (type === 'error') {
                     aiWorker?.removeEventListener('message', handleUpscaleMessage);
                     reject(new Error(error));
@@ -186,6 +196,38 @@ export const preloadUpscalerInWorker = async (scale: number): Promise<void> => {
 };
 
 /**
+ * Pre-warms models used for cropping (UltraZoom and YOLO)
+ */
+export const prewarmCropModels = async (): Promise<void> => {
+    await initAIWorker();
+    return new Promise((resolve) => {
+        const handleWarmupMessage = (e: MessageEvent) => {
+            if (e.data.type === 'warmup_complete') {
+                aiWorker?.removeEventListener('message', handleWarmupMessage);
+                resolve();
+            }
+        };
+        aiWorker?.addEventListener('message', handleWarmupMessage);
+
+        const config = {
+            localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
+            localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
+            models: [
+                { scale: 4 }, // Largest first
+                { scale: 3 },
+                { scale: 2 },
+                { modelName: 'yolo' } // Last
+            ]
+        };
+
+        aiWorker?.postMessage({ type: 'warmup', config });
+
+        // Timeout as fallback
+        setTimeout(resolve, 30000); // 30s for 4 models
+    });
+};
+
+/**
  * Warms up all AI models in the worker
  */
 export const warmupAIModels = async (): Promise<void> => {
@@ -213,6 +255,65 @@ export const terminateAIWorker = () => {
         aiWorker.postMessage({ type: 'dispose' });
         aiWorker.terminate();
         aiWorker = null;
-        workerLoadPromise = null;
     }
+};
+
+/**
+ * Restores an image using the AI Worker
+ */
+export const restoreInWorker = async (
+    imageSource: HTMLImageElement | HTMLCanvasElement | ImageData,
+    modelName: string,
+    onProgress?: (progress: any) => void
+): Promise<ImageData> => {
+    await initAIWorker();
+
+    return new Promise((resolve, reject) => {
+        if (!aiWorker) {
+            reject(new Error('AI Worker not initialized'));
+            return;
+        }
+
+        try {
+            let imageData: ImageData;
+            if (imageSource instanceof ImageData) {
+                imageData = imageSource;
+            } else {
+                const canvas = document.createElement('canvas');
+                canvas.width = imageSource.width;
+                canvas.height = imageSource.height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Failed to get canvas context');
+                ctx.drawImage(imageSource, 0, 0);
+                imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            }
+
+            const handleRestoreMessage = (e: MessageEvent) => {
+                const { type, data, error } = e.data;
+                if (type === 'restore_result') {
+                    aiWorker?.removeEventListener('message', handleRestoreMessage);
+                    resolve(data);
+                } else if (type === 'progress') {
+                    if (onProgress && data) {
+                        onProgress(data);
+                    }
+                } else if (type === 'error') {
+                    aiWorker?.removeEventListener('message', handleRestoreMessage);
+                    reject(new Error(error));
+                }
+            };
+
+            aiWorker.addEventListener('message', handleRestoreMessage);
+
+            const config = {
+                localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
+                localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
+                modelName
+            };
+
+            aiWorker.postMessage({ type: 'restore', imageData, config }, [imageData.data.buffer]);
+        } catch (err) {
+            reject(err);
+        }
+    });
 };

@@ -14,7 +14,7 @@ import {
     generateExportSettings,
     preloadUpscalerModel
 } from '../processors';
-import { warmupAIModels } from '../utils/aiWorkerUtils';
+import { warmupAIModels, prewarmCropModels } from '../utils/aiWorkerUtils';
 import {
     createImageObjects,
     createProcessingSummary,
@@ -70,6 +70,11 @@ interface ModalState {
     showProgress: boolean;
     progress: number;
     progressStep: string;
+    totalFiles?: number;
+    currentFileIndex?: number;
+    currentOperation?: string;
+    tileProgress?: { current: number; total: number };
+    granularProgress?: number;
 }
 
 interface TemplateCategory {
@@ -301,7 +306,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
 
     useEffect(() => {
         const loadAIModelIfNeeded = async () => {
-            const needsAI = (processingOptions.cropMode === CROP_MODES.SMART && !aiModelLoaded) ||
+            const hasSmartCropDimensions = !!processingOptions.cropWidth && !!processingOptions.cropHeight;
+            const needsAI = (processingOptions.cropMode === CROP_MODES.SMART && hasSmartCropDimensions && !aiModelLoaded) ||
                 (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && !aiModelLoaded);
 
             if (!needsAI) return;
@@ -340,7 +346,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         };
 
         loadAIModelIfNeeded();
-    }, [processingOptions.cropMode, processingOptions.processingMode, t, aiModelLoaded, showModal]);
+    }, [processingOptions.cropMode, processingOptions.cropWidth, processingOptions.cropHeight, processingOptions.processingMode, t, aiModelLoaded, showModal]);
 
     // Track current images for cleanup on unmount
     const imagesRef = useRef(images);
@@ -380,9 +386,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             progressStep: ''
         });
 
-        const autoClose = setupAutoClose(closeModal, MODAL_TYPES.SUMMARY);
-        autoCloseTimeoutRef.current = autoClose.ref;
-    }, [t, closeModal]);
+        // Summary modal should not auto-close to allow user to review results
+    }, [t]);
 
 
     const updateProcessingModal = (progress: number, step: string, title = t('message.processing')) => {
@@ -835,6 +840,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
 
         setIsLoading(true);
         startProcessingModal(t('message.processingImages', { count: selectedImagesForProcessing.length }));
+        setIsLoading(false); // Disable spinner specific overlay, let modal handle it
 
         try {
             updateProcessingModal(10, t('processing.preparing'));
@@ -868,7 +874,37 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 processedImages = await orchestrateCustomProcessing(
                     selectedImagesForProcessing,
                     processingConfig,
-                    aiModelLoaded
+                    aiModelLoaded,
+                    (progressInfo) => {
+                        const { processedCount, totalCount, currentOperation, granularProgress, tileProgress } = progressInfo;
+                        const totalProgress = ((processedCount) / totalCount) * 100 + (granularProgress / totalCount);
+
+                        // Construct detailed status string (e.g., "Dehazing (Outdoor) (Tile 1/6)")
+                        let detailedStatus = currentOperation || t('processing.processing');
+
+                        // Add tile info if available and not already present (to avoid double tagging)
+                        if (tileProgress && !detailedStatus.includes('(Tile')) {
+                            detailedStatus = `${detailedStatus} (Tile ${tileProgress.current}/${tileProgress.total})`;
+                        }
+
+                        setModal(prev => ({
+                            ...prev,
+                            progress: Math.min(99, totalProgress),
+                            // SWAP: Message gets the "Processing file X of Y"
+                            message: t('processing.processingFile', { current: processedCount + 1, total: totalCount }),
+                            // SWAP: ProgressStep gets the granular operation details
+                            progressStep: detailedStatus,
+                            currentOperation,
+                            currentFileIndex: processedCount + 1,
+                            totalFiles: totalCount,
+                            tileProgress,
+                            granularProgress,
+                            isOpen: true,
+                            showProgress: true,
+                            type: MODAL_TYPES.INFO as any,
+                            title: t('processing.processingImages')
+                        }));
+                    }
                 );
 
                 if (!processedImages || processedImages.length === 0) {
@@ -1041,6 +1077,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             (isScreenshotSelected ? selectedScreenshotTemplates.length : 0);
 
         startProcessingModal(t('message.processingTemplates', { count: totalTemplatesToProcess }));
+        setIsLoading(false); // Disable spinner specific overlay, let modal handle it
 
         try {
             updateProcessingModal(10, t('processing.preparingTemplates'));
@@ -1177,6 +1214,10 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
     };
 
     const toggleResizeCrop = (type: 'resize' | 'crop') => {
+        if (type === 'crop') {
+            prewarmCropModels().catch(err => console.warn('[ProcessingContext] Prewarm failed:', err));
+        }
+
         setProcessingOptions(prev => ({
             ...prev,
             showResize: type === 'resize',
