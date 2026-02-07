@@ -12,7 +12,7 @@ const resources = {
             'app.imagesNeverLeave': 'Your images never leave your browser',
             'app.subtitle': 'Batch Image Processing & Optimization Tool',
             'app.title': 'Image LemGendizer',
-            'app.version': 'Image LemGendizer v3.7.0',
+            'app.version': 'Image LemGendizer v3.8.0',
 
             'button.capture': 'Capture Screenshots',
             'button.capturing': 'Capturing...',
@@ -742,7 +742,7 @@ const resources = {
         translation: {
             'app.imagesNeverLeave': 'Your images never leave the browser',
             'app.title': 'Image LemGendizer',
-            'app.version': 'v3.7.0',
+            'app.version': 'v3.8.0',
             'app.subtitle': 'Alat za obradu i optimizaciju slika',
 
             'filters.title': 'Primijeni filtere',

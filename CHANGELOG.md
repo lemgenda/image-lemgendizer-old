@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.8.0] - 2026-02-07
+----------------------
+
+### Major Changes
+
+*   **Version Update**: Project version upgraded to 3.8.0.
+
 [3.7.0] - 2026-02-07
 ----------------------
 
