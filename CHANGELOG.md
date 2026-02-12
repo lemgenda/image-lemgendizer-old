@@ -3,6 +3,37 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.8.6] - 2026-02-12
+----------------------
+
+### AI Restoration Quality & Stability
+*   **GPEN Removal**: Decoupled GPEN-Lite restoration model to focus on superior identity-preservation results from CodeFormer.
+*   **Expanded Test Suite**:
+    *   **UI Integration**: Added comprehensive integration tests for CodeFormer, MIRNetV2 (Low-Light), and NAFNet (Denoise/Deblur) sequential flows.
+    *   **Restoration Processor**: Created a dedicated unit test suite for the core restoration orchestration logic.
+    *   **Robust Testing Architecture**: Standardized `data-testid` across AI restoration UI controls for localized test stability.
+*   **Infrastructure & Reliability**:
+    *   **Strict Build**: Resolved ESLint `no-empty` block regressions in `ai.worker.ts`, ensuring 100% linting compliance.
+    *   **Full Verification**: Verified 100% pass rate across the expanded test suite (138/138 tests passing).
+
+[3.8.5] - 2026-02-12
+----------------------
+
+### Major Changes
+
+*   **Face Restoration Suite**: Integrated specialized high-fidelity face restoration models.
+    *   **Primary: CodeFormer**: Identity-preserved restoration with adjustable fidelity (0.8-1.0).
+    *   **Secondary: GPEN-Lite**: Extreme-fast path for mild facial blur and noise removal.
+    *   **Face-Specific Pipeline**: Dedicated detection (YOLOv8), square cropping, and seamless alpha-blended re-integration.
+*   **Intelligent Restoration Policy**:
+    *   Automated suppression of global deblurring when faces are detected to prevent identity distortion.
+    *   Quality-gated processing ensuring only degraded faces are restored.
+
+### Technical Improvements
+
+*   **Version Update**: Synchronized project version to v3.8.5 across all subsystems.
+*   **Fidelity Control**: Added UI support for CodeFormer fidelity parameters.
+
 [3.8.0] - 2026-02-12
 ----------------------
 

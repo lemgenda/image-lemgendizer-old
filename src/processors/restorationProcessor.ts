@@ -13,7 +13,8 @@ import { restoreInWorker } from '../utils/aiWorkerUtils';
 export const processLemGendaryRestoration = async (
     imageFile: File,
     modelName: string,
-    onProgress?: (progress: any) => void
+    onProgress?: (progress: any) => void,
+    options: any = {}
 ): Promise<File> => {
     try {
         const img = document.createElement('img');
@@ -25,7 +26,7 @@ export const processLemGendaryRestoration = async (
             img.src = objectUrl;
         });
 
-        const restoredImageData = await restoreInWorker(img, modelName, onProgress);
+        const restoredImageData = await restoreInWorker(img, modelName, onProgress, options);
         URL.revokeObjectURL(objectUrl);
 
         const canvas = document.createElement('canvas');

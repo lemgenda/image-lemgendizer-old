@@ -44,6 +44,9 @@ const modelsToCopy = [
     { src: 'local_models/restoration/FFANet-Dehazing(Indoor).onnx', dest: 'models/restoration/FFANet-Dehazing(Indoor).onnx' },
     { src: 'local_models/restoration/FFANet-Dehazing(Outdoor).onnx', dest: 'models/restoration/FFANet-Dehazing(Outdoor).onnx' },
 
+    // Face Restoration
+    { src: 'local_models/restoration/CodeFormer.onnx', dest: 'models/restoration/CodeFormer.onnx' },
+
     { src: 'local_models/ultrazoom/UltraZoom-x2.onnx', dest: 'models/ultrazoom/UltraZoom-x2.onnx' },
     { src: 'local_models/ultrazoom/UltraZoom-x3.onnx', dest: 'models/ultrazoom/UltraZoom-x3.onnx' },
     { src: 'local_models/ultrazoom/UltraZoom-x4.onnx', dest: 'models/ultrazoom/UltraZoom-x4.onnx' },

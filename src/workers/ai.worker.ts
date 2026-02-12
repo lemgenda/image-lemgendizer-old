@@ -17,7 +17,6 @@ let currentSessionPath: string | null = null;
 const sessionCache: Map<string, any> = new Map();
 
 const WORKER_VERSION = '1.0.7-Pure-MPRNet';
-console.log(`[AI Worker] Initialized. Version: ${WORKER_VERSION}`);
 
 const MAX_CACHED_SESSIONS = 3;
 let messageQueue: Promise<void> = Promise.resolve();
@@ -278,8 +277,10 @@ const loadSession = async (modelPath: string, config: any) => {
             const dims = isYolo ? [1, 3, 640, 640] : (isRestoration ? [1, 3, 512, 512] : [1, 3, 64, 64]);
             const size = dims[1] * dims[2] * dims[3];
 
-            const inputName = session.inputNames[0];
+            const feeds: any = {};
 
+            // 1. Primary Image Input
+            const inputName = session.inputNames[0];
             let useFP16 = modelPath.toLowerCase().includes('-fp16');
 
             try {
@@ -288,7 +289,17 @@ const loadSession = async (modelPath: string, config: any) => {
                 }
                 const dummyData = new Float32Array(size).fill(0.5);
                 const tensor = new ortInstance.Tensor('float32', dummyData, dims);
-                await session.run({ [inputName]: tensor });
+                feeds[inputName] = tensor;
+
+                // 2. Secondary Inputs (e.g. Fidelity for CodeFormer)
+                for (let i = 1; i < session.inputNames.length; i++) {
+                    const name = session.inputNames[i];
+                    if (name === 'fidelity') {
+                        feeds[name] = new ortInstance.Tensor('float32', new Float32Array([0.5]), [1]);
+                    }
+                }
+
+                await session.run(feeds);
             } catch (wError: any) {
                 const errorMsg = wError.message || String(wError);
                 if (errorMsg.includes('expected: (tensor(float16))')) {
@@ -298,7 +309,13 @@ const loadSession = async (modelPath: string, config: any) => {
 
                     const dummyDataF16 = float32ToFloat16(new Float32Array(size).fill(0.5));
                     const tensorF16 = new ortInstance.Tensor('float16', dummyDataF16, dims);
-                    await session.run({ [inputName]: tensorF16 });
+                    feeds[inputName] = tensorF16;
+
+                    // Re-add secondary inputs (they are usually scalar float32, but check if they need fp16?)
+                    // CodeFormer fidelity is float32 even in fp16 models usually, but let's prevent errors.
+                    // For now, assume fidelity is float32.
+
+                    await session.run(feeds);
                 } else {
                     throw wError;
                 }
@@ -1019,10 +1036,6 @@ const runRestoration = async (imageData: ImageData, config: any): Promise<void> 
             const meanG = sumG / numPixels;
             const meanB = sumB / numPixels;
 
-            if (tilesProcessed === 0) {
-                console.log(`[AI Worker] DIAGNOSTIC: Model=${modelName}, Range=[${sMin.toFixed(4)}, ${sMax.toFixed(4)}], Means=[R:${(meanR / rangeScale).toFixed(4)}, G:${(meanG / rangeScale).toFixed(4)}, B:${(meanB / rangeScale).toFixed(4)}], Shape=[${outputShape}]`);
-            }
-
             for (let y = 0; y < TILE_SIZE; y++) {
                 for (let x = 0; x < TILE_SIZE; x++) {
                     const gx = sx + x;
@@ -1389,6 +1402,338 @@ ctx.onmessage = (e: MessageEvent) => {
     });
 };
 
+// Helper: Color Transfer (Reinhard Method - Simple RGB Mean/Std)
+// Matches the color distribution of the 'target' (original) to the 'source' (restored).
+const transferColor = (source: Float32Array, target: Uint8Array | Uint8ClampedArray, sW: number, sH: number, tW: number, tH: number) => {
+    const sPixels = sW * sH;
+    const tPixels = tW * tH;
+
+    const sYcc = new Float32Array(sPixels * 3);
+    const sMean = [0, 0, 0], sSqMean = [0, 0, 0];
+    const tMean = [0, 0, 0], tSqMean = [0, 0, 0];
+
+    const rgbToYcc = (r: number, g: number, b: number) => {
+        const y = 0.299 * r + 0.587 * g + 0.114 * b;
+        const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+        const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+        return [y, cb, cr];
+    };
+
+    // Calculate Source Stats (Restored Face)
+    for (let i = 0; i < sPixels; i++) {
+        const sr = (source[i] + 1.0) * 127.5;
+        const sg = (source[i + sPixels] + 1.0) * 127.5;
+        const sb = (source[i + 2 * sPixels] + 1.0) * 127.5;
+        const [sy, scb, scr] = rgbToYcc(sr, sg, sb);
+        sYcc[i] = sy; sYcc[i + sPixels] = scb; sYcc[i + 2 * sPixels] = scr;
+
+        sMean[0] += sy; sMean[1] += scb; sMean[2] += scr;
+        sSqMean[0] += sy * sy; sSqMean[1] += scb * scb; sSqMean[2] += scr * scr;
+    }
+
+    // Calculate Target Stats (Original Face Crop)
+    for (let i = 0; i < tPixels; i++) {
+        const tr = target[i * 4];
+        const tg = target[i * 4 + 1];
+        const tb = target[i * 4 + 2];
+        const [ty, tcb, tcr] = rgbToYcc(tr, tg, tb);
+
+        tMean[0] += ty; tMean[1] += tcb; tMean[2] += tcr;
+        tSqMean[0] += ty * ty; tSqMean[1] += tcb * tcb; tSqMean[2] += tcr * tcr;
+    }
+
+    for (let c = 0; c < 3; c++) {
+        sMean[c] /= sPixels;
+        tMean[c] /= tPixels;
+        const sVar = (sSqMean[c] / sPixels) - (sMean[c] * sMean[c]);
+        const tVar = (tSqMean[c] / tPixels) - (tMean[c] * tMean[c]);
+        sSqMean[c] = Math.sqrt(Math.max(0, sVar));
+        tSqMean[c] = Math.sqrt(Math.max(0, tVar));
+    }
+
+    const yccToRgb = (y: number, cb: number, cr: number) => {
+        const r = y + 1.402 * (cr - 128);
+        const g = y - 0.344136 * (cb - 128) - 0.714136 * (cr - 128);
+        const b = y + 1.772 * (cb - 128);
+        return [r, g, b];
+    };
+
+    const corrected = new Float32Array(source.length);
+    for (let i = 0; i < sPixels; i++) {
+        let y = sYcc[i];
+        let cb = sYcc[i + sPixels];
+        let cr = sYcc[i + 2 * sPixels];
+
+        y = (y - sMean[0]) * (tSqMean[0] / (sSqMean[0] || 1)) + tMean[0];
+        cb = (cb - sMean[1]) * (tSqMean[1] / (sSqMean[1] || 1)) + tMean[1];
+        cr = (cr - sMean[2]) * (tSqMean[2] / (sSqMean[2] || 1)) + tMean[2];
+
+        const [r, g, b] = yccToRgb(y, cb, cr);
+        corrected[i] = (r / 127.5) - 1.0;
+        corrected[i + sPixels] = (g / 127.5) - 1.0;
+        corrected[i + 2 * sPixels] = (b / 127.5) - 1.0;
+    }
+    return corrected;
+};
+
+const runFaceRestoration = async (imageData: ImageData, config: any): Promise<void> => {
+    const totalTimer = new Timer('Total Face Restoration');
+    totalTimer.start();
+
+    const { width, height, data } = imageData;
+    const modelName = config.modelName || 'CodeFormer'; // Default to CodeFormer
+    const localModelPath = config.localModelPath || '/models/';
+    const fidelity = config.fidelity !== undefined ? config.fidelity : 1.0;
+
+    // 1. Face Detection
+    const detectionConfig = { ...config, modelType: 'YOLO(v8)' };
+    const detectModelPath = config.localModelPath ? `${config.localModelPath}yolo/YOLO(v8).onnx` : `/models/yolo/YOLO(v8).onnx`;
+    const detectSession = await loadSession(detectModelPath, detectionConfig);
+
+    const targetSizeDetect = 640;
+    const { data: detectData, scale: detectScale, dx: detectDx, dy: detectDy } = await resizeAndPad(imageData, targetSizeDetect);
+
+    let float32Detect: any = new Float32Array(3 * targetSizeDetect * targetSizeDetect);
+    for (let i = 0, j = 0; i < detectData.length; i += 4, j++) {
+        float32Detect[j] = detectData[i] / 255.0;
+        float32Detect[j + targetSizeDetect * targetSizeDetect] = detectData[i + 1] / 255.0;
+        float32Detect[j + 2 * targetSizeDetect * targetSizeDetect] = detectData[i + 2] / 255.0;
+    }
+
+    const detectInputName = detectSession.inputNames[0];
+    const detectOutputName = detectSession.outputNames[0];
+    const detectInputType = (detectSession as any)._inputType || 'float32';
+    if (detectInputType === 'float16') float32Detect = float32ToFloat16(float32Detect);
+
+    const detectTensor = new ortInstance.Tensor(detectInputType === 'float16' ? 'float16' : 'float32', float32Detect, [1, 3, targetSizeDetect, targetSizeDetect]);
+    const detectResults = await detectSession.run({ [detectInputName]: detectTensor });
+    const detectOutput = detectResults[detectOutputName];
+    let detectOutputData: any = detectOutput.data;
+    if ((detectSession as any)._outputType === 'float16' && detectOutputData instanceof Uint16Array) {
+        detectOutputData = float16ToFloat32(detectOutputData);
+    }
+
+    const [_, _attrs, proposals] = detectOutput.dims;
+    const faceBoxes: number[][] = [];
+    const faceScores: number[] = [];
+
+    for (let i = 0; i < proposals; i++) {
+        // In COCO YOLOv8, 'person' is index 0. We'll use 0 as a proxy for face if no specialized model is provided.
+        const score = detectOutputData[(4 + 0) * proposals + i];
+        if (score > 0.3) {
+            const cx = detectOutputData[0 * proposals + i];
+            const cy = detectOutputData[1 * proposals + i];
+            const w = detectOutputData[2 * proposals + i];
+            const h = detectOutputData[3 * proposals + i];
+
+            const x1 = (cx - w / 2 - detectDx) / detectScale;
+            const y1 = (cy - h / 2 - detectDy) / detectScale;
+            const w_org = w / detectScale;
+            const h_org = h / detectScale;
+
+            faceBoxes.push([x1, y1, x1 + w_org, y1 + h_org]);
+            faceScores.push(score);
+        }
+    }
+
+    const keep = yoloNMS(faceBoxes, faceScores, 0.45);
+    const finalFaces = keep.map(idx => ({
+        bbox: [faceBoxes[idx][0], faceBoxes[idx][1], faceBoxes[idx][2] - faceBoxes[idx][0], faceBoxes[idx][3] - faceBoxes[idx][1]],
+        score: faceScores[idx]
+    }));
+
+    if (finalFaces.length === 0) {
+        ctx.postMessage({ type: 'restore_result', data: imageData, modelName });
+        return;
+    }
+
+    // 2. Prepare Restoration Session
+    const faceModelPath = `${localModelPath}restoration/${modelName}.onnx`;
+    const faceSession = await loadSession(faceModelPath, config);
+    const faceInputName = faceSession.inputNames[0];
+    const faceOutputName = faceSession.outputNames[0];
+    const faceInputType = (faceSession as any)._inputType || 'float32';
+    const faceOutputSize = 512;
+
+    const workingBuffer = new Uint8ClampedArray(data);
+
+
+
+
+
+
+
+
+
+
+
+
+    for (const face of finalFaces) {
+        const [fx, fy, fw, fh] = face.bbox;
+
+        // 3. Face Crop (Square, 1:1, Padded)
+        const centerX = fx + fw / 2;
+        const centerY = fy + fh / 2;
+        const size = Math.max(fw, fh) * 1.5;
+        const sx = centerX - size / 2;
+        const sy = centerY - size / 2;
+
+        const faceCanvas = new OffscreenCanvas(faceOutputSize, faceOutputSize);
+        const faceCtx = faceCanvas.getContext('2d', { willReadFrequently: true });
+        if (!faceCtx) continue;
+
+        const originalBitmap = await createImageBitmap(imageData);
+        faceCtx.drawImage(originalBitmap, sx, sy, size, size, 0, 0, faceOutputSize, faceOutputSize);
+
+        const faceImageData = faceCtx.getImageData(0, 0, faceOutputSize, faceOutputSize);
+        const facePixels = faceImageData.data;
+
+        // 4. Quality Gate
+        let lapVar = 0;
+        for (let i = 1; i < faceOutputSize - 1; i++) {
+            for (let j = 1; j < faceOutputSize - 1; j++) {
+                const idx = (i * faceOutputSize + j) * 4;
+                const val = facePixels[idx + 1];
+                const up = facePixels[((i - 1) * faceOutputSize + j) * 4 + 1];
+                const down = facePixels[((i + 1) * faceOutputSize + j) * 4 + 1];
+                const left = facePixels[(i * faceOutputSize + j - 1) * 4 + 1];
+                const right = facePixels[(i * faceOutputSize + j + 1) * 4 + 1];
+                lapVar += Math.abs(up + down + left + right - 4 * val);
+            }
+        }
+        const avgLap = lapVar / (faceOutputSize * faceOutputSize);
+        if (avgLap > 25) continue;
+
+        // 5. Run Restoration Model
+        // GAN-based models (CodeFormer) expect [-1, 1] input.
+        let float32Face: any = new Float32Array(3 * faceOutputSize * faceOutputSize);
+        for (let i = 0, j = 0; i < facePixels.length; i += 4, j++) {
+            float32Face[j] = (facePixels[i] / 127.5) - 1.0;
+            float32Face[j + faceOutputSize * faceOutputSize] = (facePixels[i + 1] / 127.5) - 1.0;
+            float32Face[j + 2 * faceOutputSize * faceOutputSize] = (facePixels[i + 2] / 127.5) - 1.0;
+        }
+
+        if (faceInputType === 'float16') float32Face = float32ToFloat16(float32Face);
+
+        const faceTensor = new ortInstance.Tensor(faceInputType === 'float16' ? 'float16' : 'float32', float32Face, [1, 3, faceOutputSize, faceOutputSize]);
+        const inputs: any = { [faceInputName]: faceTensor };
+        if (faceSession.inputNames.length > 1) {
+            const fidelityName = faceSession.inputNames[1];
+            inputs[fidelityName] = new ortInstance.Tensor('float32', new Float32Array([fidelity]), [1]);
+        }
+
+        const faceRestoreResults = await faceSession.run(inputs);
+        const faceRestoreOutput = faceRestoreResults[faceOutputName];
+        let faceRestoreData: any = faceRestoreOutput.data;
+
+        if ((faceSession as any)._outputType === 'float16' && faceRestoreData instanceof Uint16Array) {
+            faceRestoreData = float16ToFloat32(faceRestoreData);
+        }
+
+        const faceOutputShape = faceRestoreOutput.dims;
+        let outH: number, outW: number;
+        const isFaceNHWC = faceOutputShape[1] !== 3 && faceOutputShape[3] === 3;
+
+        if (isFaceNHWC) {
+            // NHWC: [batch, height, width, channels]
+            outH = faceOutputShape[1];
+            outW = faceOutputShape[2];
+        } else {
+            // NCHW: [batch, channels, height, width]
+            outH = faceOutputShape[2];
+            outW = faceOutputShape[3];
+        }
+        const curFaceArea = outH * outW;
+
+        // Sniff range for normalization
+        let fMin = 100, fMax = -100;
+        for (let i = 0; i < faceRestoreData.length; i += Math.max(1, Math.floor(faceRestoreData.length / 1000))) {
+            const v = faceRestoreData[i];
+            if (v < fMin) fMin = v;
+            if (v > fMax) fMax = v;
+        }
+
+        // If it's NHWC, convert to NCHW (planar) for transferColor and masking logic
+        if (isFaceNHWC) {
+            const planar = new Float32Array(faceRestoreData.length);
+            for (let i = 0; i < curFaceArea; i++) {
+                planar[i] = faceRestoreData[i * 3 + 0];
+                planar[i + curFaceArea] = faceRestoreData[i * 3 + 1];
+                planar[i + 2 * curFaceArea] = faceRestoreData[i * 3 + 2];
+            }
+            faceRestoreData = planar;
+        }
+
+        // Handle Normalization
+        if (fMax > 1.5 || fMin < -1.5) {
+            for (let i = 0; i < faceRestoreData.length; i++) {
+                faceRestoreData[i] = (faceRestoreData[i] / 127.5) - 1.0;
+            }
+        } else if (fMin >= -0.1 && fMax > 0.1 && fMax <= 1.1) {
+            for (let i = 0; i < faceRestoreData.length; i++) {
+                faceRestoreData[i] = (faceRestoreData[i] * 2.0) - 1.0;
+            }
+        }
+
+        for (let i = 0; i < faceRestoreData.length; i++) {
+            if (!Number.isFinite(faceRestoreData[i])) faceRestoreData[i] = 0;
+        }
+
+        // Apply Color Transfer (Dynamic Sizes)
+        faceRestoreData = transferColor(faceRestoreData, facePixels, outW, outH, faceOutputSize, faceOutputSize);
+
+        // 6. Alpha-Blended Re-integration (Elliptical Mask)
+        const restoredFaceCanvas = new OffscreenCanvas(outW, outH);
+        const restoredFaceCtx = restoredFaceCanvas.getContext('2d');
+        if (!restoredFaceCtx) continue;
+
+        const restoredPixels = new Uint8ClampedArray(curFaceArea * 4);
+        const blendingCenterX = outW / 2;
+        const blendingCenterY = outH / 2;
+        const radiusX = (outW / 2) * 0.95;
+        const radiusY = (outH / 2) * 0.95;
+
+        for (let i = 0; i < curFaceArea; i++) {
+            restoredPixels[i * 4] = Math.min(255, Math.max(0, (faceRestoreData[i] + 1.0) * 127.5));
+            restoredPixels[i * 4 + 1] = Math.min(255, Math.max(0, (faceRestoreData[i + curFaceArea] + 1.0) * 127.5));
+            restoredPixels[i * 4 + 2] = Math.min(255, Math.max(0, (faceRestoreData[i + 2 * curFaceArea] + 1.0) * 127.5));
+
+            const row = Math.floor(i / outW);
+            const col = i % outW;
+
+            const ny = (row - blendingCenterY) / radiusY;
+            const nx = (col - blendingCenterX) / radiusX;
+            let dist = Math.sqrt(nx * nx + ny * ny);
+            if (isNaN(dist)) dist = 1.0;
+
+            const innerRadius = 0.7;
+            const outerRadius = 1.0;
+            let alpha = 1.0;
+            if (dist > outerRadius) alpha = 0.0;
+            else if (dist > innerRadius) {
+                const t = (dist - innerRadius) / (outerRadius - innerRadius);
+                alpha = 1.0 - (t * t * (3 - 2 * t));
+            }
+            restoredPixels[i * 4 + 3] = alpha * 255;
+        }
+
+        restoredFaceCtx.putImageData(new ImageData(restoredPixels, outW, outH), 0, 0);
+
+        const mainCanvas = new OffscreenCanvas(width, height);
+        const mainCtx = mainCanvas.getContext('2d');
+        if (!mainCtx) continue;
+
+        mainCtx.putImageData(new ImageData(workingBuffer, width, height), 0, 0);
+        const restoredBitmap = await createImageBitmap(restoredFaceCanvas);
+        mainCtx.drawImage(restoredBitmap, 0, 0, outW, outH, sx, sy, size, size);
+
+        workingBuffer.set(mainCtx.getImageData(0, 0, width, height).data);
+    }
+
+    const finalImageData = new ImageData(workingBuffer, width, height);
+    ctx.postMessage({ type: 'restore_result', data: finalImageData, modelName });
+};
+
 async function handleMessage(e: MessageEvent) {
     const { type, config, imageData } = e.data;
     let { data } = e.data;
@@ -1461,11 +1806,14 @@ async function handleMessage(e: MessageEvent) {
                 isBusy = true;
                 try {
                     if (data && config) {
-                        if (config.modelName && config.modelName.toLowerCase().includes('ultrazoom')) {
+                        const mName = (config.modelName || '').toLowerCase();
+                        if (mName.includes('ultrazoom')) {
                             const scaleMatch = config.modelName.match(/_x(\d+)/i);
                             config.scale = scaleMatch ? parseInt(scaleMatch[1]) : 2;
                             config.resultType = 'restore_result';
                             await runUpscale(data, config);
+                        } else if (mName.includes('face') || mName.includes('codeformer')) {
+                            await runFaceRestoration(data, config);
                         } else {
                             await runRestoration(data, config);
                         }

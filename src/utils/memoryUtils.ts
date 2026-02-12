@@ -10,7 +10,8 @@ import {
 import {
     initAIWorker,
     detectObjectsInWorker,
-    terminateAIWorker
+    terminateAIWorker,
+    cleanupWorkerMemory
 } from './aiWorkerUtils';
 
 
@@ -90,9 +91,7 @@ export const safeCleanupGPUMemory = (): void => {
         // Trigger worker cleanup if nothing is active
         if (activeUpscalers.size === 0 && !aiModel) {
             initAIWorker().then(() => {
-                import('./aiWorkerUtils').then(utils => {
-                    utils.cleanupWorkerMemory();
-                }).catch(() => { });
+                cleanupWorkerMemory();
             }).catch(() => { });
         }
 

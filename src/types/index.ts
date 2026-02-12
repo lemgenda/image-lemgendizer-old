@@ -119,6 +119,7 @@ export interface RestorationOptions {
     enabled: boolean;
     selectedModels: string[]; // Ordered list of IDs
     modelName?: string; // Keep for backward compatibility/migration
+    fidelity?: number;
 }
 
 export interface ProcessingOptions {

@@ -573,7 +573,8 @@ export const getProcessingConfiguration = (processingOptions: any): any => {
         restoration: processingOptions.restoration ? {
             enabled: !!processingOptions.restoration.enabled,
             modelName: processingOptions.restoration.modelName || 'mprnet-deraining-restoration-fp16',
-            selectedModels: processingOptions.restoration.selectedModels || []
+            selectedModels: processingOptions.restoration.selectedModels || [],
+            fidelity: parseFloat(processingOptions.restoration.fidelity) || 0.9
         } : undefined,
         processingMode: processingOptions.processingMode
     };

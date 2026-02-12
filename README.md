@@ -26,6 +26,7 @@ Visit: [**https://lemgenda.github.io/image-lemgendizer-old/**](https://lemgenda
     *   **Dehazing**: Specialized Indoor (FFA-Net) and Outdoor models
     *   **Deraining**: Effective rain removal using MPRNet
     *   **Low-Light Enhancement**: Professional visibility boost with MIRNetV2 (Fixed color-tint artifacts)
+    *   **Face Restoration**: Dedicated CodeFormer (Identity-locked) model with adjustable fidelity
     *   **Deblurring & Denoising**: State-of-the-art NAFNet models
 *   **AI Upscaling**: High-fidelity FP32 upscaling with ESRGAN models (2x, 3x, 4x)
 
@@ -362,7 +363,7 @@ This project is licensed under the MIT License - see the [LICENSE](https://lice
 📊 Project Status
 -----------------
 
-**Version**: 3.8.0
+**Version**: 3.8.6
 **Last Updated**: February 2026
 **Active Development**: Yes
 **Production Ready**: Yes

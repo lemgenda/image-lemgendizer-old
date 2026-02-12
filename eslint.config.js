@@ -21,7 +21,10 @@ export default tseslint.config(
       'Restormer',
       'restormer_weights_temp',
       'DeblurGANv2',
-      'DiffBIR'
+      'DiffBIR',
+      'onnx_export',
+      'local_models',
+      'scripts'
     ],
   },
   {

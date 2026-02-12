@@ -170,17 +170,22 @@ export const orchestrateCustomProcessing = async (
         // We now calculate total weight based on ENABLED features only.
         const RAW_WEIGHTS = {
             PREPARING: 2,
-            RESTORATION: 80, // Heavy (MPRNet/NAFNet)
+            RESTORATION: 40, // Genearl Restoration (Deblur/Denoise)
+            FACE_RESTORATION: 40, // Face Restoration (CodeFormer)
             COLOR_PRE: 5,    // Fast (LUT/Gamma)
             CROP: 10,        // Fast (or Smart Crop = Medium)
             ULTRAZOOM: 40,   // Heavy (Real-ESRGAN/SwinIR)
             POLISH: 5        // Fast (Encoding)
         };
 
+        const hasFaceModel = processingConfig.restoration?.enabled && (processingConfig.restoration.selectedModels || [])
+            .some((m: string) => m.toLowerCase().includes('face') || m.toLowerCase().includes('codeformer'));
+
         // Calculate active weights based on config
         const ACTIVE_WEIGHTS = {
             PREPARING: RAW_WEIGHTS.PREPARING,
             RESTORATION: (processingConfig.restoration?.enabled) ? RAW_WEIGHTS.RESTORATION : 0,
+            FACE_RESTORATION: hasFaceModel ? RAW_WEIGHTS.FACE_RESTORATION : 0,
             COLOR_PRE: (processingConfig.colorCorrection?.enabled) ? RAW_WEIGHTS.COLOR_PRE : 0,
             CROP: (processingConfig.crop?.enabled) ? RAW_WEIGHTS.CROP : 0,
             ULTRAZOOM: 0, // Calculated dynamically below
@@ -257,7 +262,7 @@ export const orchestrateCustomProcessing = async (
                 }
             }
 
-            // --- STAGE 1: RESTORATION (Signal Cleanup) ---
+            // --- STAGE 1: GENERAL RESTORATION (Deblur/Denoise - Pre-Upscale) ---
             if (processingConfig.restoration && processingConfig.restoration.enabled) {
                 const selectedModels = processingConfig.restoration.selectedModels ||
                     (processingConfig.restoration.modelName ? [processingConfig.restoration.modelName] : []);
@@ -271,8 +276,9 @@ export const orchestrateCustomProcessing = async (
                     'deraining': 2,
                     'dehazing': 3,
                     'restoration': 4,
-                    'deblurring': 5, // Deblur must be LAST
-                    'deblurgan': 5
+                    // Face models moved to Stage 5
+                    'deblurring': 6,
+                    'deblurgan': 6
                 };
 
                 const getPriority = (name: string) => {
@@ -284,13 +290,19 @@ export const orchestrateCustomProcessing = async (
                 };
 
                 // Sort in-place (or create copy)
-                selectedModels.sort((a, b) => getPriority(a) - getPriority(b));
+                selectedModels.sort((a: string, b: string) => getPriority(a) - getPriority(b));
 
 
                 for (let mIdx = 0; mIdx < selectedModels.length; mIdx++) {
                     const modelId = selectedModels[mIdx];
+
+                    // SKIP FACE MODELS HERE (They run in Stage 5)
+                    if (modelId.toLowerCase().includes('face') || modelId.toLowerCase().includes('codeformer')) {
+                        continue;
+                    }
+
                     try {
-                        const totalModels = selectedModels.length;
+                        const totalModels = selectedModels.length; // Approximate, doesn't account for skips but OK for granular
                         const modelPrefix = totalModels > 1 ? `[${mIdx + 1}/${totalModels}] ` : '';
 
                         const modelLabelMap: Record<string, string> = {
@@ -300,6 +312,7 @@ export const orchestrateCustomProcessing = async (
                             'MIRNet(v2)-LowLight': 'restoration.model.lowlight',
                             'NAFNet-Debluring(REDS)': 'restoration.model.image-deblurring',
                             'NAFNet-Denoising': 'restoration.model.denoising',
+                            'CodeFormer': 'restoration.model.face_restoration_codeformer',
                         };
                         const modelName = t(modelLabelMap[modelId] || modelId);
 
@@ -313,8 +326,10 @@ export const orchestrateCustomProcessing = async (
                                     const restorationGranular = (mIdx * (100 / totalModels)) + (percent / totalModels);
                                     reportProgress('RESTORATION', `${modelPrefix}${modelName}`, restorationGranular, p);
                                 }
-                            }
+                            },
+                            { fidelity: processingConfig.restoration.fidelity }
                         );
+
                     } catch (err: any) {
                         restorationError = err.message || 'Restoration failed';
                         throw new Error(`Restoration failed: ${restorationError}`);
@@ -413,7 +428,6 @@ export const orchestrateCustomProcessing = async (
                     currentDims.width < targetWidth ||
                     currentDims.height < targetHeight) {
                     needsUpscale = true;
-                    console.log(`[Orchestrator] UltraZoom triggered: current ${currentDims.width}x${currentDims.height}, target ${targetWidth}x${targetHeight}`);
                 }
             }
 
@@ -449,6 +463,54 @@ export const orchestrateCustomProcessing = async (
             }
             safeCleanupGPUMemory();
             finishStage('ULTRAZOOM');
+
+            // --- STAGE 5: FACE RESTORATION (Post-Upscale) ---
+            if (processingConfig.restoration && processingConfig.restoration.enabled) {
+                const selectedModels = processingConfig.restoration.selectedModels ||
+                    (processingConfig.restoration.modelName ? [processingConfig.restoration.modelName] : []);
+
+                // let faceRestored = false; // Unused in Stage 5
+                for (let mIdx = 0; mIdx < selectedModels.length; mIdx++) {
+                    const modelId = selectedModels[mIdx];
+
+                    // ONLY RUN FACE MODELS HERE
+                    if (!(modelId.toLowerCase().includes('face') || modelId.toLowerCase().includes('codeformer'))) {
+                        continue;
+                    }
+
+                    try {
+                        const modelLabelMap: Record<string, string> = {
+                            'CodeFormer': 'restoration.model.face_restoration_codeformer',
+                        };
+                        const modelName = t(modelLabelMap[modelId] || modelId);
+
+                        reportProgress('FACE_RESTORATION', modelName, 0);
+
+                        processedFile = await processLemGendaryRestoration(
+                            processedFile as File,
+                            modelId,
+                            (p) => {
+                                const percent = (p.current / p.total) * 100;
+                                if (onProgress) {
+                                    reportProgress('FACE_RESTORATION', modelName, percent, p);
+                                }
+                            },
+                            { fidelity: processingConfig.restoration.fidelity }
+                        );
+                        // faceRestored = true;
+
+                    } catch (err: any) {
+                        restorationError = err.message || 'Face Restoration failed';
+                        // Optionally don't fail entire batch for face part? For now, standard fail
+                        throw new Error(`Face Restoration failed: ${restorationError}`);
+                    }
+                }
+                if ((processedFile as any).restorationApplied) {
+                    (image as any).restorationApplied = (processedFile as any).restorationApplied;
+                }
+            }
+            safeCleanupGPUMemory();
+            finishStage('FACE_RESTORATION');
 
             const outputFormats = processingConfig.output?.formats || [IMAGE_FORMATS.WEBP];
 

@@ -317,7 +317,6 @@ async function cropFromResized(resized: any, targetWidth: number, targetHeight: 
         const fitScale = Math.min(1, resized.width / targetWidth, resized.height / targetHeight);
         effWidth = Math.round(targetWidth * fitScale);
         effHeight = Math.round(targetHeight * fitScale);
-        console.log(`[cropFromResized] ROI-Aware Centering: ${targetWidth}x${targetHeight} -> Effective Window ${effWidth}x${effHeight}`);
     }
 
     if (typeof position === 'string') {
@@ -389,17 +388,6 @@ async function cropFromResized(resized: any, targetWidth: number, targetHeight: 
 
     // Round 22: If skipUpscale is true, we preserve the ROI at its small native size
     // but MUST maintain the target aspect ratio so UltraZoom produces correct geometry.
-    let finalWidth = targetWidth;
-    let finalHeight = targetHeight;
-
-    if (options.skipUpscale) {
-        // Calculate the scale that fits the target bounds into the current image
-        const fitScale = Math.min(1, resized.width / targetWidth, resized.height / targetHeight);
-        finalWidth = Math.round(targetWidth * fitScale);
-        finalHeight = Math.round(targetHeight * fitScale);
-
-        console.log(`[cropFromResized] ROI-Aware Resize: ${targetWidth}x${targetHeight} -> ${finalWidth}x${finalHeight} (fitScale: ${fitScale.toFixed(4)})`);
-    }
 
     const canvas = document.createElement('canvas');
     const drawCtx = canvas.getContext('2d');
@@ -833,7 +821,6 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
                     p.bbox[3] * scaleY
                 ]
             }));
-            console.log(`[SmartCrop] Scaled ${predictions.length} external predictions. Ratio: ${scaleX.toFixed(4)}x${scaleY.toFixed(4)}`);
         }
 
         const templateConfig = options.templateConfig || {};
@@ -1080,7 +1067,6 @@ export const processTemplateSmartCrop = async (imageFile: File, template: any, o
  * Processes simple smart crop without AI (center crop fallback or standard crop)
  */
 export const processSimpleSmartCrop = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }): Promise<File | object> => {
-    console.log('[SmartCrop] processSimpleSmartCrop started');
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
     const isSVG = isSVGFile(imageFile);

@@ -168,7 +168,7 @@ export const AVAILABLE_LANGUAGES = [
     { code: 'hr', name: 'Hrvatski' }
 ];
 
-export const APP_VERSION = 'v3.8.0';
+export const APP_VERSION = 'v3.8.5';
 
 // ================================
 // Processing Mode Constants
@@ -333,7 +333,8 @@ export const DEFAULT_PROCESSING_CONFIG: ProcessingOptions = {
     restoration: {
         enabled: false,
         selectedModels: [],
-        modelName: 'mprnet-deraining-fp16'
+        modelName: 'mprnet-deraining-fp16',
+        fidelity: 0.9
     }
 };
 

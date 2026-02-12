@@ -21,6 +21,7 @@ const RestorationCard = ({
         { id: 'MIRNet(v2)-LowLight', label: 'restoration.model.lowlight', desc: 'restoration.desc.lowlight', icon: 'fa-moon' },
         { id: 'NAFNet-Debluring(REDS)', label: 'restoration.model.image-deblurring', desc: 'restoration.desc.deblurring_reds', icon: 'fa-wind' },
         { id: 'NAFNet-Denoising', label: 'restoration.model.denoising', desc: 'restoration.desc.denoising_sidd', icon: 'fa-eye-slash' },
+        { id: 'CodeFormer', label: 'restoration.model.face_restoration_codeformer', desc: 'restoration.desc.face_restoration_codeformer', icon: 'fa-user-check' },
     ];
 
     const handleModelToggle = (id: string) => {
@@ -175,6 +176,32 @@ const RestorationCard = ({
                         );
                     })}
                 </div>
+                {selectedModels.includes('CodeFormer') && (
+                    <div className="restoration-settings mt-4 px-md">
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-sm font-medium">
+                                {t('restoration.label.fidelity')}
+                            </label>
+                            <span className="text-sm font-bold text-primary">
+                                {(selectedModels.find(m => m === 'CodeFormer') ? '0.9' : '1.0')}
+                            </span>
+                        </div>
+                        <input
+                            type="range"
+                            min="0.8"
+                            max="1.0"
+                            step="0.05"
+                            defaultValue="0.9"
+                            onChange={(e) => onOptionChange('restoration', 'fidelity', parseFloat(e.target.value))}
+                            className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                            data-testid="codeformer-fidelity-slider"
+                        />
+                        <div className="flex justify-between text-[10px] text-muted mt-1 uppercase tracking-wider">
+                            <span>Balance</span>
+                            <span>High Fidelity</span>
+                        </div>
+                    </div>
+                )}
                 {selectedModels.length > 1 && (
                     <div className="restoration-info-box">
                         <i className="fas fa-info-circle"></i>

@@ -302,7 +302,8 @@ export const cleanupWorkerMemory = (): void => {
 export const restoreInWorker = async (
     imageSource: HTMLImageElement | HTMLCanvasElement | ImageData,
     modelName: string,
-    onProgress?: (progress: any) => void
+    onProgress?: (progress: any) => void,
+    options: any = {}
 ): Promise<ImageData> => {
     await initAIWorker();
 
@@ -346,7 +347,8 @@ export const restoreInWorker = async (
             const config = {
                 localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
                 localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
-                modelName
+                modelName,
+                ...options
             };
 
             aiWorker.postMessage({ type: 'restore', imageData, config }, [imageData.data.buffer]);
