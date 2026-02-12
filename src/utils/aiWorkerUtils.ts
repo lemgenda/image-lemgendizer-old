@@ -2,7 +2,7 @@
  * @file aiWorkerUtils.ts
  * @description Utilities for determining and managing the AI Worker.
  */
-import { AI_SETTINGS } from '../constants';
+import { AI_SETTINGS, IMAGE_LOAD_TIMEOUT, ERROR_MESSAGES } from '../constants';
 
 // Singleton worker instance
 let aiWorker: Worker | null = null;
@@ -68,13 +68,67 @@ export const initAIWorker = (): Promise<void> => {
 };
 
 /**
+ * Ensures image data is available from various sources
+ */
+export const ensureImageData = async (imageSource: HTMLImageElement | HTMLCanvasElement | ImageData | Blob | File): Promise<ImageData> => {
+    if (imageSource instanceof ImageData) {
+        return imageSource;
+    }
+
+    if (imageSource instanceof Blob || imageSource instanceof File) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const url = URL.createObjectURL(imageSource);
+            const timeout = setTimeout(() => {
+                URL.revokeObjectURL(url);
+                reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_TIMEOUT));
+            }, IMAGE_LOAD_TIMEOUT);
+
+            img.onload = () => {
+                clearTimeout(timeout);
+                URL.revokeObjectURL(url);
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    reject(new Error('Failed to get canvas context'));
+                    return;
+                }
+                ctx.drawImage(img, 0, 0);
+                resolve(ctx.getImageData(0, 0, canvas.width, canvas.height));
+            };
+
+            img.onerror = () => {
+                clearTimeout(timeout);
+                URL.revokeObjectURL(url);
+                reject(new Error(ERROR_MESSAGES.IMAGE_LOAD_FAILED));
+            };
+
+            img.src = url;
+        });
+    }
+
+    // Handle HTMLImageElement or HTMLCanvasElement
+    const canvas = document.createElement('canvas');
+    canvas.width = (imageSource as any).width || (imageSource as any).naturalWidth;
+    canvas.height = (imageSource as any).height || (imageSource as any).naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to get canvas context');
+    ctx.drawImage(imageSource as any, 0, 0);
+    return ctx.getImageData(0, 0, canvas.width, canvas.height);
+};
+
+/**
  * Detects objects in an image using the AI Worker
  */
 export const detectObjectsInWorker = async (
-    imageSource: HTMLImageElement | HTMLCanvasElement | ImageData
+    imageSource: HTMLImageElement | HTMLCanvasElement | ImageData | Blob | File
 ): Promise<any[]> => {
     // Ensure worker is ready
     await initAIWorker();
+
+    const imageData = await ensureImageData(imageSource);
 
     return new Promise((resolve, reject) => {
         if (!aiWorker) {
@@ -83,19 +137,6 @@ export const detectObjectsInWorker = async (
         }
 
         try {
-            let imageData: ImageData;
-            if (imageSource instanceof ImageData) {
-                imageData = imageSource;
-            } else {
-                const canvas = document.createElement('canvas');
-                canvas.width = imageSource.width;
-                canvas.height = imageSource.height;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) throw new Error('Failed to get canvas context');
-                ctx.drawImage(imageSource, 0, 0);
-                imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            }
-
             const handleDetectionMessage = (e: MessageEvent) => {
                 const { type, data, error } = e.data;
                 if (type === 'result') {
@@ -109,7 +150,8 @@ export const detectObjectsInWorker = async (
 
             const config = {
                 localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
-                localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH
+                localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
+                modelType: AI_SETTINGS.MODEL_TYPE
             };
 
             aiWorker.addEventListener('message', handleDetectionMessage);
@@ -124,11 +166,13 @@ export const detectObjectsInWorker = async (
  * Upscales an image using the AI Worker
  */
 export const upscaleInWorker = async (
-    imageSource: HTMLImageElement | HTMLCanvasElement | ImageData,
+    imageSource: HTMLImageElement | HTMLCanvasElement | ImageData | Blob | File,
     scale: number,
     onProgress?: (progress: any) => void
 ): Promise<{ data: any; shape: [number, number]; scale: number; model?: string }> => {
     await initAIWorker();
+
+    const imageData = await ensureImageData(imageSource);
 
     return new Promise((resolve, reject) => {
         if (!aiWorker) {
@@ -137,18 +181,6 @@ export const upscaleInWorker = async (
         }
 
         try {
-            let imageData: ImageData;
-            if (imageSource instanceof ImageData) {
-                imageData = imageSource;
-            } else {
-                const canvas = document.createElement('canvas');
-                canvas.width = imageSource.width;
-                canvas.height = imageSource.height;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) throw new Error('Failed to get canvas context');
-                ctx.drawImage(imageSource, 0, 0);
-                imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            }
 
             const handleUpscaleMessage = (e: MessageEvent) => {
                 const { type, data, shape, scale: resScale, model, error } = e.data;
@@ -216,7 +248,7 @@ export const prewarmCropModels = async (): Promise<void> => {
                 { scale: 4 }, // Largest first
                 { scale: 3 },
                 { scale: 2 },
-                { modelName: 'yolo' } // Last
+                { modelName: 'yolo', modelType: AI_SETTINGS.MODEL_TYPE } // Last
             ]
         };
 
@@ -247,14 +279,20 @@ export const warmupAIModels = async (): Promise<void> => {
     });
 };
 
-/**
- * Terminates the AI Worker
- */
 export const terminateAIWorker = () => {
     if (aiWorker) {
         aiWorker.postMessage({ type: 'dispose' });
         aiWorker.terminate();
         aiWorker = null;
+    }
+};
+
+/**
+ * Sends a cleanup message to the worker to release GPU memory
+ */
+export const cleanupWorkerMemory = (): void => {
+    if (aiWorker) {
+        aiWorker.postMessage({ type: 'cleanup' });
     }
 };
 

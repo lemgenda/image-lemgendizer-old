@@ -1,0 +1,13 @@
+/* ==========================================================================
+   QUALITY CONTROLS CARD STYLES
+   ========================================================================== */
+
+.quality-controls-card .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.quality-controls-card .form-group {
+    margin-bottom: 0;
+}

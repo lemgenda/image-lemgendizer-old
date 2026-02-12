@@ -13,20 +13,25 @@ export const orchestrateRestorationProcessing = async (
     onProgress?: (index: number, total: number) => void
 ): Promise<ImageFile[]> => {
     const processedImages: ImageFile[] = [];
-    const modelName = processingConfig.restoration?.modelName || 'mprnet-deraining-restoration-fp16';
 
     for (let i = 0; i < images.length; i++) {
         const image = images[i];
         if (onProgress) onProgress(i, images.length);
 
+        const selectedModels = processingConfig.restoration?.selectedModels ||
+            (processingConfig.restoration?.modelName ? [processingConfig.restoration.modelName] : []);
+
         try {
-            const restoredFile = await processLemGendaryRestoration(image.file, modelName);
+            let currentFile = image.file;
+            for (const modelId of selectedModels) {
+                currentFile = await processLemGendaryRestoration(currentFile, modelId);
+            }
 
             processedImages.push({
                 ...image,
-                file: restoredFile,
-                name: restoredFile.name,
-                type: restoredFile.type || 'image/png', // Restoration returns PNG
+                file: currentFile,
+                name: currentFile.name,
+                type: currentFile.type || 'image/png', // Restoration returns PNG
                 processed: true,
                 format: 'png'
             });

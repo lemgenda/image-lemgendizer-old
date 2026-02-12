@@ -16,6 +16,7 @@ import {
     calculateUpscaleFactor,
     calculateSafeDimensions
 } from '../utils';
+import { safeCleanupGPUMemory, registerUpscaler, unregisterUpscaler } from '../utils/memoryUtils';
 
 // ... (existing code)
 
@@ -295,11 +296,18 @@ export const loadUpscalerForScale = async (scale: number): Promise<any> => {
     }
 
     // Now handled by worker, we return a proxy object
+    const id = `upscaler-${scale}-${Date.now()}`;
+    registerUpscaler(id);
+
     return {
         isWorker: true,
         scale,
+        id,
         upscale: async (img: HTMLImageElement, onProgress?: (progress: any) => void) => {
             return upscaleInWorker(img, scale, onProgress);
+        },
+        dispose: () => {
+            unregisterUpscaler(id);
         }
     };
 };
@@ -308,8 +316,10 @@ export const loadUpscalerForScale = async (scale: number): Promise<any> => {
  * Releases upscaler for specific scale
  * @param {number} scale - Scale factor
  */
-export const releaseUpscalerForScale = (_scale: number): void => {
-    // Worker handles its own memory/cleanup for now
+export const releaseUpscalerForScale = (upscaler: any): void => {
+    if (upscaler && upscaler.dispose) {
+        upscaler.dispose();
+    }
 };
 
 /**
@@ -475,6 +485,7 @@ export const upscaleImageWithAI = async (
 
     const wasCleanupInProgress = cleanupInProgress;
     cleanupInProgress = true;
+    let upscaler: any = null;
 
     try {
         const img = document.createElement('img');
@@ -488,7 +499,9 @@ export const upscaleImageWithAI = async (
 
         const safeDimensions = calculateSafeDimensions(img.naturalWidth, img.naturalHeight, scale);
 
-        if (safeDimensions.wasAdjusted || safeDimensions.width > MAX_SAFE_DIMENSION || safeDimensions.height > MAX_SAFE_DIMENSION) {
+        // Fix: Don't fallback just because of safe dimensions adjustment, unless it's extreme
+        // The worker handles tiling, so we should trust it for larger images up to a point
+        if (safeDimensions.width > MAX_SAFE_DIMENSION || safeDimensions.height > MAX_SAFE_DIMENSION) {
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
             const fallbackFile = await upscaleImageEnhancedFallback(imageFile, safeDimensions.scale, originalName);
@@ -497,16 +510,30 @@ export const upscaleImageWithAI = async (
 
         const availableScales = AVAILABLE_UPSCALE_FACTORS;
         const maxScaleFactor = Math.max(...AVAILABLE_UPSCALE_FACTORS);
-        if (!availableScales.includes(scale as any) || scale > maxScaleFactor) {
+
+        // Find nearest scale
+        const nearestScale = availableScales.reduce((prev, curr) =>
+            Math.abs(curr - scale) < Math.abs(prev - scale) ? curr : prev
+        );
+
+        // Allow if it's close enough (within 0.5) or if it's the max scale and we want more
+        // But for AI models, we should stick to the specific trained integers usually
+        // If we are significantly deviating, we might want to resize after upscaling
+
+        // If the requested scale is way larger than max available, we might need a different strategy
+        // But for now, let's just use the nearest valid model scale
+        if (scale > maxScaleFactor + 0.5) {
+            // Fallback to enhanced for very large scales not covered by AI models
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
-            const fallbackFile = await upscaleImageEnhancedFallback(imageFile, Math.min(scale, 4), originalName);
-            return { file: fallbackFile, scale: Math.min(scale, 4), model: 'enhanced-fallback' };
+            const fallbackFile = await upscaleImageEnhancedFallback(imageFile, scale, originalName);
+            return { file: fallbackFile, scale, model: 'enhanced-fallback' };
         }
 
-        let upscaler;
+
         try {
-            upscaler = await loadUpscalerForScale(scale as any);
+            // Use the nearest integer scale for the model (2, 3, or 4)
+            upscaler = await loadUpscalerForScale(nearestScale as any);
         } catch {
             textureManagerFailures++;
             if (textureManagerFailures >= MAX_TEXTURE_FAILURES) aiUpscalingDisabled = true;
@@ -530,7 +557,17 @@ export const upscaleImageWithAI = async (
 
         let canvas: HTMLCanvasElement;
 
-        if (upscaleResult.data && upscaleResult.shape) {
+        if (upscaleResult.data instanceof ImageData || (upscaleResult.data && upscaleResult.data.width && upscaleResult.data.data)) {
+            // Handle ImageData result directly from worker
+            const imgData = upscaleResult.data instanceof ImageData ? upscaleResult.data : new ImageData(upscaleResult.data.data, upscaleResult.data.width, upscaleResult.data.height);
+            canvas = document.createElement('canvas');
+            canvas.width = imgData.width;
+            canvas.height = imgData.height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.putImageData(imgData, 0, 0);
+            }
+        } else if (upscaleResult.data && upscaleResult.shape) {
             // Handle worker result (Float32Array)
             canvas = document.createElement('canvas');
             const [height, width] = upscaleResult.shape;
@@ -558,13 +595,17 @@ export const upscaleImageWithAI = async (
             canvas = await tensorToCanvas(upscaleResult.tensor);
         } else if (upscaleResult.src) {
             canvas = await dataURLToCanvas(upscaleResult.src);
-        } else if (typeof upscaleResult === 'string') {
-            canvas = await dataURLToCanvas(upscaleResult);
         } else {
+            if (upscaler && upscaler.dispose) upscaler.dispose();
             URL.revokeObjectURL(objectUrl);
             cleanupInProgress = wasCleanupInProgress;
-            const fallbackFile = await upscaleImageEnhancedFallback(imageFile, scale, originalName);
-            return { file: fallbackFile, scale, model: 'enhanced-fallback' };
+            const fallbackFile = await upscaleImageEnhancedFallback(imageFile, safeDimensions.scale, originalName);
+            return { file: fallbackFile, scale: safeDimensions.scale, model: 'enhanced-fallback' };
+        }
+
+        // Cleanup upscaler after successful use
+        if (upscaler && upscaler.dispose) {
+            upscaler.dispose();
         }
 
         URL.revokeObjectURL(objectUrl);
@@ -589,6 +630,8 @@ export const upscaleImageWithAI = async (
         };
 
     } catch {
+        if (upscaler && upscaler.dispose) upscaler.dispose();
+
         textureManagerFailures++;
         if (textureManagerFailures >= MAX_TEXTURE_FAILURES) aiUpscalingDisabled = true;
         cleanupInProgress = wasCleanupInProgress;
@@ -763,6 +806,7 @@ export const resizeImageStandard = async (imageFile: File, targetDimension: numb
 export const cleanupResizeProcessor = (): void => {
     aiUpscalingDisabled = false;
     textureManagerFailures = 0;
+    safeCleanupGPUMemory();
 };
 
 /**

@@ -72,28 +72,33 @@ const FilterSelectionCard = ({ selectedFilter, onFilterChange, t, disabled = fal
     }, []);
 
     return (
-        <div className={`card filter-selection-card ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
-            <h3 className="card-title">
-                <i className="fas fa-magic"></i> {t('filters.title')}
-            </h3>
+        <div className={`card filter-selection-card h-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className="card-header border-b border-border pb-3 mb-4">
+                <h3 className="card-title mb-0 flex items-center">
+                    <i className="fas fa-magic text-primary"></i>
+                    {t('filters.title')}
+                </h3>
+            </div>
 
-            <div className="filters-grid" ref={filtersGridRef}>
-                {filters.map((filter) => (
-                    <button
-                        key={filter.id}
-                        className={`filter-item ${selectedFilter === filter.id ? 'active' : ''}`}
-                        onClick={() => !disabled && onFilterChange(filter.id)}
-                        disabled={disabled}
-                        title={t(`filters.description.${filter.id}`) || filter.id}
-                    >
-                        <div className="filter-icon">
-                            <i className={`fas ${filter.icon}`}></i>
-                        </div>
-                        <span className="filter-name">
-                            {t(`filters.name.${filter.id}`) || filter.id.replace(/_/g, ' ')}
-                        </span>
-                    </button>
-                ))}
+            <div className="card-body">
+                <div className="filters-grid" ref={filtersGridRef}>
+                    {filters.map((filter) => (
+                        <button
+                            key={filter.id}
+                            className={`filter-item ${selectedFilter === filter.id ? 'active' : ''}`}
+                            onClick={() => !disabled && onFilterChange(filter.id)}
+                            disabled={disabled}
+                            title={t(`filters.description.${filter.id}`) || filter.id}
+                        >
+                            <div className="filter-icon">
+                                <i className={`fas ${filter.icon}`}></i>
+                            </div>
+                            <span className="filter-name">
+                                {t(`filters.name.${filter.id}`) || filter.id.replace(/_/g, ' ')}
+                            </span>
+                        </button>
+                    ))}
+                </div>
             </div>
         </div>
     );

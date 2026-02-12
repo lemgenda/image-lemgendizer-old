@@ -9,6 +9,9 @@ import {
 } from '../processors';
 import { generateNewFileName } from './renameUtils';
 import { safeCleanupGPUMemory } from './memoryUtils';
+import { detectObjectsInWorker } from './aiWorkerUtils';
+import { getImageDimensions } from './appUtils';
+import { isSVGFile } from './svgUtils';
 import {
     URL_CONSTANTS,
     PROCESSING_MODES,
@@ -137,7 +140,7 @@ export const cleanUrl = (url: string): string => {
 export const orchestrateCustomProcessing = async (
     images: ImageFile[],
     processingConfig: ProcessingOptions & { batchRename?: BatchRenameOptions },
-    aiModelLoaded: boolean,
+    t: (key: string, params?: any) => string,
     onProgress?: (progress: any) => void
 ): Promise<ImageFile[]> => {
     const processedImages: ImageFile[] = [];
@@ -159,96 +162,212 @@ export const orchestrateCustomProcessing = async (
         }
 
         const filter = processingConfig.filters?.selectedFilter || IMAGE_FILTERS.NONE;
-        let processedFile = image.file;
+        let processedFile: File | Blob = image.file;
         let restorationError = null;
 
-        // Base progress for this file
-        const reportProgress = (stage: string, granular: number = 0, tileData?: any) => {
+        // Base weights for stages (Relative complexity)
+        // Round 62: Dynamic Weighting to fix "90% at 25%" stall.
+        // We now calculate total weight based on ENABLED features only.
+        const RAW_WEIGHTS = {
+            PREPARING: 2,
+            RESTORATION: 80, // Heavy (MPRNet/NAFNet)
+            COLOR_PRE: 5,    // Fast (LUT/Gamma)
+            CROP: 10,        // Fast (or Smart Crop = Medium)
+            ULTRAZOOM: 40,   // Heavy (Real-ESRGAN/SwinIR)
+            POLISH: 5        // Fast (Encoding)
+        };
+
+        // Calculate active weights based on config
+        const ACTIVE_WEIGHTS = {
+            PREPARING: RAW_WEIGHTS.PREPARING,
+            RESTORATION: (processingConfig.restoration?.enabled) ? RAW_WEIGHTS.RESTORATION : 0,
+            COLOR_PRE: (processingConfig.colorCorrection?.enabled) ? RAW_WEIGHTS.COLOR_PRE : 0,
+            CROP: (processingConfig.crop?.enabled) ? RAW_WEIGHTS.CROP : 0,
+            ULTRAZOOM: 0, // Calculated dynamically below
+            POLISH: RAW_WEIGHTS.POLISH
+        };
+
+        // Check UltraZoom trigger (same logic as below)
+        const targetWidth = Number(processingConfig.crop?.enabled ? processingConfig.crop.width : (processingConfig.resize?.enabled ? processingConfig.resize.dimension : 0));
+        const targetHeight = Number(processingConfig.crop?.enabled ? processingConfig.crop.height : (processingConfig.resize?.enabled ? processingConfig.resize.dimension : 0));
+        if (targetWidth > 0 || targetHeight > 0) {
+            // We assume upscale might happen if resize is on.
+            // Exact check requires async image load, but for progress bar, assuming YES is safer (avoids stall).
+            ACTIVE_WEIGHTS.ULTRAZOOM = RAW_WEIGHTS.ULTRAZOOM;
+        }
+
+        const TOTAL_WEIGHT = Object.values(ACTIVE_WEIGHTS).reduce((a, b) => a + b, 0);
+
+        let currentBaseProgress = 0;
+
+        // Helper to report progress normalized to Total Weight
+        const reportProgress = (stageKey: keyof typeof RAW_WEIGHTS, stageLabel: string, granular: number = 0, tileData?: any) => {
             if (onProgress) {
+                const stageWeight = ACTIVE_WEIGHTS[stageKey] || 0;
+                // standard: (granular% * stageWeight)
+                const stageProgressRaw = (granular / 100) * stageWeight;
+
+                // standard: (currentBase + stageProgress) / TOTAL_WEIGHT * 100
+                // This converts the sum of relative weights into a 0-100% scale.
+                const totalProgress = ((currentBaseProgress + stageProgressRaw) / TOTAL_WEIGHT) * 100;
+
+                let displayOperation = stageLabel;
+                if (tileData && tileData.current && tileData.total && !stageLabel.toLowerCase().includes('warm') && !stageLabel.toLowerCase().includes('przygot')) {
+                    displayOperation = `${stageLabel} (${t('processing.tile', { current: tileData.current, total: tileData.total })})`;
+                } else if (tileData && tileData.currentOperation) {
+                    displayOperation = tileData.currentOperation;
+                }
+
                 onProgress({
                     processedCount: i,
                     totalCount: images.length,
                     currentFile: image.name,
-                    currentOperation: (tileData && tileData.currentOperation) ? tileData.currentOperation : stage,
-                    granularProgress: granular,
+                    currentOperation: displayOperation,
+                    granularProgress: totalProgress, // This is now the REAL % for the file
                     tileProgress: tileData
                 });
             }
         };
 
-        reportProgress('Preparing', 0);
+        // Helper to advance base progress when stage completes
+        const finishStage = (stageKey: keyof typeof RAW_WEIGHTS) => {
+            currentBaseProgress += ACTIVE_WEIGHTS[stageKey];
+        };
+
+        reportProgress('PREPARING', t('processing.preparing'), 100);
+        finishStage('PREPARING');
 
         try {
+            // --- STAGE 0: ANALYSIS & DETECTION (YOLO v8) ---
+            let externalDetections: any[] | undefined;
+            let originalDimensions = { width: 0, height: 0 };
 
-            if (processingConfig.resize && processingConfig.resize.enabled) {
-                // 1. Resize
-                const resizeDimension = processingConfig.resize.dimension;
+            if (processingConfig.crop?.enabled || processingConfig.resize?.enabled) {
+                const dims = await getImageDimensions(processedFile as File, isSVGFile(processedFile as File));
+                originalDimensions = dims;
+            }
 
-                if (resizeDimension) {
-
-                    const resizeResults: any[] = await processLemGendaryResize(
-                        [image],
-                        parseInt(resizeDimension),
-                        {
-                            quality: processingConfig.output.quality || 0.8,
-                            format: 'webp' // Intermediate format
-                        },
-                        (p) => {
-                            // p is { current, total, stage }
-                            const percent = (p.current / p.total) * 100;
-                            reportProgress('Upscaling', percent, p);
-                        }
-                    );
-
-                    if (resizeResults.length > 0 && resizeResults[0].resized) {
-                        processedFile = resizeResults[0].resized;
-                        if (resizeResults[0].upscaleScale) {
-                            (image as any).aiUpscaleScale = resizeResults[0].upscaleScale;
-                            (processedFile as any).aiUpscaleScale = resizeResults[0].upscaleScale;
-                        }
-                        if (resizeResults[0].upscaleModel) {
-                            (image as any).aiUpscaleModel = resizeResults[0].upscaleModel;
-                            (processedFile as any).aiUpscaleModel = resizeResults[0].upscaleModel;
-                        }
-                        if (resizeResults[0].error) {
-                            throw resizeResults[0].error;
-                        }
-                    }
+            if (processingConfig.crop?.enabled && processingConfig.crop.mode === CROP_MODES.SMART) {
+                reportProgress('PREPARING', t('processing.analyzing'), 50);
+                try {
+                    // detectObjectsInWorker handles its own image loading/conversion
+                    externalDetections = await detectObjectsInWorker(processedFile);
+                } catch (e) {
+                    console.warn('[Orchestrator] YOLO Detection failed, falling back to internal detection:', e);
                 }
             }
 
+            // --- STAGE 1: RESTORATION (Signal Cleanup) ---
+            if (processingConfig.restoration && processingConfig.restoration.enabled) {
+                const selectedModels = processingConfig.restoration.selectedModels ||
+                    (processingConfig.restoration.modelName ? [processingConfig.restoration.modelName] : []);
+
+                // Round 30: Pipeline Ordering (Safety Gate)
+                // Enforce Denoise -> Deblur ordering to prevent artifact explosion.
+                // Denoising models stabilize the image before deconvolution.
+                const ORDER_PRIORITY: Record<string, number> = {
+                    'denoising': 0,
+                    'lowlight': 1,
+                    'deraining': 2,
+                    'dehazing': 3,
+                    'restoration': 4,
+                    'deblurring': 5, // Deblur must be LAST
+                    'deblurgan': 5
+                };
+
+                const getPriority = (name: string) => {
+                    const n = name.toLowerCase();
+                    for (const [key, p] of Object.entries(ORDER_PRIORITY)) {
+                        if (n.includes(key)) return p;
+                    }
+                    return 2.5; // Default middle property
+                };
+
+                // Sort in-place (or create copy)
+                selectedModels.sort((a, b) => getPriority(a) - getPriority(b));
+
+
+                for (let mIdx = 0; mIdx < selectedModels.length; mIdx++) {
+                    const modelId = selectedModels[mIdx];
+                    try {
+                        const totalModels = selectedModels.length;
+                        const modelPrefix = totalModels > 1 ? `[${mIdx + 1}/${totalModels}] ` : '';
+
+                        const modelLabelMap: Record<string, string> = {
+                            'MPRNet-Deraining': 'restoration.model.deraining',
+                            'FFANet-Dehazing(Indoor)': 'restoration.model.dehazing_indoor',
+                            'FFANet-Dehazing(Outdoor)': 'restoration.model.dehazing_outdoor',
+                            'MIRNet(v2)-LowLight': 'restoration.model.lowlight',
+                            'NAFNet-Debluring(REDS)': 'restoration.model.image-deblurring',
+                            'NAFNet-Denoising': 'restoration.model.denoising',
+                        };
+                        const modelName = t(modelLabelMap[modelId] || modelId);
+
+                        reportProgress('RESTORATION', `${modelPrefix}${modelName}`, 0);
+                        processedFile = await processLemGendaryRestoration(
+                            processedFile as File,
+                            modelId,
+                            (p) => {
+                                const percent = (p.current / p.total) * 100;
+                                if (onProgress) {
+                                    const restorationGranular = (mIdx * (100 / totalModels)) + (percent / totalModels);
+                                    reportProgress('RESTORATION', `${modelPrefix}${modelName}`, restorationGranular, p);
+                                }
+                            }
+                        );
+                    } catch (err: any) {
+                        restorationError = err.message || 'Restoration failed';
+                        throw new Error(`Restoration failed: ${restorationError}`);
+                    }
+                }
+                // Propagate metadata after restoration
+                if ((processedFile as any).restorationApplied) {
+                    (image as any).restorationApplied = (processedFile as any).restorationApplied;
+                }
+            }
+            safeCleanupGPUMemory();
+            finishStage('RESTORATION');
+
+            // --- STAGE 2: COLOR PRE-CORRECTION (Pre-SR) ---
+            if (processingConfig.colorCorrection && processingConfig.colorCorrection.enabled) {
+                reportProgress('COLOR_PRE', t('color.correction'), 50);
+                // We'll apply just the color correction part here
+                processedFile = await processLengendaryOptimize(
+                    processedFile as File,
+                    1.0, // Lossless intermediate
+                    IMAGE_FORMATS.ORIGINAL,
+                    IMAGE_FILTERS.NONE,
+                    null,
+                    { colorCorrection: processingConfig.colorCorrection } // NO artistic filters or watermarks here
+                );
+            }
+            finishStage('COLOR_PRE');
+
+            // --- STAGE 3: CROP / SMART CROP ---
             if (processingConfig.crop && processingConfig.crop.enabled) {
                 const { width, height, mode, position } = processingConfig.crop;
 
-                // Pass skipOptimization: true to ensure we don't double-compress or filter yet
                 const cropOptions = {
-                    quality: processingConfig.output.quality || 0.8,
+                    quality: 1.0, // Lossless intermediate
                     format: IMAGE_FORMATS.WEBP,
                     skipOptimization: true,
-                    cropMode: mode // CRITICAL FIX: Pass the mode down!
+                    cropMode: mode,
+                    originalDimensions,
+                    // Round 22: Always skip internal resizing in crop stage.
+                    // We extract the ROI at native resolution and let UltraZoom (AI SR) handle target dimensions.
+                    skipUpscale: true
                 };
 
-                if (mode === CROP_MODES.SMART && aiModelLoaded) {
-                    reportProgress('Cropping (Smart)', 50); // Report Smart Crop
+                if (mode === CROP_MODES.SMART) {
+                    reportProgress('CROP', t('crop.smart'), 50);
                     try {
                         processedFile = await (processSmartCrop as any)(
                             processedFile,
                             width,
                             height,
-                            {
-                                ...cropOptions,
-                                cropMode: CROP_MODES.SMART,
-                                cropPosition: position
-                            }
+                            cropOptions,
+                            externalDetections
                         );
-
-                        if ((processedFile as any).aiUpscaleScale) {
-                            (image as any).aiUpscaleScale = (processedFile as any).aiUpscaleScale;
-                            (image as any).aiUpscaleModel = (processedFile as any).aiUpscaleModel;
-                        }
-                        if ((processedFile as any).aiSmartCrop) {
-                            (image as any).aiSmartCrop = (processedFile as any).aiSmartCrop;
-                        }
                     } catch {
                         processedFile = await (processSimpleSmartCrop as any)(
                             processedFile,
@@ -257,9 +376,10 @@ export const orchestrateCustomProcessing = async (
                             position || 'center',
                             cropOptions
                         );
+                        (image as any).isSmartCropFallback = true;
                     }
                 } else {
-                    reportProgress('Cropping', 50); // Report Standard Crop
+                    reportProgress('CROP', t('crop.standard'), 50);
                     const cropResults: any[] = await processLemGendaryCrop(
                         [{ file: processedFile, name: image.name }],
                         width,
@@ -272,78 +392,100 @@ export const orchestrateCustomProcessing = async (
                         processedFile = cropResults[0].cropped;
                     }
                 }
-            }
+                // Propagate crop metadata
+                if ((processedFile as any).aiSmartCrop) (image as any).aiSmartCrop = true;
+                if ((processedFile as any).isSmartCropFallback) (image as any).isSmartCropFallback = true;
 
-            // 2. Enhance (Restoration: Deraining, Dehazing, Low-Light)
-            // MOVED from before Resize/Crop to after Crop per user request V88
-            if (processingConfig.restoration && processingConfig.restoration.enabled && processingConfig.restoration.modelName) {
-                try {
-                    reportProgress('Restoring', 70);
-                    processedFile = await processLemGendaryRestoration(
-                        processedFile,
-                        processingConfig.restoration.modelName,
-                        (p) => {
-                            // p is { current, total, stage }
-                            const percent = (p.current / p.total) * 100;
-                            reportProgress('Restoring', percent, p);
-                        }
-                    );
-                } catch (err: any) {
-                    restorationError = err.message || 'Restoration failed';
-                    throw new Error(`Restoration failed: ${restorationError}`);
+                reportProgress('CROP', mode === CROP_MODES.SMART ? t('crop.smart') : t('crop.standard'), 100);
+            }
+            safeCleanupGPUMemory();
+            finishStage('CROP');
+
+            // --- STAGE 4: ULTRAZOOM (ROI-Aware Upscaling) ---
+            const targetWidth = Number(processingConfig.crop?.enabled ? processingConfig.crop.width : (processingConfig.resize?.enabled ? processingConfig.resize.dimension : 0));
+            const targetHeight = Number(processingConfig.crop?.enabled ? processingConfig.crop.height : (processingConfig.resize?.enabled ? processingConfig.resize.dimension : 0));
+
+            let needsUpscale = false;
+            if (targetWidth > 0 || targetHeight > 0) {
+                const currentDims = await getImageDimensions(processedFile as File, isSVGFile(processedFile as File));
+                // Round 22: Always trigger UltraZoom if Resize is enabled OR if crop created a smaller image
+                if ((processingConfig.resize && processingConfig.resize.enabled) ||
+                    currentDims.width < targetWidth ||
+                    currentDims.height < targetHeight) {
+                    needsUpscale = true;
+                    console.log(`[Orchestrator] UltraZoom triggered: current ${currentDims.width}x${currentDims.height}, target ${targetWidth}x${targetHeight}`);
                 }
             }
 
+            if (needsUpscale) {
+                const resizeDimension = Math.max(targetWidth, targetHeight) || Number(processingConfig.resize?.dimension);
+                if (resizeDimension) {
+                    reportProgress('ULTRAZOOM', t('resize.title'), 0);
+                    const upscaleResults: any[] = await processLemGendaryResize(
+                        [{ file: processedFile, name: image.name }],
+                        resizeDimension,
+                        {
+                            quality: 1.0, // Lossless intermediate
+                            format: IMAGE_FORMATS.WEBP
+                        },
+                        (p) => {
+                            const percent = (p.current / p.total) * 100;
+                            reportProgress('ULTRAZOOM', t('resize.title'), percent, p);
+                        }
+                    );
+
+                    if (upscaleResults.length > 0 && upscaleResults[0].resized) {
+                        processedFile = upscaleResults[0].resized;
+                        if (upscaleResults[0].aiUpscaleScale) {
+                            (image as any).aiUpscaleScale = upscaleResults[0].aiUpscaleScale;
+                            (image as any).aiUpscaleModel = upscaleResults[0].aiUpscaleModel;
+                        } else if (upscaleResults[0].upscaleScale) {
+                            // Fallback for key name variation
+                            (image as any).aiUpscaleScale = upscaleResults[0].upscaleScale;
+                            (image as any).aiUpscaleModel = upscaleResults[0].upscaleModel;
+                        }
+                    }
+                }
+            }
+            safeCleanupGPUMemory();
+            finishStage('ULTRAZOOM');
 
             const outputFormats = processingConfig.output?.formats || [IMAGE_FORMATS.WEBP];
 
-            // Verify configuration
+            for (let fIdx = 0; fIdx < outputFormats.length; fIdx++) {
+                const format = outputFormats[fIdx];
 
-
-            for (const format of outputFormats) {
-                // Determine if we need to force optimization (for watermark, filter, or color correction) even on original format
                 const needsProcessing = processingConfig.watermark?.enabled ||
                     (filter && filter !== IMAGE_FILTERS.NONE) ||
                     processingConfig.colorCorrection?.enabled;
 
-                // PROPAGATE METADATA to final image objects
-                const metaProps = ['aiUpscaleScale', 'aiUpscaleModel', 'aiSmartCrop', 'isSmartCropUpscale'];
-                metaProps.forEach(prop => {
-                    if ((processedFile as any)[prop] !== undefined) {
-                        (image as any)[prop] = (processedFile as any)[prop];
-                    }
-                });
-
                 if (format === IMAGE_FORMATS.ORIGINAL && !needsProcessing) {
-                    // const originalFormat = (image as any).originalFormat || image.type.split('/')[1];
                     processedImages.push({
                         ...image,
-                        file: processedFile,
+                        file: processedFile as File,
                         name: image.name,
-                        type: image.type,
+                        type: (processedFile as File).type || image.type,
                         processed: false,
                         isOriginal: true
                     });
+                    reportProgress('POLISH', t('processing.complete'), ((fIdx + 1) / outputFormats.length) * 100);
                 } else {
-                    // 3. Filter & Optimize (Compression / Format Conversion)
-                    // If format is ORIGINAL but we need processing, use the current file's type as target format
+                    const stageLabel = (filter && filter !== IMAGE_FILTERS.NONE) ? 'Filtering & Optimizing' : 'Optimizing';
+                    reportProgress('POLISH', stageLabel, (fIdx / outputFormats.length) * 100);
+
                     const targetFormat = format === IMAGE_FORMATS.ORIGINAL
                         ? (processedFile.type ? processedFile.type.split('/')[1] : 'png')
                         : format;
 
-                    // This creates the final Blob/File
-                    // Final optimization and watermark
-                    reportProgress(filter && filter !== IMAGE_FILTERS.NONE ? 'Filtering & Optimizing' : 'Optimizing', 80);
                     const optimizedFile: Blob = await processLengendaryOptimize(
-                        processedFile,
-                        processingConfig.output.quality || 0.8,
+                        processedFile as File,
+                        processingConfig.output?.quality || 0.8,
                         targetFormat,
                         filter,
-                        (processingConfig.output as any).targetSize,
-                        processingConfig // Pass full config which includes watermark
+                        (processingConfig.output as any)?.targetSize,
+                        { ...processingConfig, colorCorrection: undefined }
                     );
 
-                    // 4. Rename Logic (Post-Optimization)
                     let fileName = image.name;
                     if ((processingConfig.processingMode as any) === PROCESSING_MODES.BATCH_RENAME && processingConfig.batchRename) {
                         const renameOptions = processingConfig.batchRename;
@@ -372,7 +514,6 @@ export const orchestrateCustomProcessing = async (
 
                         fileName = generateNewFileName(virtualName, i, renameOptions);
                     } else if (!fileName.includes(`.${format}`)) {
-                        // Auto-suffix logic if NO strict rename is applied
                         let suffix = '';
                         if (processingConfig.resize?.enabled) {
                             suffix += `-${processingConfig.resize.dimension}`;
@@ -385,10 +526,6 @@ export const orchestrateCustomProcessing = async (
                         if (filter && filter !== IMAGE_FILTERS.NONE) {
                             suffix += `-${filter}`;
                         }
-                        // if ((processingConfig.output.quality || 0.8) < 1) {
-                        //    const qualityPercent = Math.round((processingConfig.output.quality || 0.8) * 100);
-                        //    suffix += `- q${ qualityPercent } `;
-                        // }
 
                         fileName = fileName.replace(/\.[^/.]+$/, '') +
                             (suffix || '') +
@@ -405,21 +542,13 @@ export const orchestrateCustomProcessing = async (
                     } as any);
                 }
             }
-
-            if (i % 3 === 0) {
-                await new Promise(resolve => setTimeout(resolve, 100));
-                safeCleanupGPUMemory();
-            }
-
         } catch (error: any) {
-            // Critical error processing image
             processedImages.push({
                 ...image,
                 error: error.message,
                 processed: false
             });
         } finally {
-            // Memory management - cleanup GPU tensors every few images
             if (i % 3 === 0) {
                 safeCleanupGPUMemory();
             }
@@ -438,7 +567,7 @@ export const orchestrateTemplateProcessing = async (
     selectedTemplateIds: string[],
     templateConfigs: TemplateConfig[],
     useSmartCrop: boolean = false,
-    aiModelLoaded: boolean = false,
+    // aiModelLoaded: boolean = false, // Removed
     onProgress: ((stage: string, percent: number) => void) | null = null,
     processingOptions: any = {}
 ): Promise<ImageFile[]> => {
@@ -481,33 +610,45 @@ export const orchestrateTemplateProcessing = async (
         const templateImages: ImageFile[] = await (processTemplateImages as any)(
             selectedImage, // Use original image for templates
             allTemplates,
-            useSmartCrop,
-            aiModelLoaded,
-            processingOptions
+            useSmartCrop
         );
 
         // Apply restoration AFTER cropping per user request V88
-        if (processingOptions.restoration && processingOptions.restoration.enabled && processingOptions.restoration.modelName) {
+        if (processingOptions.restoration && processingOptions.restoration.enabled) {
+            const selectedModels = processingOptions.restoration.selectedModels ||
+                (processingOptions.restoration.modelName ? [processingOptions.restoration.modelName] : []);
+
             if (onProgress) onProgress('restoring', 60);
+
             for (let i = 0; i < templateImages.length; i++) {
-                try {
-                    const restoredFile = await processLemGendaryRestoration(
-                        templateImages[i].file,
-                        processingOptions.restoration.modelName,
-                        (p) => {
-                            if (onProgress) {
-                                const basePercent = 60;
-                                const totalRestorationPercent = 30; // 60 -> 90
-                                const fileWeight = 1 / templateImages.length;
-                                const granular = basePercent + (i * fileWeight * totalRestorationPercent) + (p.current / p.total * fileWeight * totalRestorationPercent);
-                                onProgress('restoring', Math.round(granular));
+                for (let mIdx = 0; mIdx < selectedModels.length; mIdx++) {
+                    const modelId = selectedModels[mIdx];
+                    try {
+                        const totalModels = selectedModels.length;
+                        const restoredFile = await processLemGendaryRestoration(
+                            templateImages[i].file,
+                            modelId,
+                            (p) => {
+                                if (onProgress) {
+                                    const basePercent = 60;
+                                    const totalRestorationPercent = 30; // 60 -> 90
+                                    const fileWeight = 1 / templateImages.length;
+                                    const modelWeight = 1 / totalModels;
+
+                                    const granular = basePercent +
+                                        (i * fileWeight * totalRestorationPercent) +
+                                        (mIdx * fileWeight * modelWeight * totalRestorationPercent) +
+                                        (p.current / p.total * fileWeight * modelWeight * totalRestorationPercent);
+
+                                    onProgress(`restoring ${mIdx + 1}/${totalModels}`, Math.round(granular));
+                                }
                             }
-                        }
-                    );
-                    templateImages[i].file = restoredFile;
-                } catch (error) {
-                    console.error('Restoration failed for template result:', error);
-                    // Continue with unrestored template
+                        );
+                        templateImages[i].file = restoredFile;
+                    } catch (error) {
+                        console.error(`Restoration (${modelId}) failed for template result:`, error);
+                        // Continue with next model or next image
+                    }
                 }
             }
         }

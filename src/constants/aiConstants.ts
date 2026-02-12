@@ -435,7 +435,7 @@ export const AI_SETTINGS = {
     OBJECT_DETECTION_ENABLED: true,
     DEFAULT_CROP_STRATEGY: 'balanced',
     MAX_OBJECTS: 10,
-    MODEL_TYPE: 'yolov8n',
+    MODEL_TYPE: 'YOLO(v8)', // Matches local filename
     TENSORFLOW_VERSION: '4.22.0',
     COCO_SSD_VERSION: '2.2.3',
     WEBGPU_BACKEND_VERSION: '4.22.0',

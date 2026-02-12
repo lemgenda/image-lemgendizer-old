@@ -1,0 +1,147 @@
+/* ==========================================================================
+   RESTORATION CARD STYLES
+   ========================================================================== */
+
+.restoration-card .card-body {
+    padding: 0;
+}
+
+.restoration-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: 0 var(--space-md) var(--space-md);
+}
+
+.restoration-item {
+    display: flex;
+    align-items: center;
+    padding: var(--space-sm);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast) ease;
+    background-color: var(--color-bg-primary);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.restoration-item:hover {
+    border-color: var(--border-color-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.restoration-item.selected {
+    border-color: var(--color-primary);
+    background-color: var(--color-primary);
+    box-shadow: var(--shadow-md);
+}
+
+[data-theme="dark"] .restoration-item.selected {
+    background-color: var(--color-primary);
+}
+
+.restoration-item.draggable {
+    cursor: grab;
+}
+
+.restoration-item.draggable:active {
+    cursor: grabbing;
+}
+
+.restoration-item-icon-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    margin-right: var(--space-sm);
+    flex-shrink: 0;
+}
+
+.restoration-order-badge {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: var(--color-primary);
+}
+
+.restoration-item.selected .restoration-order-badge {
+    color: #ffffff;
+}
+
+.restoration-item-icon {
+    font-size: 1.1rem;
+    color: var(--color-text-muted);
+    width: 1.5rem;
+    text-align: center;
+}
+
+.restoration-item.selected .restoration-item-icon {
+    color: #ffffff;
+}
+
+.restoration-item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.restoration-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.restoration-item-label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--color-text-primary);
+}
+
+.restoration-item.selected .restoration-item-label,
+.restoration-item.selected .restoration-item-desc,
+.restoration-item.selected .restoration-grip {
+    color: #ffffff;
+}
+
+.restoration-item-desc {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+    line-height: 1.3;
+}
+
+.restoration-grip {
+    color: var(--color-bg-tertiary);
+    font-size: 0.8rem;
+    margin-left: var(--space-xs);
+}
+
+.restoration-info-box {
+    margin: 0 var(--space-md) var(--space-md);
+    padding: var(--space-sm);
+    background-color: rgba(14, 165, 233, 0.05);
+    border: 1px solid rgba(14, 165, 233, 0.1);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+}
+
+.restoration-info-box i {
+    color: var(--color-info);
+    font-size: 0.85rem;
+    margin-top: 2px;
+}
+
+.restoration-info-text {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+}
+
+.unselected-marker {
+    color: var(--color-bg-tertiary);
+    font-size: 0.75rem;
+    margin-bottom: 2px;
+}

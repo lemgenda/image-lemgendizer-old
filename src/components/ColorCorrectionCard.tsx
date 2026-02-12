@@ -54,53 +54,58 @@ const ColorCorrectionCard = () => {
     };
 
     return (
-        <div className="card color-correction-card">
-            <h3 className="card-title">
-                <i className="fas fa-sliders-h"></i> {t('color.title')}
-            </h3>
-
-            <div className="toggle-btn mb-md px-sm">
-                <button
-                    type="button"
-                    className={`btn w-full ${!options.enabled ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => toggleColorCorrection(!options.enabled)}
-                    title={options.enabled ? t('common.disable') : t('common.enable')}
-                >
-                    <i className={`fas fa-${options.enabled ? 'times-circle' : 'check-circle'} mr-2`}></i>
-                    {options.enabled ? t('common.disable') : t('common.enable')}
-                </button>
+        <div className="card color-correction-card h-full">
+            <div className="card-header border-b border-border pb-3 mb-4">
+                <h3 className="card-title mb-0 flex items-center">
+                    <i className="fas fa-sliders-h text-primary"></i>
+                    {t('color.title')}
+                </h3>
             </div>
 
-            {options.enabled && (
-                <div className="mt-md">
-                    <div className="flex justify-end mb-sm px-sm">
-                        <button
-                            className="btn btn-outline btn-sm reset-btn"
-                            onClick={handleReset}
-                            title={t('color.reset_title')}
-                        >
-                            <i className="fas fa-undo"></i> {t('color.reset')}
-                        </button>
-                    </div>
-
-                    <div className="adjustments-grid grid grid-cols-2 gap-sm px-sm">
-                        {adjustments.map((adj) => (
-                            <div key={adj.key} className="adjustment-item">
-                                <RangeSliderElement
-                                    label={t(`color.${adj.key}`)}
-                                    icon={adj.icon}
-                                    min={adj.min}
-                                    max={adj.max}
-                                    step={adj.step}
-                                    value={(options as any)[adj.key]}
-                                    onChange={(val: number) => handleColorCorrectionChange(adj.key, val)}
-                                    disabled={!options.enabled}
-                                />
-                            </div>
-                        ))}
-                    </div>
+            <div className="card-body">
+                <div className="toggle-btn px-sm">
+                    <button
+                        type="button"
+                        className={`btn w-full ${!options.enabled ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => toggleColorCorrection(!options.enabled)}
+                        title={options.enabled ? t('common.disable') : t('common.enable')}
+                    >
+                        <i className={`fas fa-${options.enabled ? 'times-circle' : 'check-circle'} mr-2`}></i>
+                        {options.enabled ? t('common.disable') : t('common.enable')}
+                    </button>
                 </div>
-            )}
+
+                {options.enabled && (
+                    <div className="mt-md">
+                        <div className="flex justify-end mb-sm px-sm">
+                            <button
+                                className="btn btn-outline btn-sm reset-btn"
+                                onClick={handleReset}
+                                title={t('color.reset_title')}
+                            >
+                                <i className="fas fa-undo"></i> {t('color.reset')}
+                            </button>
+                        </div>
+
+                        <div className="adjustments-grid grid grid-cols-2 gap-sm px-sm">
+                            {adjustments.map((adj) => (
+                                <div key={adj.key} className="adjustment-item">
+                                    <RangeSliderElement
+                                        label={t(`color.${adj.key}`)}
+                                        icon={adj.icon}
+                                        min={adj.min}
+                                        max={adj.max}
+                                        step={adj.step}
+                                        value={(options as any)[adj.key]}
+                                        onChange={(val: number) => handleColorCorrectionChange(adj.key, val)}
+                                        disabled={!options.enabled}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

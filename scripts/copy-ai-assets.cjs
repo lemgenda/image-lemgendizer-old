@@ -37,17 +37,18 @@ if (fs.existsSync(ORT_SOURCE)) {
 }
 
 const modelsToCopy = [
-    { src: 'local_models/restoration/MIRNetV2-LowLight.onnx', dest: 'models/restoration/MIRNetV2-LowLight.onnx' },
+    { src: 'local_models/restoration/MIRNet(v2)-LowLight.onnx', dest: 'models/restoration/MIRNet(v2)-LowLight.onnx' },
     { src: 'local_models/restoration/MPRNet-Deraining.onnx', dest: 'models/restoration/MPRNet-Deraining.onnx' },
     { src: 'local_models/restoration/NAFNet-Denoising.onnx', dest: 'models/restoration/NAFNet-Denoising.onnx' },
     { src: 'local_models/restoration/NAFNet-Debluring(REDS).onnx', dest: 'models/restoration/NAFNet-Debluring(REDS).onnx' },
     { src: 'local_models/restoration/FFANet-Dehazing(Indoor).onnx', dest: 'models/restoration/FFANet-Dehazing(Indoor).onnx' },
     { src: 'local_models/restoration/FFANet-Dehazing(Outdoor).onnx', dest: 'models/restoration/FFANet-Dehazing(Outdoor).onnx' },
 
-    { src: 'local_models/ultrazoom/UltraZoom_x2.onnx', dest: 'models/ultrazoom/UltraZoom_x2.onnx' },
-    { src: 'local_models/ultrazoom/UltraZoom_x3.onnx', dest: 'models/ultrazoom/UltraZoom_x3.onnx' },
-    { src: 'local_models/ultrazoom/UltraZoom_x4.onnx', dest: 'models/ultrazoom/UltraZoom_x4.onnx' },
-    { src: 'local_models/yolo/yolov8n-fp16.onnx', dest: 'models/yolo/yolov8n-fp16.onnx' }
+    { src: 'local_models/ultrazoom/UltraZoom-x2.onnx', dest: 'models/ultrazoom/UltraZoom-x2.onnx' },
+    { src: 'local_models/ultrazoom/UltraZoom-x3.onnx', dest: 'models/ultrazoom/UltraZoom-x3.onnx' },
+    { src: 'local_models/ultrazoom/UltraZoom-x4.onnx', dest: 'models/ultrazoom/UltraZoom-x4.onnx' },
+
+    { src: 'local_models/yolo/YOLO(v8).onnx', dest: 'models/yolo/YOLO(v8).onnx' } // Preserve user filename
 ];
 
 modelsToCopy.forEach(item => {

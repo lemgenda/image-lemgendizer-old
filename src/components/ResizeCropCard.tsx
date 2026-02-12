@@ -62,184 +62,189 @@ const ResizeCropCard = ({
     };
 
     return (
-        <div className="card">
-            <h3 className="card-title">
-                <i className="fas fa-compress-arrows-alt"></i> {t('resize.title')} & {t('crop.title')}
-            </h3>
-
-            <div className="mode-toggle-group">
-                <button
-                    type="button"
-                    className={`mode-toggle-btn ${showResize ? 'active' : ''}`}
-                    onClick={() => onToggleResizeCrop('resize')}
-                >
-                    <i className="fas fa-expand-alt"></i>
-                    <span>{t('resize.title')}</span>
-                </button>
-                <button
-                    type="button"
-                    className={`mode-toggle-btn ${!showResize && cropMode === CROP_MODES.SMART ? 'active' : ''}`}
-                    onClick={() => {
-                        onToggleResizeCrop('crop');
-                        onToggleCropMode(CROP_MODES.SMART);
-                    }}
-                    disabled={aiLoading}
-                >
-                    <i className="fas fa-brain"></i>
-                    <span>{t('crop.smart')}</span>
-                </button>
-                <button
-                    type="button"
-                    className={`mode-toggle-btn ${!showResize && cropMode === CROP_MODES.STANDARD ? 'active' : ''}`}
-                    onClick={() => {
-                        onToggleResizeCrop('crop');
-                        onToggleCropMode(CROP_MODES.STANDARD);
-                    }}
-                >
-                    <i className="fas fa-crop-alt"></i>
-                    <span>{t('crop.standard')}</span>
-                </button>
+        <div className="card resize-crop-card h-full">
+            <div className="card-header border-b border-border pb-3 mb-4">
+                <h3 className="card-title mb-0 flex items-center">
+                    <i className="fas fa-compress-arrows-alt text-primary"></i>
+                    {t('resize.title')} & {t('crop.title')}
+                </h3>
             </div>
 
-            {showResize ? (
-                <div className="form-group resize-dimension-group">
-                    <label className="form-label" htmlFor="resize-dimension-input">{t('resize.dimension')}</label>
-                    <div className="number-input-wrapper">
-                        <input
-                            type="number"
-                            id="resize-dimension-input"
-                            className="input-field"
-                            value={isNaN(Number(resizeDimension)) ? '' : resizeDimension}
-                            onChange={(e) => onOptionChange('resizeDimension', e.target.value)}
-                            onFocus={() => onOptionChange('resizeDimension', '')}
-                            placeholder={`e.g., ${RESIZE_DIMENSION_RANGE.DEFAULT}`}
-                            min={RESIZE_DIMENSION_RANGE.MIN}
-                            max={RESIZE_DIMENSION_RANGE.MAX}
-                        />
-                        <div className="number-input-spinner">
-                            <button
-                                type="button"
-                                className="number-input-button"
-                                onClick={() => handleIncrement('resizeDimension')}
-                            >
-                                <i className="fas fa-chevron-up"></i>
-                            </button>
-                            <button
-                                type="button"
-                                className="number-input-button"
-                                onClick={() => handleDecrement('resizeDimension')}
-                            >
-                                <i className="fas fa-chevron-down"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <p className="form-helper">
-                        {t('resize.helper')}
-                    </p>
+            <div className="card-body">
+                <div className="mode-toggle-group">
+                    <button
+                        type="button"
+                        className={`mode-toggle-btn ${showResize ? 'active' : ''}`}
+                        onClick={() => onToggleResizeCrop('resize')}
+                    >
+                        <i className="fas fa-expand-alt"></i>
+                        <span>{t('resize.title')}</span>
+                    </button>
+                    <button
+                        type="button"
+                        className={`mode-toggle-btn ${!showResize && cropMode === CROP_MODES.SMART ? 'active' : ''}`}
+                        onClick={() => {
+                            onToggleResizeCrop('crop');
+                            onToggleCropMode(CROP_MODES.SMART);
+                        }}
+                        disabled={aiLoading}
+                    >
+                        <i className="fas fa-brain"></i>
+                        <span>{t('crop.smart')}</span>
+                    </button>
+                    <button
+                        type="button"
+                        className={`mode-toggle-btn ${!showResize && cropMode === CROP_MODES.STANDARD ? 'active' : ''}`}
+                        onClick={() => {
+                            onToggleResizeCrop('crop');
+                            onToggleCropMode(CROP_MODES.STANDARD);
+                        }}
+                    >
+                        <i className="fas fa-crop-alt"></i>
+                        <span>{t('crop.standard')}</span>
+                    </button>
                 </div>
-            ) : (
-                <div className="space-y-md">
-                    {cropMode === CROP_MODES.SMART && (
-                        <p className="text-sm text-muted mb-sm">
-                            <i className="fas fa-info-circle mr-1"></i>
-                            {t('crop.smartBest')}
-                            {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
+
+                {showResize ? (
+                    <div className="form-group resize-dimension-group">
+                        <label className="form-label" htmlFor="resize-dimension-input">{t('resize.dimension')}</label>
+                        <div className="number-input-wrapper">
+                            <input
+                                type="number"
+                                id="resize-dimension-input"
+                                className="input-field"
+                                value={isNaN(Number(resizeDimension)) ? '' : resizeDimension}
+                                onChange={(e) => onOptionChange('resizeDimension', e.target.value)}
+                                onFocus={() => onOptionChange('resizeDimension', '')}
+                                placeholder={`e.g., ${RESIZE_DIMENSION_RANGE.DEFAULT}`}
+                                min={RESIZE_DIMENSION_RANGE.MIN}
+                                max={RESIZE_DIMENSION_RANGE.MAX}
+                            />
+                            <div className="number-input-spinner">
+                                <button
+                                    type="button"
+                                    className="number-input-button"
+                                    onClick={() => handleIncrement('resizeDimension')}
+                                >
+                                    <i className="fas fa-chevron-up"></i>
+                                </button>
+                                <button
+                                    type="button"
+                                    className="number-input-button"
+                                    onClick={() => handleDecrement('resizeDimension')}
+                                >
+                                    <i className="fas fa-chevron-down"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <p className="form-helper">
+                            {t('resize.helper')}
                         </p>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-md">
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="crop-width-input">{t('crop.width')}</label>
-                            <div className="number-input-wrapper">
-                                <input
-                                    type="number"
-                                    id="crop-width-input"
-                                    className="input-field"
-                                    value={cropWidth}
-                                    onChange={(e) => onOptionChange('cropWidth', e.target.value)}
-                                    onFocus={() => onOptionChange('cropWidth', '')}
-                                    placeholder="1080"
-                                    min={CROP_DIMENSION_RANGE.MIN}
-                                    max={CROP_DIMENSION_RANGE.MAX}
-                                    disabled={aiLoading && cropMode === CROP_MODES.SMART}
-                                />
-                                <div className="number-input-spinner">
-                                    <button
-                                        type="button"
-                                        className="number-input-button"
-                                        onClick={() => handleIncrement('cropWidth', NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT)}
-                                        disabled={aiLoading && cropMode === CROP_MODES.SMART}
-                                    >
-                                        <i className="fas fa-chevron-up"></i>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="number-input-button"
-                                        onClick={() => handleDecrement('cropWidth', NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT)}
-                                        disabled={aiLoading && cropMode === CROP_MODES.SMART}
-                                    >
-                                        <i className="fas fa-chevron-down"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="crop-height-input">{t('crop.height')}</label>
-                            <div className="number-input-wrapper">
-                                <input
-                                    type="number"
-                                    id="crop-height-input"
-                                    className="input-field"
-                                    value={cropHeight}
-                                    onChange={(e) => onOptionChange('cropHeight', e.target.value)}
-                                    onFocus={() => onOptionChange('cropHeight', '')}
-                                    placeholder="1080"
-                                    min={CROP_DIMENSION_RANGE.MIN}
-                                    max={CROP_DIMENSION_RANGE.MAX}
-                                    disabled={aiLoading && cropMode === CROP_MODES.SMART}
-                                />
-                                <div className="number-input-spinner">
-                                    <button
-                                        type="button"
-                                        className="number-input-button"
-                                        onClick={() => handleIncrement('cropHeight', NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT)}
-                                        disabled={aiLoading && cropMode === CROP_MODES.SMART}
-                                    >
-                                        <i className="fas fa-chevron-up"></i>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="number-input-button"
-                                        onClick={() => handleDecrement('cropHeight', NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT)}
-                                        disabled={aiLoading && cropMode === CROP_MODES.SMART}
-                                    >
-                                        <i className="fas fa-chevron-down"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
                     </div>
+                ) : (
+                    <div className="crop-controls-wrapper space-y-md">
+                        {cropMode === CROP_MODES.SMART && (
+                            <p className="text-sm text-muted mb-sm">
+                                <i className="fas fa-info-circle mr-1"></i>
+                                {t('crop.smartBest')}
+                                {aiLoading && <i className="fas fa-spinner fa-spin ml-xs"></i>}
+                            </p>
+                        )}
 
-                    {cropMode === CROP_MODES.STANDARD && (
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="crop-position-select">{t('crop.position')}</label>
-                            <select
-                                id="crop-position-select"
-                                value={cropPosition}
-                                onChange={(e) => onOptionChange('cropPosition', e.target.value)}
-                                className="select-field"
-                            >
-                                {CROP_POSITION_LIST.map(position => (
-                                    <option key={position} value={position}>
-                                        {t(`crop.position.${position}`)}
-                                    </option>
-                                ))}
-                            </select>
+                        <div className="grid grid-cols-2 gap-md">
+                            <div className="form-group">
+                                <label className="form-label" htmlFor="crop-width-input">{t('crop.width')}</label>
+                                <div className="number-input-wrapper">
+                                    <input
+                                        type="number"
+                                        id="crop-width-input"
+                                        className="input-field"
+                                        value={cropWidth}
+                                        onChange={(e) => onOptionChange('cropWidth', e.target.value)}
+                                        onFocus={() => onOptionChange('cropWidth', '')}
+                                        placeholder="1080"
+                                        min={CROP_DIMENSION_RANGE.MIN}
+                                        max={CROP_DIMENSION_RANGE.MAX}
+                                        disabled={aiLoading && cropMode === CROP_MODES.SMART}
+                                    />
+                                    <div className="number-input-spinner">
+                                        <button
+                                            type="button"
+                                            className="number-input-button"
+                                            onClick={() => handleIncrement('cropWidth', NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT)}
+                                            disabled={aiLoading && cropMode === CROP_MODES.SMART}
+                                        >
+                                            <i className="fas fa-chevron-up"></i>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="number-input-button"
+                                            onClick={() => handleDecrement('cropWidth', NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT)}
+                                            disabled={aiLoading && cropMode === CROP_MODES.SMART}
+                                        >
+                                            <i className="fas fa-chevron-down"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label className="form-label" htmlFor="crop-height-input">{t('crop.height')}</label>
+                                <div className="number-input-wrapper">
+                                    <input
+                                        type="number"
+                                        id="crop-height-input"
+                                        className="input-field"
+                                        value={cropHeight}
+                                        onChange={(e) => onOptionChange('cropHeight', e.target.value)}
+                                        onFocus={() => onOptionChange('cropHeight', '')}
+                                        placeholder="1080"
+                                        min={CROP_DIMENSION_RANGE.MIN}
+                                        max={CROP_DIMENSION_RANGE.MAX}
+                                        disabled={aiLoading && cropMode === CROP_MODES.SMART}
+                                    />
+                                    <div className="number-input-spinner">
+                                        <button
+                                            type="button"
+                                            className="number-input-button"
+                                            onClick={() => handleIncrement('cropHeight', NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT)}
+                                            disabled={aiLoading && cropMode === CROP_MODES.SMART}
+                                        >
+                                            <i className="fas fa-chevron-up"></i>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="number-input-button"
+                                            onClick={() => handleDecrement('cropHeight', NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT)}
+                                            disabled={aiLoading && cropMode === CROP_MODES.SMART}
+                                        >
+                                            <i className="fas fa-chevron-down"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    )}
-                </div>
-            )}
+
+                        {cropMode === CROP_MODES.STANDARD && (
+                            <div className="form-group">
+                                <label className="form-label" htmlFor="crop-position-select">{t('crop.position')}</label>
+                                <select
+                                    id="crop-position-select"
+                                    value={cropPosition}
+                                    onChange={(e) => onOptionChange('cropPosition', e.target.value)}
+                                    className="select-field"
+                                >
+                                    {CROP_POSITION_LIST.map(position => (
+                                        <option key={position} value={position}>
+                                            {t(`crop.position.${position}`)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

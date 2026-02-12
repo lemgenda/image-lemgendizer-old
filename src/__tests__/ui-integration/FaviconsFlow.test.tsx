@@ -80,9 +80,8 @@ describe('Favicons Flow', () => {
 
         // Check options passed to orchestration
         const callArgs = vi.mocked(generalUtils.orchestrateTemplateProcessing).mock.calls[0];
-        const options = callArgs[6]; // 7th arg is processingOptions? Check sharedConstants/types
-        // Or checking call signature in orchestrateTemplateProcessing
-        // signature: (image, ids, configs, smartCrop, aiLoaded, onProgress, options)
+        const options = callArgs[5]; // 6th arg is processingOptions (aiLoaded removed)
+        // signature: (image, ids, configs, smartCrop, onProgress, options)
 
         expect(options.includeFavicon).toBe(true);
     }, 15000);

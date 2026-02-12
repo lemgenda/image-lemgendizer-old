@@ -15,7 +15,8 @@ import {
     CROP_MODES,
     OUTPUT_FORMATS,
     IMAGE_FORMATS,
-    IMAGE_FILTERS
+    IMAGE_FILTERS,
+    DEFAULT_COMPRESSION_QUALITY
 } from '../constants';
 import { TFunction } from 'i18next';
 
@@ -40,16 +41,29 @@ export const calculateUpscaleFactor = (originalWidth: number, originalHeight: nu
 
     if (requiredScale <= 1) return 1;
 
+    // Fix: Explicitly check for x3 support or nearest neighbor
+    // The previous loop might fail if requiredScale is like 2.99
     const availableScales = AVAILABLE_UPSCALE_FACTORS;
 
+    // Check for exact match or slightly smaller (to prefer higher quality source)
     for (const scale of availableScales) {
-        if (scale >= requiredScale) {
+        if (scale >= requiredScale - 0.1) { // Tolerance for floating point
             const safeDimensions = calculateSafeDimensions(originalWidth, originalHeight, scale);
-            if (!safeDimensions.wasAdjusted) return scale;
+            // If we are within safe limits (even if adjusted slightly), use it
+            if (!safeDimensions.wasAdjusted || safeDimensions.scale === scale) return scale;
         }
     }
 
-    if (requiredScale > 1) return Math.min(requiredScale, 4);
+    if (requiredScale > 1) {
+        // Return nearest available scale instead of hard cap at 4
+        const maxScale = Math.max(...availableScales);
+        if (requiredScale > maxScale) return maxScale;
+
+        // Find closest match
+        return availableScales.reduce((prev, curr) =>
+            Math.abs(curr - requiredScale) < Math.abs(prev - requiredScale) ? curr : prev
+        );
+    }
     return 1;
 };
 
@@ -699,7 +713,7 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
         errors: result.errors || [],
         templatesApplied: result.templatesApplied || 0,
         categoriesApplied: result.categoriesApplied || 0,
-        formatsExported: result.formatsExported || ['WEBP', 'PNG', 'JPG'],
+        formatsExported: result.formatsExported || (options.output.formats ? options.output.formats.map((f: string) => f.toUpperCase()) : ['WEBP']),
         watermarkApplied: options.watermark?.enabled || false,
         watermark: options.watermark ? {
             text: options.watermark.text,
@@ -758,9 +772,16 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
     }
 
     // 3. Restoration (list models)
-    if (options.restoration?.enabled && options.restoration.modelName) {
+    if (options.restoration?.enabled) {
         summary.aiUsed = true;
-        summary.operations.push(t('operations.restorationApplied', { model: options.restoration.modelName }));
+        const selectedModels = options.restoration.selectedModels ||
+            (options.restoration.modelName ? [options.restoration.modelName] : []);
+
+        if (selectedModels.length > 0) {
+            selectedModels.forEach((modelId: string) => {
+                summary.operations.push(t('operations.restorationApplied', { model: modelId }));
+            });
+        }
     }
 
     // 4. Filter / Color Correction
@@ -773,12 +794,17 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
     }
 
     // 5. Compression (percentage)
-    let compressionQuality = 80; // Default
-    if (options.output.quality && options.output.quality <= 1) {
-        compressionQuality = Math.round(options.output.quality * 100);
-    } else if (options.output.quality > 1) {
-        compressionQuality = options.output.quality;
+    let compressionQuality = DEFAULT_COMPRESSION_QUALITY;
+
+    // Check compression options first (most specific)
+    if (options.compression?.quality) {
+        compressionQuality = options.compression.quality <= 1 ? Math.round(options.compression.quality * 100) : options.compression.quality;
     }
+    // Fallback to output quality if set and not default
+    else if (options.output?.quality) {
+        compressionQuality = options.output.quality <= 1 ? Math.round(options.output.quality * 100) : options.output.quality;
+    }
+
     // Only show if explicitly configured or not default 100/lossless (usually we show it always for clarity)
     summary.operations.push(t('operations.compressed', { quality: compressionQuality }));
 

@@ -52,6 +52,7 @@ import {
     CROP_MODES,
     ALL_OUTPUT_FORMATS,
     DEFAULT_PROCESSING_CONFIG,
+    DEFAULT_COMPRESSION_QUALITY,
     DEFAULT_COLOR_CORRECTION,
     MODAL_TYPES,
     NUMBER_INPUT_CONSTANTS,
@@ -147,13 +148,13 @@ interface ProcessingProviderProps {
 
 /**
  * Context for managing global image processing state and operations.
+ * Exported for testing and external access.
  */
-const ProcessingContext = createContext<ProcessingContextValue | null>(null);
+export const ProcessingContext = createContext<ProcessingContextValue | null>(null);
 
 /**
  * Hook to access the processing context.
  * @returns {ProcessingContextValue} The processing context value.
- * @throws {Error} If used outside of a ProcessingProvider.
  */
 export const useProcessingContext = (): ProcessingContextValue => {
     const context = useContext(ProcessingContext);
@@ -210,7 +211,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         output: {
             ...DEFAULT_PROCESSING_CONFIG.output,
             formats: [IMAGE_FORMATS.WEBP],
-            quality: COMPRESSION_QUALITY_RANGE.DEFAULT
+            quality: DEFAULT_COMPRESSION_QUALITY
         },
         resize: {
             enabled: true,
@@ -241,6 +242,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
 
 
     useEffect(() => {
+        // Smart preload YOLO and other mandatory models for the session
+        prewarmCropModels().catch(err => console.warn('[ProcessingContext] Startup Prewarm failed:', err));
+
         return () => {
             if (autoCloseTimeoutRef.current) {
                 clearTimeout(autoCloseTimeoutRef.current);
@@ -874,16 +878,22 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 processedImages = await orchestrateCustomProcessing(
                     selectedImagesForProcessing,
                     processingConfig,
-                    aiModelLoaded,
+                    t,
                     (progressInfo) => {
                         const { processedCount, totalCount, currentOperation, granularProgress, tileProgress } = progressInfo;
-                        const totalProgress = ((processedCount) / totalCount) * 100 + (granularProgress / totalCount);
+                        // granularProgress is now 0-100 per image (weighted sum)
+                        const totalProgress = (processedCount / totalCount) * 100 + (granularProgress / totalCount);
 
                         // Construct detailed status string (e.g., "Dehazing (Outdoor) (Tile 1/6)")
                         let detailedStatus = currentOperation || t('processing.processing');
 
                         // Add tile info if available and not already present (to avoid double tagging)
-                        if (tileProgress && !detailedStatus.includes('(Tile')) {
+                        // AND only if we are not in a global stage like "Warming Up" or "Loading" which might send 0/100
+                        const isGlobalStage = detailedStatus.toLowerCase().includes('warming') ||
+                            detailedStatus.toLowerCase().includes('loading') ||
+                            detailedStatus.toLowerCase().includes('preparing');
+
+                        if (tileProgress && !detailedStatus.includes('(Tile') && !isGlobalStage) {
                             detailedStatus = `${detailedStatus} (Tile ${tileProgress.current}/${tileProgress.total})`;
                         }
 
@@ -917,7 +927,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                     setTimeout(() => {
                         showModal(
                             t('message.warning'),
-                            `${failedImages.length} image(s) failed to process: ${failedNames}`,
+                            t('message.failedToProcess', { count: failedImages.length, names: failedNames }),
                             MODAL_TYPES.WARNING as any
                         );
                     }, 2000);
@@ -939,9 +949,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             const settings = generateExportSettings(EXPORT_SETTINGS.CUSTOM, {
                 includeOptimized: true,
                 includeOriginal: true,
-                watermark: processingOptions.watermark,
-                filters: processingOptions.filters,
-                colorCorrection: processingOptions.colorCorrection
+                ...processingConfig // Derived config has correct 'enabled' flags
             });
 
             let zipBlob;
@@ -972,7 +980,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 setTimeout(() => {
                     showModal(
                         t('message.warning'),
-                        'Files were processed but auto-download failed. You can download them manually.',
+                        t('message.autoDownloadFailed'),
                         MODAL_TYPES.WARNING as any
                     );
                 }, 3000);
@@ -987,6 +995,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 templatesApplied: processingOptions.selectedTemplates.length,
                 categoriesApplied: calculateCategoriesApplied(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES, false, false),
                 processedImagesList: successfulImages,
+                formatsExported: processingConfig.output.formats,
                 errors: processedImages.filter(img => img.error).map(img => ({
                     name: img.name,
                     error: img.error,
@@ -1013,7 +1022,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 setTimeout(() => {
                     showModal(
                         t('message.warning'),
-                        'Would you like to try processing again with different settings?',
+                        t('message.tryDifferentSettings'),
                         MODAL_TYPES.INFO
                     );
                 }, 2000);
@@ -1111,7 +1120,6 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 templatesToProcess,
                 allTemplates,
                 true,
-                aiModelLoaded,
                 null,
                 processingOptionsWithExtras
             );

@@ -117,7 +117,8 @@ export interface WatermarkOptions {
 
 export interface RestorationOptions {
     enabled: boolean;
-    modelName: string; // e.g., 'mprnet-deraining-restoration-fp16', 'mirnet_v2-lowlight-restoration-fp16'
+    selectedModels: string[]; // Ordered list of IDs
+    modelName?: string; // Keep for backward compatibility/migration
 }
 
 export interface ProcessingOptions {

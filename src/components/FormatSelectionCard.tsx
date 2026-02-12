@@ -1,10 +1,6 @@
 import { IMAGE_FORMATS } from '../constants';
 import type { ProcessingOptions } from '../types';
-
-/**
- * @file FormatSelectionCard.tsx
- * @description UI component for choosing output image formats (WebP, AVIF, JPEG, PNG, Original).
- */
+import '../styles/FormatSelectionCard.css';
 
 interface FormatSelectionCardProps {
     selectedFormats: string[];
@@ -17,12 +13,6 @@ interface FormatSelectionCardProps {
     t: (key: string, params?: any) => string;
 }
 
-/**
- * FormatSelectionCard component.
- * @component
- * @param {FormatSelectionCardProps} props - Component props.
- * @returns {JSX.Element} The rendered format selection card.
- */
 const FormatSelectionCard = ({
     selectedFormats,
     rename,
@@ -34,15 +24,18 @@ const FormatSelectionCard = ({
     t
 }: FormatSelectionCardProps) => {
     return (
-        <div className="card">
-            <h3 className="card-title">
-                <i className="fas fa-file-image"></i> {t('output.title')}
-            </h3>
+        <div className="card format-selection-card h-full">
+            <div className="card-header border-b border-border pb-3 mb-4">
+                <h3 className="card-title mb-0 flex items-center">
+                    <i className="fas fa-file-image text-primary"></i>
+                    {t('output.title')}
+                </h3>
+            </div>
 
-            <div className="form-group">
-                <label className="form-label">{t('output.format')}</label>
-                <div className="space-y-sm mb-md">
-                    <div className="grid grid-cols-2 gap-sm">
+            <div className="card-body">
+                <div className="form-group">
+                    <label className="form-label">{t('output.format')}</label>
+                    <div className="checkbox-group">
                         <label className="checkbox-wrapper">
                             <input
                                 type="checkbox"
@@ -103,7 +96,7 @@ const FormatSelectionCard = ({
                         </label>
                     </div>
 
-                    <div className="flex flex-col gap-xs mt-sm">
+                    <div className="format-actions">
                         <button
                             className="btn btn-secondary btn-xs"
                             onClick={onSelectAll}
@@ -118,34 +111,34 @@ const FormatSelectionCard = ({
                         </button>
                     </div>
                 </div>
-            </div>
 
-            <div className="form-group">
-                <label className="checkbox-wrapper">
-                    <input
-                        type="checkbox"
-                        className="checkbox-input"
-                        checked={rename}
-                        onChange={(e) => onOptionChange('output', 'rename', e.target.checked)}
-                    />
-                    <span className="checkbox-custom"></span>
-                    <span>{t('output.rename')}</span>
-                </label>
-            </div>
-
-            {rename && (
                 <div className="form-group">
-                    <label htmlFor="newFileName" className="form-label">{t('output.newFileName')}</label>
-                    <input
-                        type="text"
-                        id="newFileName"
-                        className="input-field"
-                        value={newFileName}
-                        onChange={(e) => onOptionChange('output', 'newFileName', e.target.value)}
-                        placeholder={t('output.newFileName.placeholder')}
-                    />
+                    <label className="checkbox-wrapper">
+                        <input
+                            type="checkbox"
+                            className="checkbox-input"
+                            checked={rename}
+                            onChange={(e) => onOptionChange('output', 'rename', e.target.checked)}
+                        />
+                        <span className="checkbox-custom"></span>
+                        <span className="checkbox-label font-semibold">{t('output.rename')}</span>
+                    </label>
                 </div>
-            )}
+
+                {rename && (
+                    <div className="form-group">
+                        <label htmlFor="newFileName" className="form-label">{t('output.newFileName')}</label>
+                        <input
+                            type="text"
+                            id="newFileName"
+                            className="input-field"
+                            value={newFileName}
+                            onChange={(e) => onOptionChange('output', 'newFileName', e.target.value)}
+                            placeholder={t('output.newFileName.placeholder')}
+                        />
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

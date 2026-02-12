@@ -3,7 +3,7 @@
  * @description Handles file export, zip generation, and file organization for various processing modes.
  */
 import JSZip from 'jszip';
-import { PROCESSING_MODES, IMAGE_FORMATS, APP_CONFIG } from '../constants';
+import { PROCESSING_MODES, IMAGE_FORMATS, APP_CONFIG, APP_VERSION } from '../constants';
 import { generateFaviconSet, validateImage } from '../utils';
 import {
     EXPORT_FOLDERS,
@@ -717,12 +717,134 @@ function createExportSummary(
         templateCount = validProcessedImages.filter(img => img.template).length;
     }
 
+    // Generate Operations Performed list
+    const operations: string[] = [];
+
+    // 1. Resize (with upscale info)
+    const upscaledImage = validProcessedImages.find((img: any) => img.aiUpscaleScale);
+    if (upscaledImage) {
+        if (upscaledImage.isSmartCropUpscale || (upscaledImage as any).isSmartCropUpscale) {
+            operations.push(t ? t('operations.aiSmartCropUpscale', { scale: upscaledImage.aiUpscaleScale }) : `UltraZoom x${upscaledImage.aiUpscaleScale} Upscaled for Smart Crop`);
+        } else if (upscaledImage.aiUpscaleModel?.includes('UltraZoom')) {
+            operations.push(t ? t('operations.aiUltraZoom', { scale: upscaledImage.aiUpscaleScale }) : `UltraZoom x${upscaledImage.aiUpscaleScale} Upscaled`);
+        } else {
+            let modelInfo = `x${upscaledImage.aiUpscaleScale}`;
+            if (upscaledImage.aiUpscaleModel) {
+                modelInfo += ` (${upscaledImage.aiUpscaleModel})`;
+            }
+            operations.push(t ? t('operations.aiUpscalingWithModel', { model: modelInfo }) : `AI upscaling with ${modelInfo} model`);
+        }
+    } else if (settings.resize?.enabled && settings.resize.dimension) {
+        operations.push(t ? t('operations.resized', { dimension: settings.resize.dimension }) : `Resized to ${settings.resize.dimension}px`);
+    }
+
+    // 2. Crop (dimensions)
+    const smartCroppedImage = validProcessedImages.find((img: any) => img.aiSmartCrop);
+    const smartCropFallback = validProcessedImages.find((img: any) => (img as any).isSmartCropFallback);
+    const isCropOperation = (settings.crop && settings.crop.enabled) || !!smartCroppedImage || !!smartCropFallback;
+
+    if (isCropOperation) {
+        if (settings.crop?.mode === 'smart' || smartCroppedImage || smartCropFallback) { // CROP_MODES.SMART
+
+            if (smartCroppedImage) {
+                operations.push(t ? t('operations.aiYoloSmartCrop', {
+                    width: settings.crop.width,
+                    height: settings.crop.height
+                }) : `YOLO Smart Cropped to ${settings.crop.width}x${settings.crop.height}`);
+            } else if (smartCropFallback) {
+                operations.push(t ? t('operations.aiSmartCropFallback', {
+                    width: settings.crop.width,
+                    height: settings.crop.height
+                }) : `Smart Crop (Fallback) to ${settings.crop.width}x${settings.crop.height}`);
+            } else {
+                operations.push(t ? t('operations.aiSmartCropTo', {
+                    width: settings.crop.width,
+                    height: settings.crop.height
+                }) : `AI Smart Cropped to ${settings.crop.width}x${settings.crop.height}`);
+            }
+        } else {
+            // Standard Crop
+            operations.push(`${t ? t('operations.standardCrop') : 'Crop'} (${settings.crop.width}x${settings.crop.height})`);
+        }
+    }
+
+    // 3. Restoration (list models)
+    if (settings.restoration?.enabled) {
+        const selectedModels = settings.restoration.selectedModels ||
+            (settings.restoration.modelName ? [settings.restoration.modelName] : []);
+
+        if (selectedModels.length > 0) {
+            selectedModels.forEach((modelId: string) => {
+                operations.push(t ? t('operations.restorationApplied', { model: modelId }) : `AI Restoration: ${modelId}`);
+            });
+        }
+    }
+
+    // 4. Filter / Color Correction
+    if (settings.filters && settings.filters.selectedFilter && settings.filters.selectedFilter !== 'none') { // IMAGE_FILTERS.NONE
+        const filterName = t ? t(`filters.name.${settings.filters.selectedFilter}`) : settings.filters.selectedFilter;
+        operations.push(t ? t('operations.filterApplied', { filter: filterName }) : `Filter applied: ${filterName}`);
+    }
+    if (settings.colorCorrection?.enabled) {
+        operations.push(t ? t('operations.colorCorrectionApplied') : 'Color correction applied');
+    }
+
+    // 5. Compression (percentage)
+    let compressionQuality = 85; // DEFAULT_COMPRESSION_QUALITY
+
+    // Check compression options first (most specific)
+    if (settings.compression?.quality) {
+        compressionQuality = settings.compression.quality <= 1 ? Math.round(settings.compression.quality * 100) : settings.compression.quality;
+    }
+    // Fallback to output quality if set and not default
+    else if (settings.output?.quality) {
+        compressionQuality = settings.output.quality <= 1 ? Math.round(settings.output.quality * 100) : settings.output.quality;
+    }
+    operations.push(t ? t('operations.compressed', { quality: compressionQuality }) : `Compressed (${compressionQuality}% quality)`);
+
+
+    // 6. Watermark
+    if (settings.watermark?.enabled) {
+        operations.push(t ? t('summary.watermarkApplied') : 'Watermark Applied');
+    }
+
+    // 7. Format Conversion
+    if (formatsUsed.size > 0) {
+        const formats = Array.from(formatsUsed).join(', ');
+        operations.push(t ? t('operations.formatsExported', { formats }) : `Converted to: ${formats}`);
+    }
+
+    // 8. Rename
+    const isBatchRename = mode === PROCESSING_MODES.BATCH_RENAME;
+    const hasRename = settings.output?.rename && settings.output?.newFileName;
+
+    if (isBatchRename && settings.batchRename) {
+        const pattern = settings.batchRename.pattern || 'Pattern';
+        operations.push(t ? t('operations.renamed', { pattern }) : `Renamed to ${pattern}`);
+    } else if (hasRename) {
+        const pattern = settings.output.newFileName;
+        operations.push(t ? t('operations.renamed', { pattern }) : `Renamed to ${pattern}`);
+    }
+
+    // Templates special case
+    if (mode === PROCESSING_MODES.TEMPLATES && templateCount > 0) {
+        operations.push(t ? t('operations.templatesApplied', { count: templateCount }) : `${templateCount} templates applied`);
+    }
+
+    // Generator special cases
+    if (settings.includeFavicon) {
+        operations.push(t ? t('button.generateFavicon') : 'Generate Favicon Set');
+    }
+    if (settings.includeScreenshots && settings.screenshotUrl) {
+        operations.push(`${t ? t('button.generateScreenshots') : 'Generate Screenshots'} for ${settings.screenshotUrl}`);
+    }
+
+
     const summary = `${t ? t('export.summary.title') : 'Image Processing Export Summary'}
 ${'='.repeat(t ? t('export.summary.title').length : 30)}
 
 ${t ? t('export.summary.exportDate') : 'Export Date'}: ${timestamp}
 ${t ? t('export.summary.processingMode') : 'Processing Mode'}: ${mode}
-${t ? t('export.summary.exportSettings') : 'Export Settings'}: ${JSON.stringify(settings, null, 2)}
 
 ${t ? t('export.summary.statistics') : 'STATISTICS'}:${'='.repeat(t ? t('export.summary.statistics').length : 11)}
 ${t ? t('export.summary.originalImages') : 'Original Images'}: ${validOriginalImages.length}
@@ -732,14 +854,8 @@ ${t ? t('export.summary.categoriesApplied') : 'Categories Applied'}: ${categorie
 ${t ? t('export.summary.formatsExported') : 'Formats Exported'}: ${Array.from(formatsUsed).join(', ')}
 ${t ? t('export.summary.totalFiles') : 'Total Files in Export'}: ${calculateTotalFiles(validOriginalImages, processedImages, settings, mode, faviconFilesCount)}
 
-${validProcessedImages.some(img => img.aiUpscaleScale) ? `
-${t ? t('summary.upscalingUsed') : 'AI UPSCALING'}:${'='.repeat(t ? t('summary.upscalingUsed').length : 12)}
-- ${(() => {
-                const img = validProcessedImages.find(img => img.aiUpscaleScale);
-                const model = img.aiUpscaleModel ? `x${img.aiUpscaleScale} (${img.aiUpscaleModel})` : `x${img.aiUpscaleScale}`;
-                return t ? t('operations.aiUpscalingWithModel', { model }) : `AI upscaling with ${model} model`;
-            })()}
-` : ''}
+${t ? t('summary.operationsPerformed') : 'Operations Performed'}:${'='.repeat(t ? t('summary.operationsPerformed').length : 20)}
+${operations.map(op => `✓ ${op}`).join('\n')}
 
 ${settings.watermark && settings.watermark.enabled ? `
 ${t ? t('export.summary.watermarkInfo') : 'WATERMARK INFO'}:${'='.repeat(t ? t('export.summary.watermarkInfo').length : 14)}
@@ -759,7 +875,7 @@ ${t ? t('export.summary.notes') : 'NOTES'}:${'='.repeat(t ? t('export.summary.no
 ${getExportNotes(mode, t)}
 
 ${t ? t('export.summary.generatedBy') : 'GENERATED BY'}:${'='.repeat(t ? t('export.summary.generatedBy').length : 13)}
-${t ? t('export.summary.appName') : 'Image Processing Tool'}
+${t ? t('export.summary.appName') : 'Image Processing Tool'} ${APP_VERSION}
 ${window.location.origin}
 
 ${t ? t('export.summary.supportNote') : 'Need help? Contact support or check the documentation.'}`;

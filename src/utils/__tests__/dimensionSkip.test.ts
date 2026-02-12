@@ -65,7 +65,8 @@ describe('Dimension Skip Logic', () => {
         };
 
         // We use the real orchestrateCustomProcessing but the mocked processors
-        await orchestrateCustomProcessing([mockImage], options as any, false);
+        const t = (k: string) => k;
+        await orchestrateCustomProcessing([mockImage], options as any, t);
 
         expect(processLemGendaryResize).not.toHaveBeenCalled();
         expect(processSmartCrop).not.toHaveBeenCalled();

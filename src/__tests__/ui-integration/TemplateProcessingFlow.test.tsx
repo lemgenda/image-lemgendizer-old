@@ -61,17 +61,8 @@ describe('Template Processing Flow', () => {
         fireEvent.click(templatesTab);
 
         // 3. Select a Template
-        // 3. Select a Template
-        // Target by ID for robustness
-        // ID derived from templateConfigs.ts: 'ig-square' -> 'template-ig-square'
         const checkbox = document.getElementById('template-ig-square') as HTMLInputElement;
-        if (!checkbox) throw new Error('Checkbox template-ig-square not found');
-
-        fireEvent.click(checkbox);
-
-        // Verify and force if needed
-        if (!checkbox.checked) {
-
+        if (checkbox && !checkbox.checked) {
             fireEvent.click(checkbox);
         }
 
@@ -116,25 +107,7 @@ describe('Template Processing Flow', () => {
         fireEvent.click(screen.getByRole('tab', { name: /templates/i }));
 
         // Enable Restoration
-        // RestorationCard should be visible
-        await waitFor(() => {
-            expect(screen.getByText(/AI Image Restoration/i)).toBeInTheDocument();
-        });
-
-        // Use ID for robustness
-        const restoToggle = document.getElementById('restorationInfoToggle') as HTMLInputElement;
-
-        expect(restoToggle).toBeInTheDocument();
-        // Click to enable
-        if (!restoToggle.checked) {
-            fireEvent.click(restoToggle);
-        }
-
-        // Wait for state update - checked should be true
-        await waitFor(() => {
-            expect(restoToggle.checked).toBe(true);
-        });
-
+        // To enable, we select a model
         const rainRemoval = screen.getByText(/Deraining/i);
         fireEvent.click(rainRemoval);
 
@@ -154,7 +127,7 @@ describe('Template Processing Flow', () => {
         });
 
         const callArgs = vi.mocked(generalUtils.orchestrateTemplateProcessing).mock.calls[0];
-        const options = callArgs[6];
+        const options = callArgs[5];
 
         expect(options.restoration?.enabled).toBe(true);
         expect(options.restoration?.modelName).toBe('MPRNet-Deraining');

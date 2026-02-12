@@ -24,6 +24,25 @@ let textureManagerFailures = 0;
 let cleanupInProgress = false;
 let aiModelLoading = false;
 
+// Global tracking for worker-based upscalers
+const activeUpscalers = new Set<string>();
+
+/**
+ * Registers an active upscaler instance
+ * @param {string} id - Upscaler ID
+ */
+export const registerUpscaler = (id: string): void => {
+    activeUpscalers.add(id);
+};
+
+/**
+ * Unregisters an active upscaler instance
+ * @param {string} id - Upscaler ID
+ */
+export const unregisterUpscaler = (id: string): void => {
+    activeUpscalers.delete(id);
+};
+
 
 /**
  * Initializes GPU memory monitoring system.
@@ -67,6 +86,16 @@ export const safeCleanupGPUMemory = (): void => {
                 delete upscalerLastUsed[key];
             }
         });
+
+        // Trigger worker cleanup if nothing is active
+        if (activeUpscalers.size === 0 && !aiModel) {
+            initAIWorker().then(() => {
+                import('./aiWorkerUtils').then(utils => {
+                    utils.cleanupWorkerMemory();
+                }).catch(() => { });
+            }).catch(() => { });
+        }
+
         currentMemoryUsage = 0;
     } catch {
         // Ignore cleanup errors

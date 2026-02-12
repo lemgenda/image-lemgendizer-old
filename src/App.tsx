@@ -307,10 +307,9 @@ function App() {
                     </div>
                   )}
 
-                  <div className="summary-item">
-                    <div className="summary-label">{t('summary.totalFiles')}:</div>
-                    <div className="summary-value">
-                      {processingSummary.totalFiles}
+                  <div className="summary-item full-width">
+                    <div className="summary-value-highlight">
+                      {t('summary.totalFiles', { count: processingSummary.totalFiles })}
                     </div>
                   </div>
 

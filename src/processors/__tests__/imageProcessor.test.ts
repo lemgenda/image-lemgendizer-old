@@ -9,7 +9,7 @@ describe('imageProcessor', () => {
             const options = {};
             const config = getProcessingConfiguration(options as any);
 
-            expect(config.compression.quality).toBe(0.8);
+            expect(config.compression.quality).toBe(0.85);
             expect(config.resize.enabled).toBe(false);
             expect(config.resize.dimension).toBe(1200);
             expect(config.crop.enabled).toBe(false);

@@ -12,6 +12,7 @@ import {
     FILE_EXTENSIONS,
     PROCESSING_ERRORS,
     DEFAULT_QUALITY,
+    DEFAULT_COMPRESSION_QUALITY,
     PROCESSING_MODES,
     CROP_MODES,
     IMAGE_FORMATS,
@@ -513,13 +514,14 @@ export const processLengendaryOptimize = async (
 export const getProcessingConfiguration = (processingOptions: any): any => {
     return {
         compression: {
-            quality: (processingOptions.compression?.quality || 80) / 100,
+            quality: (processingOptions.compression?.quality || DEFAULT_COMPRESSION_QUALITY) / 100,
             targetSize: processingOptions.compression?.fileSize ? parseInt(processingOptions.compression.fileSize) : null
         },
         output: {
             formats: processingOptions.output?.formats || [IMAGE_FORMATS.WEBP],
             rename: processingOptions.output?.rename || false,
-            newFileName: processingOptions.output?.newFileName || ''
+            newFileName: processingOptions.output?.newFileName || '',
+            quality: (processingOptions.output?.quality || processingOptions.compression?.quality || 85) / 100
         },
         resize: {
             enabled: (processingOptions.showResize && !!processingOptions.resizeDimension) || false,
@@ -570,7 +572,8 @@ export const getProcessingConfiguration = (processingOptions: any): any => {
         } : undefined,
         restoration: processingOptions.restoration ? {
             enabled: !!processingOptions.restoration.enabled,
-            modelName: processingOptions.restoration.modelName || 'mprnet-deraining-restoration-fp16'
+            modelName: processingOptions.restoration.modelName || 'mprnet-deraining-restoration-fp16',
+            selectedModels: processingOptions.restoration.selectedModels || []
         } : undefined,
         processingMode: processingOptions.processingMode
     };

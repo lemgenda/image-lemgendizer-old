@@ -51,13 +51,8 @@ describe('Restoration Flow', () => {
         // It should be visible in Custom Processing tab (default tab)
         expect(screen.getByText(/AI Image Restoration/i)).toBeInTheDocument();
 
-        // 3. Enable Restoration
-        const toggle = document.getElementById('restorationInfoToggle') as HTMLInputElement;
-        expect(toggle).toBeInTheDocument();
-        fireEvent.click(toggle);
-        expect(toggle.checked).toBe(true);
-
-        // 4. Select a Model (e.g., Deraining)
+        // 3. Select a Model (e.g., Deraining)
+        // Note: Toggle is removed, selecting a model implicitly enables restoration
         const derainingOption = screen.getByText(/Deraining/i);
         fireEvent.click(derainingOption);
 
@@ -96,13 +91,10 @@ describe('Restoration Flow', () => {
             expect(screen.getByRole('tab', { name: /Custom Processing/i })).toBeInTheDocument();
         });
 
-        // Enable Restoration
-        const toggle = document.getElementById('restorationInfoToggle') as HTMLInputElement;
-        fireEvent.click(toggle);
-
         // Select Dehazing Indoor
-        // Label is 'Indoor Dehazing' in i18n
-        const dehazingOption = screen.getByText(/Indoor Dehazing/i);
+        // Note: Toggle is removed, selecting a model implicitly enables restoration
+        // Label is 'Dehazing (Indoor)' in i18n
+        const dehazingOption = screen.getByText(/Dehazing.*Indoor/i);
         fireEvent.click(dehazingOption);
 
         // Process

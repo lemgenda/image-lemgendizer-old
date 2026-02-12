@@ -19,7 +19,6 @@ import {
     PROCESSING_THRESHOLDS,
     MAX_TOTAL_PIXELS_FOR_AI,
     MAX_DIMENSION_FOR_AI,
-    MAX_SCALE_FACTOR,
     TIFF_FORMATS,
     FILE_EXTENSIONS,
     IMAGE_COLORS,
@@ -154,13 +153,20 @@ async function resizeImageForCrop(imageFile: File, targetWidth: number, targetHe
                 let scaledWidth, scaledHeight;
                 if (imageAspectRatio > targetAspectRatio) {
                     scale = targetHeight / img.naturalHeight;
-                    scaledWidth = Math.round(img.naturalWidth * scale);
-                    scaledHeight = targetHeight;
                 } else {
                     scale = targetWidth / img.naturalWidth;
-                    scaledWidth = targetWidth;
-                    scaledHeight = Math.round(img.naturalHeight * scale);
                 }
+
+                // Round 22: If skipUpscale is true, we REFUSE to downscale or upscale.
+                // We want the ROI at native resolution so Stage 4 (UltraZoom) handles it with AI.
+                if (options.skipUpscale) {
+                    scale = 1.0;
+                } else if (scale > 1 && !options.allowUpscale) {
+                    scale = 1;
+                }
+
+                scaledWidth = Math.round(img.naturalWidth * scale);
+                scaledHeight = Math.round(img.naturalHeight * scale);
                 const minSizeForAI = 300;
                 if (scaledWidth < minSizeForAI || scaledHeight < minSizeForAI) {
                     const minScale = Math.max(
@@ -300,15 +306,29 @@ async function cropFromResized(resized: any, targetWidth: number, targetHeight: 
     const img = resized.element;
     let offsetX = 0, offsetY = 0;
 
+    // Round 22: Calculate effective extraction window first.
+    // When skipUpscale is true, we extract a smaller ROI to preserve quality and force UltraZoom.
+    // We MUST use these effective dimensions for centering, or the crop will be "off target"
+    // if the source is smaller than the target dimensions.
+    let effWidth = targetWidth;
+    let effHeight = targetHeight;
+
+    if (options.skipUpscale) {
+        const fitScale = Math.min(1, resized.width / targetWidth, resized.height / targetHeight);
+        effWidth = Math.round(targetWidth * fitScale);
+        effHeight = Math.round(targetHeight * fitScale);
+        console.log(`[cropFromResized] ROI-Aware Centering: ${targetWidth}x${targetHeight} -> Effective Window ${effWidth}x${effHeight}`);
+    }
+
     if (typeof position === 'string') {
-        const offset = calculateCropOffset(resized.width, resized.height, targetWidth, targetHeight, position);
+        const offset = calculateCropOffset(resized.width, resized.height, effWidth, effHeight, position);
         offsetX = offset.offsetX;
         offsetY = offset.offsetY;
     } else if (position && position.bbox) {
         const bbox = position.bbox;
         const [x, y, width, height] = bbox;
 
-        const verticalFits = height * 1.1 <= targetHeight;
+        const verticalFits = height * 1.1 <= effHeight;
 
         const subjectCenterX = x + width / 2;
         let subjectCenterY;
@@ -328,11 +348,11 @@ async function cropFromResized(resized: any, targetWidth: number, targetHeight: 
             }
         }
 
-        offsetX = subjectCenterX - targetWidth / 2;
-        offsetY = subjectCenterY - targetHeight / 2;
+        offsetX = subjectCenterX - effWidth / 2;
+        offsetY = subjectCenterY - effHeight / 2;
 
         if (logos.length > 0 && LOGO_DETECTION_CONFIG.PRESERVE_WHOLE_LOGO) {
-            const adjustedOffset = adjustForLogos(offsetX, offsetY, targetWidth, targetHeight,
+            const adjustedOffset = adjustForLogos(offsetX, offsetY, effWidth, effHeight,
                 resized.width, resized.height, logos);
             offsetX = adjustedOffset.x;
             offsetY = adjustedOffset.y;
@@ -348,35 +368,53 @@ async function cropFromResized(resized: any, targetWidth: number, targetHeight: 
             if (x < margin) offsetX = Math.max(0, offsetX - (margin - x));
             if (x + width > resized.width - margin) {
                 const rightOverflow = (x + width) - (resized.width - margin);
-                offsetX = Math.min(offsetX + rightOverflow, resized.width - targetWidth);
+                offsetX = Math.min(offsetX + rightOverflow, resized.width - effWidth);
             }
             if (y < margin) offsetY = Math.max(0, offsetY - (margin - y));
             if (y + height > resized.height - margin) {
                 const bottomOverflow = (y + height) - (resized.height - margin);
-                offsetY = Math.min(offsetY + bottomOverflow, resized.height - targetHeight);
+                offsetY = Math.min(offsetY + bottomOverflow, resized.height - effHeight);
             }
         }
     } else if (position && position.x !== undefined && position.y !== undefined) {
-        offsetX = position.x - targetWidth / 2;
-        offsetY = position.y - targetHeight / 2;
+        offsetX = position.x - effWidth / 2;
+        offsetY = position.y - effHeight / 2;
     } else {
-        const offset = calculateCropOffset(resized.width, resized.height, targetWidth, targetHeight, 'center');
+        const offset = calculateCropOffset(resized.width, resized.height, effWidth, effHeight, 'center');
         offsetX = offset.offsetX;
         offsetY = offset.offsetY;
     }
-    offsetX = Math.max(0, Math.min(offsetX, resized.width - targetWidth));
-    offsetY = Math.max(0, Math.min(offsetY, resized.height - targetHeight));
+    offsetX = Math.max(0, Math.min(offsetX, resized.width - effWidth));
+    offsetY = Math.max(0, Math.min(offsetY, resized.height - effHeight));
+
+    // Round 22: If skipUpscale is true, we preserve the ROI at its small native size
+    // but MUST maintain the target aspect ratio so UltraZoom produces correct geometry.
+    let finalWidth = targetWidth;
+    let finalHeight = targetHeight;
+
+    if (options.skipUpscale) {
+        // Calculate the scale that fits the target bounds into the current image
+        const fitScale = Math.min(1, resized.width / targetWidth, resized.height / targetHeight);
+        finalWidth = Math.round(targetWidth * fitScale);
+        finalHeight = Math.round(targetHeight * fitScale);
+
+        console.log(`[cropFromResized] ROI-Aware Resize: ${targetWidth}x${targetHeight} -> ${finalWidth}x${finalHeight} (fitScale: ${fitScale.toFixed(4)})`);
+    }
 
     const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error("No context");
+    const drawCtx = canvas.getContext('2d');
+    if (!drawCtx) throw new Error("No context");
 
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-    ctx.drawImage(
+    canvas.width = effWidth;
+    canvas.height = effHeight;
+
+    // Center the smaller ROI within the offset logic
+    // offsetX/offsetY were already calculated relative to targetWidth/targetHeight
+
+    drawCtx.drawImage(
         img,
-        offsetX, offsetY, targetWidth, targetHeight,
-        0, 0, targetWidth, targetHeight
+        offsetX, offsetY, effWidth, effHeight,
+        0, 0, effWidth, effHeight
     );
     const format = options.format || 'webp';
     const quality = options.quality || DEFAULT_WEBP_QUALITY;
@@ -731,8 +769,7 @@ async function fitImageToContain(imageFile: File, targetWidth: number, targetHei
 /**
  * Processes smart crop with proper resize
  */
-export const processSmartCrop = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }): Promise<File> => {
-    console.log('[SmartCrop] processSmartCrop started for:', imageFile.name);
+export const processSmartCrop = async (imageFile: File, targetWidth: number, targetHeight: number, options: any = { quality: DEFAULT_QUALITY, format: IMAGE_FORMATS.WEBP }, externalDetections?: any[]): Promise<File> => {
     const fileName = imageFile.name ? imageFile.name.toLowerCase() : '';
     const mimeType = imageFile.type ? imageFile.type.toLowerCase() : '';
 
@@ -766,49 +803,58 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
             }
         }
 
-        const img = await loadImage(processableFile);
+        // Prep (Load to memory)
+        await loadImage(processableFile);
 
-        const needsUpscaling = targetWidth > img.width || targetHeight > img.height;
-        let sourceFile = processableFile;
+        const sourceFile = processableFile;
 
-        if (needsUpscaling) {
-            const upscaleFactor = calculateUpscaleFactor(img.width, img.height, targetWidth, targetHeight);
-            if (upscaleFactor > 1 && upscaleFactor <= MAX_SCALE_FACTOR) {
-                try {
-                    const upscaleResult = await upscaleImageWithAI(processableFile, upscaleFactor, imageFile.name);
-                    sourceFile = upscaleResult.file;
-                    (sourceFile as any).aiUpscaleScale = upscaleResult.scale;
-                    (sourceFile as any).aiUpscaleModel = upscaleResult.model;
-                    (sourceFile as any).isSmartCropUpscale = true;
-                } catch (err) {
-                    console.error('[SmartCrop] Internal upscale failed:', err);
-                }
-            }
-        }
+        // Round 22: Removed internal AI upscaling from Crop.
+        // Upscaling is now centralized in the UltraZoom stage of the global pipeline.
+        // This ensures ROI-aware processing (upscaling only the final crop).
 
         const resized = await resizeImageForCrop(sourceFile, targetWidth, targetHeight, options);
 
         let model = aiModel;
-        if (!model) {
-            try {
-                model = await loadAIModel();
-                aiModel = model;
-            } catch {
-                model = null;
-            }
+        let predictions = externalDetections || null;
+
+        // Fix: Scale external detections to current resized canvas
+        if (predictions && options.originalDimensions) {
+            const { width: origW, height: origH } = options.originalDimensions;
+            const targetW = resized.width;
+            const targetH = resized.height;
+            const scaleX = targetW / origW;
+            const scaleY = targetH / origH;
+            predictions = predictions.map((p: any) => ({
+                ...p,
+                bbox: [
+                    p.bbox[0] * scaleX,
+                    p.bbox[1] * scaleY,
+                    p.bbox[2] * scaleX,
+                    p.bbox[3] * scaleY
+                ]
+            }));
+            console.log(`[SmartCrop] Scaled ${predictions.length} external predictions. Ratio: ${scaleX.toFixed(4)}x${scaleY.toFixed(4)}`);
         }
 
         const templateConfig = options.templateConfig || {};
-        const useAIDetection = templateConfig.useAIDetection !== false && model !== null;
+        const useAIDetection = templateConfig.useAIDetection !== false;
 
         // Fix: Detect logos if explicit "Logo" mode OR if we need to preserve them
-        const useLogoDetection = (options.isLogo === true || templateConfig.preserveLogos === true) && model !== null;
+        const useLogoDetection = (options.isLogo === true || templateConfig.preserveLogos === true);
 
         let logos: any[] = [];
         if (useLogoDetection) {
-            try {
-                logos = await detectLogos(resized.element, resized.width, resized.height, model);
-            } catch { /* ignored */ }
+            if (!model) {
+                try {
+                    model = await loadAIModel();
+                    aiModel = model;
+                } catch { model = null; }
+            }
+            if (model) {
+                try {
+                    logos = await detectLogos(resized.element, resized.width, resized.height, model);
+                } catch { /* ignored */ }
+            }
         }
 
         let croppedFile: File;
@@ -826,56 +872,70 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
             croppedFile = await cropFromResized(resized, targetWidth, targetHeight, primaryLogo, imageFile, options, logos);
             mainSubject = primaryLogo;
         }
+
         if (useAIDetection && currentStrategy !== 'focal_point') {
             try {
-                const isResizedTooLargeForAI = (resized.width * resized.height > MAX_TOTAL_PIXELS_FOR_AI) ||
-                    (resized.width > MAX_DIMENSION_FOR_AI) ||
-                    (resized.height > MAX_DIMENSION_FOR_AI);
+                // Only run internal detection if external detections are missing
+                if (!predictions) {
+                    if (!model) {
+                        try {
+                            model = await loadAIModel();
+                            aiModel = model;
+                        } catch { model = null; }
+                    }
 
-                let detectionElement = resized.element;
-                let detectionScale = 1;
+                    if (model) {
+                        const isResizedTooLargeForAI = (resized.width * resized.height > MAX_TOTAL_PIXELS_FOR_AI) ||
+                            (resized.width > MAX_DIMENSION_FOR_AI) ||
+                            (resized.height > MAX_DIMENSION_FOR_AI);
 
-                if (isResizedTooLargeForAI) {
-                    const maxAIdim = MAX_DIMENSION_FOR_AI || 1500;
-                    detectionScale = Math.min(maxAIdim / resized.width, maxAIdim / resized.height);
+                        let detectionElement = resized.element;
+                        let detectionScale = 1;
 
-                    const dCanvas = document.createElement('canvas');
-                    dCanvas.width = Math.round(resized.width * detectionScale);
-                    dCanvas.height = Math.round(resized.height * detectionScale);
-                    const dctx = dCanvas.getContext('2d');
-                    if (dctx) {
-                        dctx.drawImage(resized.element, 0, 0, dCanvas.width, dCanvas.height);
-                        detectionElement = dCanvas;
+                        if (isResizedTooLargeForAI) {
+                            const maxAIdim = MAX_DIMENSION_FOR_AI || 1500;
+                            detectionScale = Math.min(maxAIdim / resized.width, maxAIdim / resized.height);
+
+                            const dCanvas = document.createElement('canvas');
+                            dCanvas.width = Math.round(resized.width * detectionScale);
+                            dCanvas.height = Math.round(resized.height * detectionScale);
+                            const dctx = dCanvas.getContext('2d');
+                            if (dctx) {
+                                dctx.drawImage(resized.element, 0, 0, dCanvas.width, dCanvas.height);
+                                detectionElement = dCanvas;
+                            }
+                        }
+
+                        predictions = await model.detect(detectionElement);
+
+                        if (detectionScale !== 1 && predictions && predictions.length > 0) {
+                            const invScale = 1 / detectionScale;
+                            predictions = predictions.map((p: any) => ({
+                                ...p,
+                                bbox: [
+                                    p.bbox[0] * invScale,
+                                    p.bbox[1] * invScale,
+                                    p.bbox[2] * invScale,
+                                    p.bbox[3] * invScale
+                                ]
+                            }));
+                        }
                     }
                 }
 
-                let predictions = await model.detect(detectionElement);
+                if (predictions && predictions.length > 0) {
+                    if (templateConfig.prioritySubject) {
+                        predictions.forEach((pred: any) => {
+                            if (pred.class && pred.class.toLowerCase().includes(templateConfig.prioritySubject)) {
+                                pred.score *= 1.5;
+                            }
+                        });
+                    }
 
-                if (detectionScale !== 1 && predictions.length > 0) {
-                    const invScale = 1 / detectionScale;
-                    predictions = predictions.map((p: any) => ({
-                        ...p,
-                        bbox: [
-                            p.bbox[0] * invScale,
-                            p.bbox[1] * invScale,
-                            p.bbox[2] * invScale,
-                            p.bbox[3] * invScale
-                        ]
-                    }));
+                    mainSubject = findMainSubject(predictions, resized.width, resized.height);
                 }
-
-                if (templateConfig.prioritySubject) {
-                    predictions.forEach((pred: any) => {
-                        if (pred.class && pred.class.toLowerCase().includes(templateConfig.prioritySubject)) {
-                            pred.score *= 1.5;
-                        }
-                    });
-                }
-
-                mainSubject = findMainSubject(predictions, resized.width, resized.height);
 
                 if (mainSubject) {
-                    console.log(`[SmartCrop] Main subject identified: ${mainSubject.class} (${mainSubject.category}) with score ${mainSubject.score.toFixed(3)}`);
                     if (SMART_CROP_CONFIG.USE_FACIAL_FEATURES &&
                         (mainSubject.category === 'face' || mainSubject.category === 'facial_feature')) {
                         croppedFile = await cropFromResized(resized, targetWidth, targetHeight, mainSubject, imageFile, options, logos);
@@ -883,12 +943,10 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
                     else if (SMART_CROP_CONFIG.DEFAULT_STRATEGY === 'ai_priority' || SMART_CROP_CONFIG.DEFAULT_STRATEGY === 'hybrid') {
                         croppedFile = await cropFromResized(resized, targetWidth, targetHeight, mainSubject, imageFile, options, logos);
                     } else {
-                        console.log('[SmartCrop] Strategy not AI-priority, falling back to focal point detection');
                         focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
                         croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
                     }
                 } else {
-                    console.log('[SmartCrop] No suitable subject found by YOLO, falling back to focal point detection');
                     focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
                     croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
                 }
@@ -900,8 +958,10 @@ export const processSmartCrop = async (imageFile: File, targetWidth: number, tar
             focalPoint = await detectFocalPointSimple(resized.element, resized.width, resized.height);
             croppedFile = await cropFromResized(resized, targetWidth, targetHeight, focalPoint, imageFile, options, logos);
         }
+
         if (croppedFile) {
             (croppedFile as any).aiSmartCrop = true;
+            if ((processableFile as any).restorationApplied) (croppedFile as any).restorationApplied = (processableFile as any).restorationApplied;
             if ((sourceFile as any).aiUpscaleScale) {
                 (croppedFile as any).aiUpscaleScale = (sourceFile as any).aiUpscaleScale;
                 (croppedFile as any).aiUpscaleModel = (sourceFile as any).aiUpscaleModel;
@@ -1379,7 +1439,14 @@ export const processSmartCropForLogo = async (imageFile: File, targetWidth: numb
                 model = await loadAIModel();
                 aiModel = model;
             } catch {
-                return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' }) as File;
+                const fallbackFile = await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' }) as any;
+                if (fallbackFile) {
+                    fallbackFile.isSmartCropFallback = true;
+                    fallbackFile.aiSmartCrop = false;
+                    if ((imageFile as any).aiUpscaleScale) fallbackFile.aiUpscaleScale = (imageFile as any).aiUpscaleScale;
+                    if ((imageFile as any).aiUpscaleModel) fallbackFile.aiUpscaleModel = (imageFile as any).aiUpscaleModel;
+                }
+                return fallbackFile;
             }
         }
 
@@ -1387,8 +1454,13 @@ export const processSmartCropForLogo = async (imageFile: File, targetWidth: numb
             const detections = await model.detect(img.element);
 
             if (!detections || detections.length === 0) {
-
-                return await processStandardCrop(processableFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' });
+                const fallbackFile = await processStandardCrop(processableFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' }) as any;
+                if (fallbackFile) {
+                    fallbackFile.isSmartCropFallback = true;
+                    if ((imageFile as any).aiUpscaleScale) fallbackFile.aiUpscaleScale = (imageFile as any).aiUpscaleScale;
+                    if ((imageFile as any).aiUpscaleModel) fallbackFile.aiUpscaleModel = (imageFile as any).aiUpscaleModel;
+                }
+                return fallbackFile;
             }
 
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -1458,15 +1530,34 @@ export const processSmartCropForLogo = async (imageFile: File, targetWidth: numb
             const extension = format === IMAGE_FORMATS.PNG ? 'png' : 'webp';
             const outputFileName = fileName.replace(/\.[^.]+$/, `-logo-${targetWidth}x${targetHeight}.${extension}`);
 
-            return new File([blob], outputFileName, { type: blob.type });
+            const resultFile = new File([blob], outputFileName, { type: blob.type || MIME_TYPE_MAP[format] || MIME_TYPE_MAP.webp }) as any;
+            resultFile.aiSmartCrop = true;
+            // Preserve upscale metadata
+            if ((imageFile as any).aiUpscaleScale) resultFile.aiUpscaleScale = (imageFile as any).aiUpscaleScale;
+            if ((imageFile as any).aiUpscaleModel) resultFile.aiUpscaleModel = (imageFile as any).aiUpscaleModel;
+
+            return resultFile;
 
         } catch {
-
-            return await processStandardCrop(processableFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' });
+            const fallbackFile = await processStandardCrop(processableFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' }) as any;
+            if (fallbackFile) {
+                fallbackFile.isSmartCropFallback = true;
+                if ((imageFile as any).aiUpscaleScale) fallbackFile.aiUpscaleScale = (imageFile as any).aiUpscaleScale;
+                if ((imageFile as any).aiUpscaleModel) fallbackFile.aiUpscaleModel = (imageFile as any).aiUpscaleModel;
+            }
+            return fallbackFile;
         }
 
     } catch {
-        return await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' }) as File;
+        const fallbackFile = await processSimpleSmartCrop(imageFile, targetWidth, targetHeight, { ...options, cropPosition: 'center' }) as any;
+        if (fallbackFile) {
+            fallbackFile.isSmartCropFallback = true;
+            fallbackFile.aiSmartCrop = false;
+            // Preserve upscale metadata if present
+            if ((imageFile as any).aiUpscaleScale) fallbackFile.aiUpscaleScale = (imageFile as any).aiUpscaleScale;
+            if ((imageFile as any).aiUpscaleModel) fallbackFile.aiUpscaleModel = (imageFile as any).aiUpscaleModel;
+        }
+        return fallbackFile;
     }
 };
 

@@ -66,173 +66,178 @@ function WatermarkCard({
     };
 
     return (
-        <div className="watermark-card card">
-            <h3 className="card-title">
-                <i className="fas fa-copyright"></i> {t('watermark.title')}
-            </h3>
-
-            <div className="toggle-btn mb-md px-sm">
-                <button
-                    type="button"
-                    className={`btn w-full ${!w.enabled ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={handleToggle}
-                    title={w.enabled ? t('watermark.disable') : t('watermark.enable')}
-                >
-                    <i className={`fas fa-${w.enabled ? 'times-circle' : 'check-circle'} mr-2`}></i>
-                    {w.enabled ? t('common.disable') : t('common.enable')}
-                </button>
+        <div className="watermark-card card h-full">
+            <div className="card-header border-b border-border pb-3 mb-4">
+                <h3 className="card-title mb-0 flex items-center">
+                    <i className="fas fa-copyright text-primary"></i>
+                    {t('watermark.title')}
+                </h3>
             </div>
 
-            {w.enabled && (
-                <div className="space-y-md mt-md">
-                    {/* Info Box */}
-                    <div className="alert alert-info py-xs px-sm mb-md text-xs">
-                        <i className="fas fa-info-circle mr-1"></i> {t('watermark.previewNotice')}
-                    </div>
-
-                    <div className="form-group">
-                        <label className="form-label">{t('watermark.type')}</label>
-                        <div className="btn-group btn-group-sm w-full">
-                            <button
-                                type="button"
-                                className={`btn ${w.type === 'text' ? 'btn-primary' : 'btn-outline-primary'}`}
-                                onClick={() => handleTypeChange('text')}
-                            >
-                                <i className="fas fa-font mr-1"></i> {t('watermark.type.text')}
-                            </button>
-                            <button
-                                type="button"
-                                className={`btn ${w.type === 'image' ? 'btn-primary' : 'btn-outline-primary'}`}
-                                onClick={() => handleTypeChange('image')}
-                            >
-                                <i className="fas fa-image mr-1"></i> {t('watermark.type.image')}
-                            </button>
-                        </div>
-                    </div>
-
-                    {w.type === 'text' && (
-                        <div className="space-y-sm" key="watermark-text-input-group">
-                            <div className="form-group">
-                                <label className="form-label">{t('watermark.text')}</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    value={String(w.text || '')}
-                                    onChange={handleTextChange}
-                                    placeholder={t('watermark.placeholder')}
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-sm">
-                                <ColorSelector
-                                    label={t('watermark.color')}
-                                    value={String(w.color || '#ffffff')}
-                                    onChange={(color: string) => onOptionChange('watermark', 'color', color)}
-                                />
-                                <FontSizeSelector
-                                    label={t('watermark.fontSize')}
-                                    value={Number(w.fontSize) || 32}
-                                    onChange={(size: number) => onOptionChange('watermark', 'fontSize', size)}
-                                />
-                            </div>
-                            <FontSelector
-                                label={t('watermark.fontFamily')}
-                                value={w.fontFamily || 'Arial'}
-                                onChange={(font: string) => onOptionChange('watermark', 'fontFamily', font)}
-                            />
-                        </div>
-                    )}
-
-                    {w.type === 'image' && (
-                        <div className="form-group" key="watermark-image-input-group">
-                            <label className="form-label">{t('watermark.image')}</label>
-                            <div className="flex gap-sm align-center">
-                                <input
-                                    type="file"
-                                    className="hidden"
-                                    id="watermark-image-upload"
-                                    accept="image/*"
-                                    onChange={handleImageUpload}
-                                />
-                                <label htmlFor="watermark-image-upload" className="btn btn-secondary btn-sm flex-1 cursor-pointer">
-                                    <i className="fas fa-upload mr-1"></i> {t('watermark.upload')}
-                                </label>
-                                {w.image && (
-                                    <button
-                                        type="button"
-                                        className="btn btn-danger btn-sm"
-                                        onClick={() => onOptionChange('watermark', 'image', null)}
-                                    >
-                                        <i className="fas fa-trash"></i>
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="form-group">
-                        <div className="justify-between flex">
-                            <label className="form-label">{t('watermark.opacity')}</label>
-                            <span className="text-xs text-muted">{Math.round((w.opacity ?? 0.5) * 100)}%</span>
-                        </div>
-                        <input
-                            type="range"
-                            className="form-control-range"
-                            min="0.1"
-                            max="1"
-                            step="0.1"
-                            value={Number(w.opacity) || 0.5}
-                            onChange={handleOpacityChange}
-                        />
-                    </div>
-
-                    <div className="form-group">
-                        <label className="checkbox-container text-sm">
-                            <input
-                                type="checkbox"
-                                checked={!!w.repeat}
-                                onChange={handleRepeatChange}
-                            />
-                            <span className="checkbox-checkmark"></span>
-                            {t('watermark.repeat')}
-                        </label>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-sm mb-sm px-sm">
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="watermark-size-select">{t('watermark.size')}</label>
-                            <select
-                                id="watermark-size-select"
-                                className="select-field"
-                                value={w.size || 'medium'}
-                                onChange={(e) => handleSizeChange(e.target.value)}
-                            >
-                                {Object.values(WATERMARK_SIZES).map(size => (
-                                    <option key={size} value={size}>
-                                        {t(`watermark.size.${size.toLowerCase()}`)}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className={`form-group ${w.repeat ? 'opacity-50 pointer-events-none' : ''}`}>
-                            <label className="form-label" htmlFor="watermark-position-select">{t('watermark.position')}</label>
-                            <select
-                                id="watermark-position-select"
-                                className="select-field"
-                                value={w.position || 'bottom-right'}
-                                onChange={(e) => handlePositionChange(e.target.value)}
-                                disabled={!!w.repeat}
-                            >
-                                {Object.values(WATERMARK_POSITIONS).map(pos => (
-                                    <option key={pos} value={pos}>
-                                        {t(`watermark.position.${pos}`)}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+            <div className="card-body">
+                <div className="toggle-btn px-sm">
+                    <button
+                        type="button"
+                        className={`btn w-full ${!w.enabled ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={handleToggle}
+                        title={w.enabled ? t('common.disable') : t('common.enable')}
+                    >
+                        <i className={`fas fa-${w.enabled ? 'times-circle' : 'check-circle'} mr-2`}></i>
+                        {w.enabled ? t('common.disable') : t('common.enable')}
+                    </button>
                 </div>
-            )}
+
+                {w.enabled && (
+                    <div className="watermark-options-grid space-y-md mt-md">
+                        {/* Info Box */}
+                        <div className="alert alert-info py-xs px-sm mb-md text-xs">
+                            <i className="fas fa-info-circle mr-1"></i> {t('watermark.previewNotice')}
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">{t('watermark.type')}</label>
+                            <div className="btn-group btn-group-sm w-full">
+                                <button
+                                    type="button"
+                                    className={`btn ${w.type === 'text' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                    onClick={() => handleTypeChange('text')}
+                                >
+                                    <i className="fas fa-font mr-1"></i> {t('watermark.type.text')}
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`btn ${w.type === 'image' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                    onClick={() => handleTypeChange('image')}
+                                >
+                                    <i className="fas fa-image mr-1"></i> {t('watermark.type.image')}
+                                </button>
+                            </div>
+                        </div>
+
+                        {w.type === 'text' && (
+                            <div className="space-y-sm" key="watermark-text-input-group">
+                                <div className="form-group">
+                                    <label className="form-label">{t('watermark.text')}</label>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        value={String(w.text || '')}
+                                        onChange={handleTextChange}
+                                        placeholder={t('watermark.placeholder')}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-sm">
+                                    <ColorSelector
+                                        label={t('watermark.color')}
+                                        value={String(w.color || '#ffffff')}
+                                        onChange={(color: string) => onOptionChange('watermark', 'color', color)}
+                                    />
+                                    <FontSizeSelector
+                                        label={t('watermark.fontSize')}
+                                        value={Number(w.fontSize) || 32}
+                                        onChange={(size: number) => onOptionChange('watermark', 'fontSize', size)}
+                                    />
+                                </div>
+                                <FontSelector
+                                    label={t('watermark.fontFamily')}
+                                    value={w.fontFamily || 'Arial'}
+                                    onChange={(font: string) => onOptionChange('watermark', 'fontFamily', font)}
+                                />
+                            </div>
+                        )}
+
+                        {w.type === 'image' && (
+                            <div className="form-group" key="watermark-image-input-group">
+                                <label className="form-label">{t('watermark.image')}</label>
+                                <div className="flex gap-sm align-center">
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        id="watermark-image-upload"
+                                        accept="image/*"
+                                        onChange={handleImageUpload}
+                                    />
+                                    <label htmlFor="watermark-image-upload" className="btn btn-secondary btn-sm flex-1 cursor-pointer">
+                                        <i className="fas fa-upload mr-1"></i> {t('watermark.upload')}
+                                    </label>
+                                    {w.image && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-danger btn-sm"
+                                            onClick={() => onOptionChange('watermark', 'image', null)}
+                                        >
+                                            <i className="fas fa-trash"></i>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="form-group">
+                            <div className="justify-between flex">
+                                <label className="form-label">{t('watermark.opacity')}</label>
+                                <span className="text-xs text-muted">{Math.round((w.opacity ?? 0.5) * 100)}%</span>
+                            </div>
+                            <input
+                                type="range"
+                                className="form-control-range"
+                                min="0.1"
+                                max="1"
+                                step="0.1"
+                                value={Number(w.opacity) || 0.5}
+                                onChange={handleOpacityChange}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label className="checkbox-container text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={!!w.repeat}
+                                    onChange={handleRepeatChange}
+                                />
+                                <span className="checkbox-checkmark"></span>
+                                {t('watermark.repeat')}
+                            </label>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-sm mb-sm px-sm">
+                            <div className="form-group">
+                                <label className="form-label" htmlFor="watermark-size-select">{t('watermark.size')}</label>
+                                <select
+                                    id="watermark-size-select"
+                                    className="select-field"
+                                    value={w.size || 'medium'}
+                                    onChange={(e) => handleSizeChange(e.target.value)}
+                                >
+                                    {Object.values(WATERMARK_SIZES).map(size => (
+                                        <option key={size} value={size}>
+                                            {t(`watermark.size.${size.toLowerCase()}`)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className={`form-group ${w.repeat ? 'opacity-50 pointer-events-none' : ''}`}>
+                                <label className="form-label" htmlFor="watermark-position-select">{t('watermark.position')}</label>
+                                <select
+                                    id="watermark-position-select"
+                                    className="select-field"
+                                    value={w.position || 'bottom-right'}
+                                    onChange={(e) => handlePositionChange(e.target.value)}
+                                    disabled={!!w.repeat}
+                                >
+                                    {Object.values(WATERMARK_POSITIONS).map(pos => (
+                                        <option key={pos} value={pos}>
+                                            {t(`watermark.position.${pos}`)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

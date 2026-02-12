@@ -1,0 +1,22 @@
+/* ==========================================================================
+   FORMAT SELECTION CARD STYLES
+   ========================================================================== */
+
+.format-selection-card .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.format-selection-card .checkbox-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-sm);
+}
+
+.format-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-top: var(--space-sm);
+}

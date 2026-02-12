@@ -200,7 +200,7 @@ async function processSingleTemplate(
     image: any,
     imageFile: File,
     useSmartCrop: boolean,
-    aiModelLoaded: boolean,
+    // aiModelLoaded: boolean, // Removed
     _isLargeImage: boolean,
     hasTransparency: boolean
 ): Promise<any[]> {
@@ -233,7 +233,7 @@ async function processSingleTemplate(
             const targetHeight = template.height === 'auto' ? null : parseInt(template.height);
 
             if (targetHeight) {
-                if (useSmartCrop && aiModelLoaded && !aiUpscalingDisabled) {
+                if (useSmartCrop && !aiUpscalingDisabled) {
                     try {
                         if (isLogoTemplate) {
                             processedFile = await processSmartCropForLogo(
@@ -466,8 +466,7 @@ async function processSingleTemplate(
 export const processTemplateImages = async (
     image: any,
     selectedTemplates: any[],
-    useSmartCrop: boolean = false,
-    aiModelLoaded: boolean = false
+    useSmartCrop: boolean = false
 ): Promise<any[]> => {
     const processedImages: any[] = [];
 
@@ -518,7 +517,6 @@ export const processTemplateImages = async (
                 image,
                 imageFile,
                 useSmartCrop,
-                aiModelLoaded,
                 isLargeImage,
                 hasTransparency
             );

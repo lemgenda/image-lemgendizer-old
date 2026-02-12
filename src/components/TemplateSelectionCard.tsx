@@ -258,8 +258,7 @@ const TemplateSelectionCard = ({
 
             <div className="mb-lg">
                 <RestorationCard
-                    modelName={processingOptions.restoration?.modelName || ''}
-                    enabled={!!processingOptions.restoration?.enabled}
+                    selectedModels={processingOptions.restoration?.selectedModels || []}
                     onOptionChange={onOptionChange as (category: string, key: string, value: any) => void}
                     t={t}
                 />
