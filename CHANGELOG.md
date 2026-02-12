@@ -3,12 +3,27 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
-[3.8.0] - 2026-02-07
+[3.8.0] - 2026-02-12
 ----------------------
 
 ### Major Changes
 
-*   **Version Update**: Project version upgraded to 3.8.0.
+*   **Translation Audit**: Completed a comprehensive synchronization between English and Croatian translations.
+    *   **Pluralization Support**: Implemented deep support for Croatian pluralization (singular, few, many) in processing summaries (e.g., "1 datoteka", "2 datoteke", "5 datoteka").
+    *   **Runtime Messages**: Localized all remaining runtime modals, progress updates, and success notifications.
+    *   **Tooltips & UI**: Harmonized tooltip labels for watermark and screenshot controls.
+*   **AI Model Standardization**: Migrated all local ONNX models to high-precision FP32.
+    *   **Consistent Output**: Replaced FP16 models with FP32 versions to ensure uniform results across different hardware.
+    *   **Naming Conventions**: Renamed model files for better maintainability (e.g., MIRNet(v2)-LowLight.onnx, YOLO(v8).onnx).
+*   **Restoration Artifact Fixes**: Significantly improved the AI restoration pipeline to prevent visual artifacts.
+    *   **Color Correction**: Integrated White Balance correction for low-light models to eliminate the "green tint" on skin tones.
+    *   **Solarization Prevention**: Refactored post-processing sequence to avoid clipping and dark blotches in high-contrast areas.
+
+### Technical Improvements
+
+*   **Code Quality**: Removed all remaining hardcoded English strings from `ProcessingContext.tsx`.
+*   **Documentation**: Updated walkthroughs and README with the latest technical specifications.
+*   **Version Update**: Project version synchronized to 3.8.0.
 
 [3.7.0] - 2026-02-07
 ----------------------

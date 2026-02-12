@@ -22,14 +22,12 @@ Visit: [**https://lemgenda.github.io/image-lemgendizer-old/**](https://lemgenda
 
 *   **Smart Templates**: Pre-defined templates for all social media platforms (Instagram, Facebook, Twitter, LinkedIn, etc.)
 
-*   **AI-Powered Features**: Smart cropping with TensorFlow.js object detection
-*   **WebGPU Acceleration**: High-performance GPU-accelerated AI processing for supported hardware
-*   **AI Image Restoration**: Advanced FP32 restoration models for high-fidelity output
+*   **AI Image Restoration**: Advanced FP32 absolute restoration suite (Standardized high-precision)
     *   **Dehazing**: Specialized Indoor (FFA-Net) and Outdoor models
     *   **Deraining**: Effective rain removal using MPRNet
-    *   **Low-Light Enhancement**: Professional visibility boost with MIRNetV2
+    *   **Low-Light Enhancement**: Professional visibility boost with MIRNetV2 (Fixed color-tint artifacts)
     *   **Deblurring & Denoising**: State-of-the-art NAFNet models
-*   **AI Upscaling**: Enhance image resolution with ESRGAN models (2x, 3x, 4x)
+*   **AI Upscaling**: High-fidelity FP32 upscaling with ESRGAN models (2x, 3x, 4x)
 
 *   **Image Filters**: 20+ professional filters including Vintage, HDR, Night Vision, and creative presets
 *   **Real-time Preview**: Live filter preview before processing
@@ -54,7 +52,7 @@ Visit: [**https://lemgenda.github.io/image-lemgendizer-old/**](https://lemgenda
 
 *   **ZIP Export**: Download all processed images in organized folders
 
-*   **Internationalization**: English and Croatian language support with auto-detection
+*   **Internationalization**: Full synchronization between English and Croatian with deep pluralization support and automatic language detection
 
 *   **PWA Support**: Installable web app with full offline capabilities
 
