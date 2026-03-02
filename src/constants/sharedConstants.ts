@@ -41,7 +41,7 @@ export const SUPPORTED_INPUT_FORMATS = [
     'image/svg+xml', 'image/avif', 'image/tiff', 'image/bmp',
     'image/x-icon', 'image/vnd.microsoft.icon',
     'image/tif', 'application/tif', 'application/tiff',
-    'image/apng'
+    'image/apng', 'image/jxl'
 ];
 
 export const LEGACY_FORMATS = ['image/tiff', 'image/bmp', 'image/x-icon', 'image/vnd.microsoft.icon'];
@@ -88,6 +88,7 @@ export const COMPRESSION_QUALITY_RANGE = {
 export const OUTPUT_FORMATS = [
     { id: 'webp', name: 'WebP', description: 'Modern format with excellent compression' },
     { id: 'avif', name: 'AVIF', description: 'Next-gen format with superior compression' },
+    { id: 'jxl', name: 'JXL', description: 'JPEG XL format with advanced features' },
     { id: 'jpg', name: 'JPEG', description: 'Standard format with good compression' },
     { id: 'png', name: 'PNG', description: 'Lossless format with transparency support' },
     { id: 'original', name: 'Original', description: 'Keep original format' }
@@ -96,12 +97,13 @@ export const OUTPUT_FORMATS = [
 export const OUTPUT_FORMAT_OPTIONS = [
     { id: 'webp', name: 'WebP' },
     { id: 'avif', name: 'AVIF' },
+    { id: 'jxl', name: 'JXL' },
     { id: 'jpg', name: 'JPEG' },
     { id: 'png', name: 'PNG' },
     { id: 'original', name: 'Original' }
 ];
 
-export const ALL_OUTPUT_FORMATS = ['webp', 'avif', 'jpg', 'png', 'original'];
+export const ALL_OUTPUT_FORMATS = ['webp', 'avif', 'jxl', 'jpg', 'png', 'original'];
 
 export const MIME_TYPE_MAP: Record<string, string> = {
     'jpg': 'image/jpeg',
@@ -115,7 +117,8 @@ export const MIME_TYPE_MAP: Record<string, string> = {
     'tif': 'image/tiff',
     'bmp': 'image/bmp',
     'ico': 'image/x-icon',
-    'apng': 'image/apng'
+    'apng': 'image/apng',
+    'jxl': 'image/jxl'
 };
 
 export const IMAGE_FORMATS = {
@@ -126,7 +129,8 @@ export const IMAGE_FORMATS = {
     PNG: 'png',
     ORIGINAL: 'original',
     TIFF: 'tiff',
-    SVG: 'svg'
+    SVG: 'svg',
+    JXL: 'jxl'
 } as const;
 
 // ================================
@@ -174,7 +178,7 @@ export const APP_VERSION = 'v3.8.5';
 // Processing Mode Constants
 // ================================
 
-import { ProcessingOptions } from '../types';
+import { ProcessingOptions, EnhanceOptions } from '../types';
 export const PROCESSING_MODES = {
     CUSTOM: 'custom',
     TEMPLATES: 'templates',
@@ -275,6 +279,12 @@ export const DEFAULT_COLOR_CORRECTION = {
  * Default internal processing configuration.
  * Categories: output, resize, crop, filters, watermark
  */
+export const DEFAULT_ENHANCE_CONFIG: EnhanceOptions = {
+    enabled: false,
+    autoMode: true,
+    optimizationTarget: 'balance'
+};
+
 export const DEFAULT_PROCESSING_CONFIG: ProcessingOptions = {
     processingMode: 'custom',
     output: {
@@ -335,7 +345,8 @@ export const DEFAULT_PROCESSING_CONFIG: ProcessingOptions = {
         selectedModels: [],
         modelName: 'mprnet-deraining-fp16',
         fidelity: 0.9
-    }
+    },
+    enhance: DEFAULT_ENHANCE_CONFIG
 };
 
 export const EXPORT_SETTINGS = {
@@ -590,7 +601,8 @@ export const FILE_TYPE_NAMES = {
     PNG: 'PNG',
     JPEG: 'JPEG',
     GIF: 'GIF',
-    APNG: 'APNG'
+    APNG: 'APNG',
+    JXL: 'JXL'
 };
 
 // ================================
@@ -607,7 +619,8 @@ export const FILE_EXTENSIONS = {
     PNG: ['.png'],
     JPEG: ['.jpg', '.jpeg'],
     GIF: ['.gif'],
-    APNG: ['.apng']
+    APNG: ['.apng'],
+    JXL: ['.jxl']
 };
 
 // ================================

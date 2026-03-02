@@ -7,10 +7,19 @@ import ReactDOM from 'react-dom/client';
 import './i18n';
 import App from './App';
 import './styles/App.css';
-import { registerSW } from 'virtual:pwa-register';
-
-// Register PWA service worker
-registerSW({ immediate: true });
+// Only register PWA service worker in production to avoid HMR interference
+if (import.meta.env.PROD) {
+  import('virtual:pwa-register').then(({ registerSW }) => {
+    registerSW({ immediate: true });
+  });
+} else {
+  // In dev, unregister any stale Service Workers to prevent caching issues
+  navigator.serviceWorker?.getRegistrations().then(registrations => {
+    for (const registration of registrations) {
+      registration.unregister();
+    }
+  });
+}
 
 import '@fortawesome/fontawesome-free/css/all.min.css';
 

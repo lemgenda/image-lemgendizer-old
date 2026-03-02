@@ -7,6 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
 dist
 dist-ssr
@@ -15,6 +16,8 @@ dist-ssr
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -23,6 +26,8 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Environment variables
 .env
 .env.local
 .env.*.local
@@ -32,13 +37,19 @@ proxy-server.js
 proxy-server.mjs
 proxy-server.cjs
 
-# Test output files
+# Test and Lint output
 test_output.txt
 lint_report*.txt
 lint_output.txt
-
-# Debug folder
 debug/
-debug/*
 
+# Models and Training
 public/models/
+training/
+
+# Python Virtual Environments
+.venv*/
+venv*/
+
+# Husky
+.husky/_/

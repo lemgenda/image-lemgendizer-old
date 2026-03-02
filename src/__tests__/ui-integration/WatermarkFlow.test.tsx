@@ -46,13 +46,13 @@ describe('Watermark Flow', () => {
         const customTab = screen.getByRole('tab', { name: /custom/i });
         fireEvent.click(customTab);
 
-        // 3. Enable Watermark
+        // 3. Enable Watermark (Text type)
         // Scope to Watermark card to avoid conflict with Color Correction
         // Use heading to find the card reliably
         const watermarkHeading = screen.getByRole('heading', { name: /watermark/i });
         const watermarkCard = watermarkHeading.closest('.card') as HTMLElement;
-        const enableBtn = within(watermarkCard).getByRole('button', { name: /enable/i });
-        fireEvent.click(enableBtn);
+        const textBtn = within(watermarkCard).getByRole('button', { name: /text watermark/i });
+        fireEvent.click(textBtn);
 
         // 4. Change Watermark Text
         const textInput = screen.getByPlaceholderText(/enter watermark text/i);

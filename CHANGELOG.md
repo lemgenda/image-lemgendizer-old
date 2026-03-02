@@ -3,6 +3,16 @@ Changelog
 
 All notable changes to the Image LemGendizer project will be documented in this file.
 
+[3.9.0] - 2026-02-18
+----------------------
+
+### Production Polish & Cleanup
+*   **AI Backend Stabilization**: Standardized `ai.worker.ts` with JSDoc documentation and professional coding standards.
+*   **Syntax & Error Resolution**: Fixed critical syntax errors in session management and progress reporting logic.
+*   **Code Sanitization**: Removed development artifacts including emojis and literal `console.log` statements from core AI worker logic.
+*   **Asset Consistency**: Audited `i18n.ts` to ensure professional terminology across English and Croatian translations.
+*   **Variable Optimization**: Purged unused variables and functions to minimize bundle size and overhead.
+
 [3.8.6] - 2026-02-12
 ----------------------
 

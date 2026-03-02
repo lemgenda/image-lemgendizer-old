@@ -16,6 +16,19 @@ vi.mock('../../processors', () => ({
     processTemplateImages: vi.fn()
 }));
 
+// Mock AI Worker Utils
+vi.mock('../aiWorkerUtils', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../aiWorkerUtils')>();
+    return {
+        ...actual,
+        enhanceInWorker: vi.fn(() => Promise.resolve({
+            data: new ImageData(100, 100),
+            nimaScore: 7.5,
+            opsApplied: ['MockOp']
+        }))
+    };
+});
+
 describe('orchestrateCustomProcessing', () => {
     it('should use batch rename logic when output.rename is true', async () => {
         const images: ImageFile[] = [{
@@ -160,5 +173,40 @@ describe('orchestrateCustomProcessing', () => {
             totalCount: 1,
             currentOperation: expect.any(String)
         }));
+    });
+
+    it('should call enhanceInWorker when enhance is enabled', async () => {
+        const images: ImageFile[] = [{
+            file: new File([''], 'enhance.png', { type: 'image/png' }),
+            name: 'enhance.png',
+            type: 'image/png',
+            size: 0,
+            id: '1',
+            preview: '',
+            originalWidth: 100,
+            originalHeight: 100
+        }];
+
+        const processingConfig: Partial<ProcessingOptions> = {
+            processingMode: PROCESSING_MODES.CUSTOM,
+            output: {
+                formats: [IMAGE_FORMATS.WEBP],
+                quality: 85,
+                rename: false,
+                newFileName: ''
+            },
+            enhance: {
+                enabled: true,
+                autoMode: true,
+                optimizationTarget: 'balance'
+            },
+            compression: { quality: 80, fileSize: '100' }
+        };
+
+        const { enhanceInWorker } = await import('../aiWorkerUtils');
+
+        await orchestrateCustomProcessing(images, processingConfig as ProcessingOptions, (k: string) => k);
+
+        expect(enhanceInWorker).toHaveBeenCalled();
     });
 });

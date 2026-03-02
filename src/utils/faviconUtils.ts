@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 import {
     FAVICON_SIZES,
     FAVICON_SIZES_BASIC,
+    FAVICON_SIZES_STANDARD,
     FAVICON_ICO_SIZES,
     FAVICON_PREVIEW_SIZE,
     APP_TEMPLATE_CONFIG,
@@ -29,10 +30,16 @@ export const generateFaviconSet = async (
     siteName: string = DEFAULT_FAVICON_SITE_NAME,
     themeColor: string = DEFAULT_FAVICON_THEME_COLOR,
     backgroundColor: string = DEFAULT_FAVICON_BACKGROUND_COLOR,
-    mode: string = 'complete'
+    mode: string = 'standard'
 ): Promise<Blob> => {
     const zip = new JSZip();
-    const targetSizes = mode === 'basic' ? FAVICON_SIZES_BASIC : FAVICON_SIZES;
+    let targetSizes = FAVICON_SIZES_STANDARD;
+
+    if (mode === 'basic') {
+        targetSizes = FAVICON_SIZES_BASIC;
+    } else if (mode === 'complete') {
+        targetSizes = FAVICON_SIZES;
+    }
 
     const manifest = {
         "name": siteName,

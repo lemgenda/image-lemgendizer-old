@@ -7,18 +7,25 @@ import { BatchRenameOptions } from '../types';
 
 /**
  * Formats a date object according to a format string
- * Supported tokens: YYYY, MM, DD, HH, mm, ss
+ * Supported tokens: YYYY, MM, DD, HH, mm, ss, ms, A, H12
  */
 export const formatDate = (date: Date, format: string = 'YYYY-MM-DD'): string => {
-    const pad = (n: number) => n.toString().padStart(2, '0');
+    const pad = (n: number, len: number = 2) => n.toString().padStart(len, '0');
+
+    const hours = date.getHours();
+    const hours12 = hours % 12 || 12;
+    const ampm = hours >= 12 ? 'PM' : 'AM';
 
     return format
         .replace('YYYY', date.getFullYear().toString())
         .replace('MM', pad(date.getMonth() + 1))
         .replace('DD', pad(date.getDate()))
-        .replace('HH', pad(date.getHours()))
+        .replace('HH', pad(hours))
         .replace('mm', pad(date.getMinutes()))
-        .replace('ss', pad(date.getSeconds()));
+        .replace('ss', pad(date.getSeconds()))
+        .replace('ms', pad(date.getMilliseconds(), 3))
+        .replace('A', ampm)
+        .replace('H12', pad(hours12));
 };
 
 /**
@@ -31,7 +38,8 @@ export const formatDate = (date: Date, format: string = 'YYYY-MM-DD'): string =>
 export const generateNewFileName = (
     originalName: string,
     index: number,
-    options: Partial<BatchRenameOptions> = {}
+    options: Partial<BatchRenameOptions> = {},
+    dimensions?: { width: number, height: number }
 ): string => {
     const {
         pattern = '{name}',
@@ -83,6 +91,26 @@ export const generateNewFileName = (
 
     // Token: {timestamp}
     newName = newName.replace(/{timestamp}/g, Date.now().toString());
+
+    // Token: {size} (WidthxHeight)
+    if (dimensions) {
+        newName = newName.replace(/{size}/g, `${dimensions.width}x${dimensions.height}`);
+    } else {
+        newName = newName.replace(/{size}/g, '0x0');
+    }
+
+    // Advanced Date/Time Tokens (V17)
+    const now = new Date();
+    newName = newName.replace(/{year}/g, formatDate(now, 'YYYY'));
+    newName = newName.replace(/{month}/g, formatDate(now, 'MM'));
+    newName = newName.replace(/{day}/g, formatDate(now, 'DD'));
+    newName = newName.replace(/{time}/g, formatDate(now, 'HH-mm-ss'));
+
+    // Formatted Presets
+    newName = newName.replace(/{DD-MM-YYYY}/g, formatDate(now, 'DD-MM-YYYY'));
+    newName = newName.replace(/{M-D-YY}/g, formatDate(now, 'MM-DD-YY'));
+    newName = newName.replace(/{24h-m-s}/g, formatDate(now, 'HH-mm-ss'));
+    newName = newName.replace(/{12h-m-s-ms}/g, `${formatDate(now, 'H12-mm-ss-ms')} ${formatDate(now, 'A')}`);
 
     // 2. Find and Replace
     if (find) {

@@ -89,6 +89,7 @@ class MockWorker {
     url: string;
     onmessage: (e: MessageEvent) => void;
     onerror: (e: ErrorEvent) => void;
+    listeners: Record<string, EventListenerOrEventListenerObject[]> = {};
 
     constructor(stringUrl: string) {
         this.url = stringUrl;
@@ -96,20 +97,95 @@ class MockWorker {
         this.onerror = () => { };
     }
 
-    postMessage(_msg: any) {
-        // Echo back or handle specific messages if needed for tests
-        // For basic load tests, just doing nothing or ack is often enough
+    postMessage(msg: any) {
+        const { type } = msg;
+
         setTimeout(() => {
-            if (this.onmessage) {
-                this.onmessage({ data: { type: 'complete', result: 'mock-result' } } as MessageEvent);
+            let response: any = { type: 'complete', result: 'mock-result' };
+
+            switch (type) {
+                case 'load':
+                    response = { type: 'loaded' };
+                    break;
+                case 'warmup':
+                    response = { type: 'warmup_complete' };
+                    break;
+                case 'detect':
+                    response = { type: 'result', data: [] };
+                    break;
+                case 'upscale':
+                    response = { type: 'upscale_result', data: new ImageData(100, 100), shape: [100, 100, 3], scale: 2 };
+                    break;
+                case 'restore':
+                    response = { type: 'restore_result', data: new ImageData(100, 100) };
+                    break;
+                case 'enhance':
+                    response = { type: 'enhance_result', data: new ImageData(100, 100), nimaScore: 8.0, opsApplied: ['MockOp'] };
+                    break;
+                case 'preload':
+                    return;
+                default:
+                    break;
             }
-        }, 50);
+
+            const event = { data: response } as MessageEvent;
+
+            if (this.onmessage) {
+                this.onmessage(event);
+            }
+
+            if (this.listeners['message']) {
+                this.listeners['message'].forEach(listener => {
+                    if (typeof listener === 'function') {
+                        listener(event);
+                    } else if (listener && typeof listener.handleEvent === 'function') {
+                        listener.handleEvent(event);
+                    }
+                });
+            }
+        }, 10);
     }
 
     terminate() { }
-    addEventListener() { }
-    removeEventListener() { }
+
+    addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+        if (!this.listeners[type]) {
+            this.listeners[type] = [];
+        }
+        this.listeners[type].push(listener);
+    }
+
+    removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+        if (this.listeners[type]) {
+            this.listeners[type] = this.listeners[type].filter(l => l !== listener);
+        }
+    }
+
     dispatchEvent() { return true; }
 }
 
 (global as any).Worker = MockWorker;
+
+// Mock tiffUtils to prevent network requests
+vi.mock('./utils/tiffUtils', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('./utils/tiffUtils')>();
+    return {
+        ...actual,
+        loadUTIFLibrary: vi.fn(() => Promise.resolve(true)),
+    };
+});
+
+// Mock aiWorkerUtils to prevent test hangs during AI initialization
+vi.mock('./utils/aiWorkerUtils', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('./utils/aiWorkerUtils')>();
+    return {
+        ...actual,
+        initAIWorker: vi.fn(() => Promise.resolve()),
+        prewarmCropModels: vi.fn(() => Promise.resolve()),
+        warmupAIModels: vi.fn(() => Promise.resolve()),
+        detectObjectsInWorker: vi.fn(() => Promise.resolve([])),
+        upscaleInWorker: vi.fn(() => Promise.resolve({ data: new ImageData(1, 1), shape: [1, 1], scale: 2 })),
+        restoreInWorker: vi.fn(() => Promise.resolve(new ImageData(1, 1))),
+        enhanceInWorker: vi.fn(() => Promise.resolve({ data: new ImageData(1, 1), nimaScore: 8.0, opsApplied: [] })),
+    };
+});

@@ -5,7 +5,6 @@
 import type { ProcessingOptions, ImageFile } from '../types';
 import { useTranslation } from 'react-i18next';
 
-import { generateNewFileName } from '../utils/renameUtils';
 import '../styles/AdvancedRenameTab.css';
 
 interface AdvancedRenameTabProps {
@@ -13,8 +12,9 @@ interface AdvancedRenameTabProps {
     selectedImagesForProcessing: ImageFile[];
     onOptionChange: (category: keyof ProcessingOptions, key: string, value: any) => void;
     onApplyToCustom: () => void;
-    onProcess: () => void;
     isLoading: boolean;
+    processImages: () => Promise<void>;
+    selectedImagesCount: number;
 }
 
 /**
@@ -25,14 +25,14 @@ interface AdvancedRenameTabProps {
  */
 const AdvancedRenameTab = ({
     processingOptions,
-    selectedImagesForProcessing,
     onOptionChange,
     onApplyToCustom,
-    onProcess,
-    isLoading
+    isLoading,
+    processImages,
+    selectedImagesCount
 }: AdvancedRenameTabProps) => {
     const { t } = useTranslation();
-    const previewImages = selectedImagesForProcessing;
+
 
     const handleRenameChange = (key: string, value: any) => {
         onOptionChange('batchRename', key, value);
@@ -57,25 +57,18 @@ const AdvancedRenameTab = ({
 
     return (
         <div className="tab-pane animate-fade-in">
-            {/* Header / Actions Section */}
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h2 className="text-xl font-bold">{t('batchRename.title')}</h2>
-                    <p className="text-sm text-muted">{t('batchRename.description')}</p>
-                </div>
-            </div>
+            <div className="flex flex-col mb-lg">
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                {/* Left Column: Naming Rules */}
-                <div className="space-y-6">
-
-                    {/* Pattern Section */}
-                    <div className="card p-4">
-                        <h3 className="text-lg font-semibold mb-3 flex items-center" data-testid="rename-pattern-title">
-                            <i className="fas fa-tag mr-2 text-primary"></i>
-                            {t('rename.patternTitle')}
-                        </h3>
+                {/* Naming Rules Accordion */}
+                <details className="settings-accordion" name="rename-settings">
+                    <summary style={{ outline: 'none' }}>
+                        <div className="flex items-center gap-sm" data-testid="rename-pattern-title">
+                            <i className="fas fa-tag text-primary flex-shrink-0"></i>
+                            <span>{t('rename.patternTitle')}</span>
+                        </div>
+                        <i className="fas fa-chevron-down text-sm"></i>
+                    </summary>
+                    <div className="card-body">
 
                         <div className="form-group mb-4">
                             <label htmlFor="renamePattern" className="block text-sm font-medium mb-1">
@@ -92,31 +85,47 @@ const AdvancedRenameTab = ({
                             />
                         </div>
 
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            <button onClick={() => insertToken('{name}')} className="badge badge-primary">
-                                {'{name}'}
-                            </button>
-                            <button onClick={() => insertToken('{counter}')} className="badge badge-primary">
-                                {'{counter}'}
-                            </button>
-                            <button onClick={() => insertToken('{date}')} className="badge badge-primary">
-                                {'{date}'}
-                            </button>
-                            <button onClick={() => insertToken('{ext}')} className="badge badge-secondary">
-                                {'{ext}'}
-                            </button>
+                        <div className="flex flex-col mb-lg">
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                <button onClick={() => insertToken('{name}')} className="badge badge-primary">
+                                    {'{name}'}
+                                </button>
+                                <button onClick={() => insertToken('{counter}')} className="badge badge-primary">
+                                    {'{counter}'}
+                                </button>
+                                <button onClick={() => insertToken('{size}')} className="badge badge-primary">
+                                    {'{size}'}
+                                </button>
+                                <button onClick={() => insertToken('{year}')} className="badge badge-primary">
+                                    {'{year}'}
+                                </button>
+                                <button onClick={() => insertToken('{time}')} className="badge badge-primary">
+                                    {'{time}'}
+                                </button>
+                                <button onClick={() => insertToken('{date}')} className="badge badge-primary">
+                                    {'{date}'}
+                                </button>
+                                <button onClick={() => insertToken('{ext}')} className="badge badge-secondary">
+                                    {'{ext}'}
+                                </button>
+                            </div>
                         </div>
                         <p className="text-xs text-muted">
                             {t('rename.tokenHelp')}
                         </p>
                     </div>
+                </details>
 
-                    {/* Find & Replace Section */}
-                    <div className="card p-4">
-                        <h3 className="text-lg font-semibold mb-3 flex items-center">
-                            <i className="fas fa-search mr-2 text-primary"></i>
-                            {t('rename.replaceTitle')}
-                        </h3>
+                {/* Find & Replace Accordion */}
+                <details className="settings-accordion" name="rename-settings">
+                    <summary style={{ outline: 'none' }}>
+                        <div className="flex items-center gap-sm">
+                            <i className="fas fa-search text-primary flex-shrink-0"></i>
+                            <span>{t('rename.replaceTitle')}</span>
+                        </div>
+                        <i className="fas fa-chevron-down text-sm"></i>
+                    </summary>
+                    <div className="card-body">
 
                         <div className="form-group mb-3">
                             <label htmlFor="renameFind" className="block text-sm font-medium mb-1">
@@ -159,16 +168,18 @@ const AdvancedRenameTab = ({
                             </label>
                         </div>
                     </div>
-                </div>
+                </details>
 
-                {/* Right Column: Formatting & Output */}
-                <div className="space-y-6">
-                    {/* Options Section */}
-                    <div className="card p-4">
-                        <h3 className="text-lg font-semibold mb-3 flex items-center">
-                            <i className="fas fa-sliders-h mr-2 text-primary"></i>
-                            {t('rename.optionsTitle')}
-                        </h3>
+                {/* Options Accordion */}
+                <details className="settings-accordion" name="rename-settings">
+                    <summary style={{ outline: 'none' }}>
+                        <div className="flex items-center gap-sm">
+                            <i className="fas fa-sliders-h text-primary flex-shrink-0"></i>
+                            <span>{t('rename.optionsTitle')}</span>
+                        </div>
+                        <i className="fas fa-chevron-down text-sm"></i>
+                    </summary>
+                    <div className="card-body">
 
                         <div className="form-group mb-3">
                             <label htmlFor="renameCasing" className="block text-sm font-medium mb-1">
@@ -219,80 +230,28 @@ const AdvancedRenameTab = ({
                             </div>
                         </div>
                     </div>
+                </details>
 
-                    {/* Rename Preview Section */}
-                    <div className="card p-4 flex-grow flex flex-col min-h-0">
-                        <h3 className="text-lg font-semibold mb-3 flex items-center">
-                            <i className="fas fa-eye mr-2 text-primary"></i>
-                            {t('rename.previewTitle')}
-                        </h3>
 
-                        <div className="overflow-auto border rounded border-gray-100 dark:border-gray-800 rename-preview-list">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
-                                    <tr>
-                                        <th className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 font-medium">{t('common.hashSymbol')}</th>
-                                        <th className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 font-medium">{t('rename.originalName')}</th>
-                                        <th className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 font-medium text-primary">{t('rename.newName')}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {previewImages.length > 0 ? (
-                                        previewImages.map((img, idx) => (
-                                            <tr key={img.id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                                                <td className="px-3 py-2 border-b border-gray-50 dark:border-gray-800 text-muted">{idx + 1}</td>
-                                                <td className="px-3 py-2 border-b border-gray-50 dark:border-gray-800 truncate max-w-[150px]" title={img.name}>
-                                                    {img.name}
-                                                </td>
-                                                <td className="px-3 py-2 border-b border-gray-50 dark:border-gray-800 font-medium text-primary">
-                                                    {generateNewFileName(img.name, idx, renameOptions)}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan={3} className="px-3 py-8 text-center text-muted">
-                                                {t('rename.noSelectedImages')}
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                        <p className="text-xs text-muted mt-3">
-                            {t('rename.previewInfo')}
-                        </p>
-                    </div>
-
-                    {/* Actions Row */}
-                    <div className="flex flex-col sm:flex-row gap-3 mt-auto">
-                        <button
-                            onClick={onApplyToCustom}
-                            data-testid="apply-to-custom-btn"
-                            className="btn btn-secondary btn-lg flex-1 font-semibold mb-2 sm:mb-0"
-                            disabled={isLoading}
-                        >
-                            <i className="fas fa-exchange-alt mr-2"></i>
-                            {t('rename.applyToCustom')}
-                        </button>
-                        <button
-                            onClick={onProcess}
-                            className="btn btn-primary btn-lg flex-1 font-bold"
-                            disabled={previewImages.length === 0 || isLoading}
-                        >
-                            {isLoading ? (
-                                <>
-                                    <i className="fas fa-spinner fa-spin mr-2"></i>
-                                    {t('button.processing')}
-                                </>
-                            ) : (
-                                <>
-                                    <i className="fas fa-save mr-2"></i>
-                                    {t('rename.processBtn')}
-                                </>
-                            )}
-                        </button>
-                    </div>
+                {/* Actions Row */}
+                <div className="mt-auto" style={{ paddingTop: 'var(--space-md)', borderTop: '1px solid var(--border-color)' }}>
+                    <button
+                        className="btn btn-primary w-full mb-sm"
+                        onClick={processImages}
+                        disabled={isLoading || selectedImagesCount === 0}
+                    >
+                        <i className="fas fa-cog"></i>
+                        {isLoading ? t('button.processing') : `${t('button.process')} (${selectedImagesCount})`}
+                    </button>
+                    <button
+                        onClick={onApplyToCustom}
+                        data-testid="apply-to-custom-btn"
+                        className="btn btn-secondary w-full font-semibold"
+                        disabled={isLoading}
+                    >
+                        <i className="fas fa-exchange-alt mr-2"></i>
+                        {t('rename.applyToCustom')}
+                    </button>
                 </div>
             </div>
         </div>

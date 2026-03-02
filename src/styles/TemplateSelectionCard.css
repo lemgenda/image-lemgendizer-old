@@ -1,8 +1,8 @@
-.templates-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: var(--space-lg);
+.templates-grid.mb-lg {
+    display: flex;
+    flex-direction: column;
 }
+
 
 .screenshot-section {
     margin-top: var(--space-md);
@@ -11,7 +11,7 @@
 }
 
 @media (max-width: 768px) {
-    .templates-grid {
+    .templates-grid.mb-lg {
         grid-template-columns: 1fr;
     }
 }

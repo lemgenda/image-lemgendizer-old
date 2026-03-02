@@ -25,6 +25,7 @@ import { ImageFile, ProcessingOptions } from '../types';
 
 import { generateSVGPreview } from './svgUtils';
 import { generateTIFFPreview } from './tiffUtils';
+import { convertJXLToStandardBlob } from './jxlUtils';
 
 /**
  * Calculates upscale factor
@@ -207,10 +208,18 @@ export const createImageObjects = (files: File[]): Promise<ImageFile[]> => {
 
         const isTIFF = FILE_EXTENSIONS.TIFF.some(ext => fileName.endsWith(ext));
         const isSVG = mimeType === 'image/svg+xml' || FILE_EXTENSIONS.SVG.some(ext => fileName.endsWith(ext));
+        const isJXL = mimeType === 'image/jxl' || FILE_EXTENSIONS.JXL.some(ext => fileName.endsWith(ext));
 
         let previewUrl: string = '';
 
-        if (!isTIFF && !isSVG && fileObj.size < PROCESSING_THRESHOLDS.MAX_FILE_SIZE_PREVIEW) {
+        if (isJXL) {
+            try {
+                const standardBlob = await convertJXLToStandardBlob(fileObj);
+                previewUrl = URL.createObjectURL(standardBlob);
+            } catch {
+                previewUrl = URL.createObjectURL(fileObj);
+            }
+        } else if (!isTIFF && !isSVG && fileObj.size < PROCESSING_THRESHOLDS.MAX_FILE_SIZE_PREVIEW) {
             try {
                 previewUrl = await fileToDataURL(fileObj);
             } catch {
@@ -236,7 +245,8 @@ export const createImageObjects = (files: File[]): Promise<ImageFile[]> => {
             optimized: false,
             isTIFF: isTIFF,
             isSVG: isSVG,
-            originalFormat: isTIFF ? IMAGE_FORMATS.TIFF || 'tiff' : (isSVG ? IMAGE_FORMATS.SVG || 'svg' : fileObj.type.split('/')[1]),
+            isJXL: isJXL,
+            originalFormat: isTIFF ? IMAGE_FORMATS.TIFF || 'tiff' : (isSVG ? IMAGE_FORMATS.SVG || 'svg' : (isJXL ? IMAGE_FORMATS.JXL || 'jxl' : fileObj.type.split('/')[1])),
             hasPreview: true
         } as unknown as ImageFile; // casting because valid ImageFile needs dimensions which are not sync available here without loading image
     }));
@@ -688,6 +698,10 @@ export const generateSpecialFormatPreview = async (image: any): Promise<string> 
             generateSVGPreview(image.file)
                 .then(resolve)
                 .catch(reject);
+        } else if (image.isJXL) {
+            convertJXLToStandardBlob(image.file)
+                .then(blob => resolve(URL.createObjectURL(blob)))
+                .catch(reject);
         } else {
             resolve(URL.createObjectURL(image.file));
         }
@@ -715,6 +729,8 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
         categoriesApplied: result.categoriesApplied || 0,
         formatsExported: result.formatsExported || (options.output.formats ? options.output.formats.map((f: string) => f.toUpperCase()) : ['WEBP']),
         watermarkApplied: options.watermark?.enabled || false,
+        elapsedTime: result.elapsedTime || 0,
+        policyDosages: [],
         watermark: options.watermark ? {
             text: options.watermark.text,
             size: options.watermark.size || 'medium',
@@ -793,7 +809,36 @@ export const createProcessingSummary = (result: any, options: ProcessingOptions 
         summary.operations.push(t('operations.colorCorrectionApplied'));
     }
 
-    // 5. Compression (percentage)
+    // 5. LemGendary Enhance
+    const enhancedImages = processedImagesList.filter((img: any) => img.enhanceMetadata);
+    if (enhancedImages.length > 0 || options.enhance?.enabled) {
+        summary.aiUsed = true;
+        summary.operations.push(t('operations.aiLemGendaryEnhance') || 'LemGendary AI Enhance');
+
+        // V29: Aggregate Policy Dosages
+        const aggregatedDosages: Record<string, number> = {};
+        let enhanceCount = 0;
+
+        enhancedImages.forEach((img: any) => {
+            if (img.enhanceMetadata?.policyDosages) {
+                enhanceCount++;
+                Object.entries(img.enhanceMetadata.policyDosages).forEach(([key, val]) => {
+                    aggregatedDosages[key] = (aggregatedDosages[key] || 0) + (val as number);
+                });
+            }
+        });
+
+        if (enhanceCount > 0) {
+            Object.entries(aggregatedDosages).forEach(([key, totalVal]) => {
+                const avgVal = Math.round((totalVal / enhanceCount) * 100);
+                if (avgVal > 0) {
+                    summary.policyDosages.push(`${key.charAt(0).toUpperCase() + key.slice(1)}: ${avgVal}%`);
+                }
+            });
+        }
+    }
+
+    // 6. Compression (percentage)
     let compressionQuality = DEFAULT_COMPRESSION_QUALITY;
 
     // Check compression options first (most specific)

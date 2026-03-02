@@ -9,7 +9,7 @@ import {
 } from '../processors';
 import { generateNewFileName } from './renameUtils';
 import { safeCleanupGPUMemory } from './memoryUtils';
-import { detectObjectsInWorker } from './aiWorkerUtils';
+import { detectObjectsInWorker, enhanceInWorker } from './aiWorkerUtils';
 import { getImageDimensions } from './appUtils';
 import { isSVGFile } from './svgUtils';
 import {
@@ -145,6 +145,8 @@ export const orchestrateCustomProcessing = async (
 ): Promise<ImageFile[]> => {
     const processedImages: ImageFile[] = [];
 
+    let lastTotalLog = 0;
+
     for (let i = 0; i < images.length; i++) {
         const image = images[i];
 
@@ -162,15 +164,17 @@ export const orchestrateCustomProcessing = async (
         }
 
         const filter = processingConfig.filters?.selectedFilter || IMAGE_FILTERS.NONE;
-        let processedFile: File | Blob = image.file;
+        let processedFile: File | Blob | ImageData = image.file;
         let restorationError = null;
+        let enhanceMetadata: { nimaScore: number; opsApplied: string[] } | undefined;
 
         // Base weights for stages (Relative complexity)
         // Round 62: Dynamic Weighting to fix "90% at 25%" stall.
         // We now calculate total weight based on ENABLED features only.
         const RAW_WEIGHTS = {
             PREPARING: 2,
-            RESTORATION: 40, // Genearl Restoration (Deblur/Denoise)
+            ENHANCE: 60,     // Heavy (NIMA + Pipeline)
+            RESTORATION: 40, // General Restoration (Deblur/Denoise)
             FACE_RESTORATION: 40, // Face Restoration (CodeFormer)
             COLOR_PRE: 5,    // Fast (LUT/Gamma)
             CROP: 10,        // Fast (or Smart Crop = Medium)
@@ -184,6 +188,7 @@ export const orchestrateCustomProcessing = async (
         // Calculate active weights based on config
         const ACTIVE_WEIGHTS = {
             PREPARING: RAW_WEIGHTS.PREPARING,
+            ENHANCE: (processingConfig.enhance?.enabled) ? RAW_WEIGHTS.ENHANCE : 0,
             RESTORATION: (processingConfig.restoration?.enabled) ? RAW_WEIGHTS.RESTORATION : 0,
             FACE_RESTORATION: hasFaceModel ? RAW_WEIGHTS.FACE_RESTORATION : 0,
             COLOR_PRE: (processingConfig.colorCorrection?.enabled) ? RAW_WEIGHTS.COLOR_PRE : 0,
@@ -215,6 +220,16 @@ export const orchestrateCustomProcessing = async (
                 // standard: (currentBase + stageProgress) / TOTAL_WEIGHT * 100
                 // This converts the sum of relative weights into a 0-100% scale.
                 const totalProgress = ((currentBaseProgress + stageProgressRaw) / TOTAL_WEIGHT) * 100;
+
+                // USER REQUEST: Update global progress only after each image is completed (Discrete Progress)
+                const isFinalStage = stageKey === 'POLISH';
+                const batchProgress = i === images.length - 1 && isFinalStage && granular === 100 ? 100 : (i / images.length) * 100;
+
+                // V25 Monotonic Peak-Hold: Reduced console spam since global progress only jumps per image.
+                if (batchProgress > lastTotalLog || batchProgress === 100) {
+                    console.log(`[Batch Progress] ${batchProgress.toFixed(1)}% | ${image.name} | ${stageLabel}`);
+                    lastTotalLog = batchProgress;
+                }
 
                 let displayOperation = stageLabel;
                 if (tileData && tileData.current && tileData.total && !stageLabel.toLowerCase().includes('warm') && !stageLabel.toLowerCase().includes('przygot')) {
@@ -262,6 +277,38 @@ export const orchestrateCustomProcessing = async (
                 }
             }
 
+            // --- STAGE 0.5: LEMGENDARY ENHANCE (Automated Quality Optimization) ---
+            if (processingConfig.enhance?.enabled) {
+                try {
+                    const { data: enhancedData, nimaScore, opsApplied } = await enhanceInWorker(processedFile, (prog) => {
+                        reportProgress('ENHANCE', t('enhance.optimized', { target: t('enhance.quality') }), prog.granular || 0, prog);
+                    });
+
+                    console.log(`[Orchestrator] Enhance Complete: NIMA=${nimaScore.toFixed(2)}, Applied=${opsApplied.join(', ')}`);
+
+                    // Update processedFile for next stages
+                    // We use common canvas-based conversion
+                    const canvas = document.createElement('canvas');
+                    canvas.width = enhancedData.width;
+                    canvas.height = enhancedData.height;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.putImageData(enhancedData, 0, 0);
+
+                        // Convert back to File/Blob for next stages
+                        const blob: Blob = await new Promise((resolve, reject) => {
+                            canvas.toBlob(b => b ? resolve(b) : reject('Canvas toBlob failed'), 'image/png');
+                        });
+
+                        processedFile = new File([blob], image.name, { type: 'image/png' });
+                    }
+                    enhanceMetadata = { nimaScore, opsApplied };
+                } catch (e) {
+                    console.error('[Orchestrator] LemGendary Enhance failed:', e);
+                }
+                finishStage('ENHANCE');
+            }
+
             // --- STAGE 1: GENERAL RESTORATION (Deblur/Denoise - Pre-Upscale) ---
             if (processingConfig.restoration && processingConfig.restoration.enabled) {
                 const selectedModels = processingConfig.restoration.selectedModels ||
@@ -271,13 +318,14 @@ export const orchestrateCustomProcessing = async (
                 // Enforce Denoise -> Deblur ordering to prevent artifact explosion.
                 // Denoising models stabilize the image before deconvolution.
                 const ORDER_PRIORITY: Record<string, number> = {
-                    'denoising': 0,
-                    'lowlight': 1,
-                    'deraining': 2,
-                    'dehazing': 3,
+                    'lowlight': 0,
+                    'deraining': 1,
+                    'mprnet': 1,
+                    'denoising': 2,
+                    'deblurring': 3,
                     'restoration': 4,
-                    // Face models moved to Stage 5
-                    'deblurring': 6,
+                    'dehazing': 5,
+                    'ffanet': 5,
                     'deblurgan': 6
                 };
 
@@ -321,8 +369,8 @@ export const orchestrateCustomProcessing = async (
                             processedFile as File,
                             modelId,
                             (p) => {
-                                const percent = (p.current / p.total) * 100;
                                 if (onProgress) {
+                                    const percent = p.granular || (p.current / p.total) * 100;
                                     const restorationGranular = (mIdx * (100 / totalModels)) + (percent / totalModels);
                                     reportProgress('RESTORATION', `${modelPrefix}${modelName}`, restorationGranular, p);
                                 }
@@ -340,7 +388,6 @@ export const orchestrateCustomProcessing = async (
                     (image as any).restorationApplied = (processedFile as any).restorationApplied;
                 }
             }
-            safeCleanupGPUMemory();
             finishStage('RESTORATION');
 
             // --- STAGE 2: COLOR PRE-CORRECTION (Pre-SR) ---
@@ -413,7 +460,6 @@ export const orchestrateCustomProcessing = async (
 
                 reportProgress('CROP', mode === CROP_MODES.SMART ? t('crop.smart') : t('crop.standard'), 100);
             }
-            safeCleanupGPUMemory();
             finishStage('CROP');
 
             // --- STAGE 4: ULTRAZOOM (ROI-Aware Upscaling) ---
@@ -443,7 +489,7 @@ export const orchestrateCustomProcessing = async (
                             format: IMAGE_FORMATS.WEBP
                         },
                         (p) => {
-                            const percent = (p.current / p.total) * 100;
+                            const percent = p.granular || (p.current / p.total) * 100;
                             reportProgress('ULTRAZOOM', t('resize.title'), percent, p);
                         }
                     );
@@ -461,7 +507,6 @@ export const orchestrateCustomProcessing = async (
                     }
                 }
             }
-            safeCleanupGPUMemory();
             finishStage('ULTRAZOOM');
 
             // --- STAGE 5: FACE RESTORATION (Post-Upscale) ---
@@ -509,7 +554,6 @@ export const orchestrateCustomProcessing = async (
                     (image as any).restorationApplied = (processedFile as any).restorationApplied;
                 }
             }
-            safeCleanupGPUMemory();
             finishStage('FACE_RESTORATION');
 
             const outputFormats = processingConfig.output?.formats || [IMAGE_FORMATS.WEBP];
@@ -536,16 +580,16 @@ export const orchestrateCustomProcessing = async (
                     reportProgress('POLISH', stageLabel, (fIdx / outputFormats.length) * 100);
 
                     const targetFormat = format === IMAGE_FORMATS.ORIGINAL
-                        ? (processedFile.type ? processedFile.type.split('/')[1] : 'png')
+                        ? (!(processedFile instanceof ImageData) && processedFile.type ? processedFile.type.split('/')[1] : 'png')
                         : format;
 
-                    const optimizedFile: Blob = await processLengendaryOptimize(
+                    const optimizedFile: File = await processLengendaryOptimize(
                         processedFile as File,
                         processingConfig.output?.quality || 0.8,
                         targetFormat,
                         filter,
-                        (processingConfig.output as any)?.targetSize,
-                        { ...processingConfig, colorCorrection: undefined }
+                        null,
+                        processingConfig
                     );
 
                     let fileName = image.name;
@@ -600,7 +644,8 @@ export const orchestrateCustomProcessing = async (
                         name: fileName,
                         type: `image/${format}`,
                         format: format,
-                        processed: true
+                        processed: true,
+                        enhanceMetadata
                     } as any);
                 }
             }
@@ -612,7 +657,7 @@ export const orchestrateCustomProcessing = async (
             });
         } finally {
             if (i % 3 === 0) {
-                safeCleanupGPUMemory();
+                // Removed aggressive cleanup
             }
         }
     }

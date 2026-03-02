@@ -4,6 +4,7 @@
     "useDefineForClassFields": true,
     "lib": [
       "ES2020",
+      "ESNext",
       "DOM",
       "DOM.Iterable"
     ],
@@ -22,7 +23,8 @@
       "react-dom",
       "node",
       "vite/client",
-      "vitest/globals"
+      "vitest/globals",
+      "@webgpu/types"
     ],
     /* Strict Mode */
     "strict": true,

@@ -1,39 +1,42 @@
-.watermark-card.card {
-    padding: var(--space-lg);
+/* ==========================================================================
+   WATERMARK CARD STYLES
+   ========================================================================== */
+
+.watermark-card .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
 }
 
 .watermark-card .form-group {
-    margin-bottom: var(--space-md);
-}
-
-.watermark-card .form-group:last-child {
     margin-bottom: 0;
 }
 
-.toggle-btn {
-    margin-bottom: var(--space-md);
-}
-
-.watermark-info-box {
-    background-color: var(--bg-info);
-    border-radius: var(--radius-sm);
-    padding: var(--space-sm);
-    margin-bottom: var(--space-md);
-    font-size: var(--font-size-sm);
-    border-left: 4px solid var(--color-primary);
-}
-
-.watermark-info-box p {
-    margin: 0;
-    color: var(--text-muted);
+/* Type toggle buttons — same style as format-actions */
+.watermark-type-actions {
     display: flex;
-    align-items: flex-start;
+    flex-direction: row;
     gap: var(--space-xs);
 }
 
-.watermark-info-box i {
-    color: var(--color-primary);
-    margin-top: 2px;
+.watermark-type-actions .btn {
+    flex: 1;
+}
+
+/* Active type button: white text on blue */
+.watermark-type-btn--active {
+    background-color: var(--color-primary) !important;
+    color: #fff !important;
+    border-color: var(--color-primary) !important;
+}
+
+.watermark-type-btn--active:hover {
+    opacity: 0.9;
+}
+
+/* Font size input half-width */
+.watermark-font-size-input {
+    max-width: 100%;
 }
 
 .form-control-color {
@@ -51,7 +54,7 @@
     pointer-events: none;
 }
 
-/* Missing Outline Buttons from App.css */
+/* Outline button styles (shared) */
 .btn-outline-primary {
     background-color: transparent;
     color: var(--color-primary);

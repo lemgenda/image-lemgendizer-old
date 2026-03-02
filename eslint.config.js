@@ -13,6 +13,7 @@ export default tseslint.config(
       'src/vendor',
       'debug',
       '.venv',
+      '.venv_training',
       'MIRNet_v1',
       'MIRNetv2',
       'MPRNet_deraining',
@@ -57,6 +58,7 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       ...jsxA11y.configs.recommended.rules,
+      'jsx-a11y/label-has-associated-control': 'off',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },

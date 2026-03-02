@@ -289,8 +289,8 @@
 }
 
 .templates-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 10px;
     margin-bottom: 20px;
     width: 100%;
@@ -312,7 +312,6 @@
     min-height: 50px;
     min-width: 0;
     width: 100%;
-    max-width: 80%;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -452,7 +451,6 @@
     }
 
     .templates-grid {
-        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
         gap: 6px;
     }
 

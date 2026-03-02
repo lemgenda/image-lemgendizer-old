@@ -928,6 +928,12 @@ body {
     text-decoration: none;
     white-space: nowrap;
     line-height: 1;
+    background-color: transparent;
+    /* Fix for weird button icon backgrounds */
+}
+
+.btn i {
+    background: transparent !important;
 }
 
 .btn:disabled {
@@ -1164,11 +1170,29 @@ body {
     position: absolute;
     left: 5px;
     top: 2px;
-    width: 5px;
-    height: 9px;
+    width: 6px;
+    height: 10px;
     border: solid white;
-    border-width: 0 2px 2px 0;
+    border-width: 0 2.5px 2.5px 0;
     transform: rotate(45deg);
+}
+
+/* Radio button support */
+.checkbox-input[type="radio"]~.checkbox-custom {
+    border-radius: 50%;
+}
+
+.checkbox-input[type="radio"]:checked~.checkbox-custom::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    width: 6px;
+    height: 6px;
+    background-color: white;
+    border: none;
+    border-radius: 50%;
+    transform: none;
 }
 
 .checkbox-label {
@@ -1294,3 +1318,144 @@ body {
     margin: 0 auto var(--space-md) !important;
     width: fit-content;
 }
+
+/* ==========================================================================
+   SIDE-BY-SIDE LAYOUT ENHANCEMENTS & ACCORDIONS
+   ========================================================================== */
+
+/* Main split layout container */
+.processing-layout-split {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+}
+
+@media (min-width: 1024px) {
+    .processing-layout-split {
+        display: grid;
+        grid-template-columns: minmax(320px, 350px) 1fr;
+        align-items: start;
+    }
+
+    .processing-sidebar {
+        position: sticky;
+        top: var(--space-lg);
+        max-height: calc(100vh - 4rem);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        overflow-x: hidden;
+        /* Scrollable but hide scrollbar */
+        scrollbar-width: none;
+        /* Firefox */
+        -ms-overflow-style: none;
+        /* IE/Edge */
+        padding-right: 0;
+    }
+
+    .processing-sidebar::-webkit-scrollbar {
+        display: none;
+        /* Chrome/Safari */
+    }
+
+    .tab-content {
+        flex: 1;
+        min-height: 0;
+    }
+
+    .sidebar-footer {
+        display: none;
+        /* Removing redundant footer */
+    }
+}
+
+/* Fix button icons to not have background colors unless active */
+.btn-icon:not(.active) i,
+.btn i {
+    background: transparent !important;
+}
+
+/* Ensure custom checkbox/radio backgrounds are correct */
+.checkbox-custom {
+    background-color: var(--color-bg-tertiary);
+    border: 1px solid var(--border-color);
+}
+
+.checkbox-input:checked~.checkbox-custom {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+/* Accordion card styling using native HTML <details> */
+details.settings-accordion {
+    background-color: var(--color-bg-secondary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    margin-bottom: var(--space-lg);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--transition-fast);
+}
+
+details.settings-accordion:hover {
+    box-shadow: var(--shadow-md);
+}
+
+details.settings-accordion>summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-lg);
+    font-size: 1.15rem;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+    /* Hide default arrow */
+    user-select: none;
+    color: var(--color-text-primary);
+}
+
+details.settings-accordion>summary::-webkit-details-marker {
+    display: none;
+}
+
+details.settings-accordion>summary i.fa-chevron-down {
+    transition: transform var(--transition-fast) ease-in-out;
+    color: var(--color-text-muted);
+}
+
+details.settings-accordion[open]>summary {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: var(--space-md);
+}
+
+details.settings-accordion[open]>summary i.fa-chevron-down {
+    transform: rotate(180deg);
+}
+
+details.settings-accordion>.accordion-content,
+details.settings-accordion .card-body {
+    padding: var(--space-lg);
+    padding-top: var(--space-md);
+}
+
+/* Replace regular card inside an accordion */
+details.settings-accordion .card {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+}
+
+details.settings-accordion :not(summary).card-header {
+    display: none;
+    /* Let summary act as header, but don't hide the summary itself */
+}
+
+/* Suppress .card-header border when accordion is collapsed */
+details.settings-accordion:not([open])>summary.card-header,
+details.settings-accordion:not([open])>summary {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding: var(--space-sm);
+}

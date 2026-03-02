@@ -3,10 +3,11 @@
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
     padding: var(--space-lg);
-    margin-bottom: var(--space-lg);
+    margin-bottom: 0;
     box-shadow: var(--shadow-sm);
     transition: box-shadow var(--transition-fast);
 }
+
 
 .gallery-card:hover {
     box-shadow: var(--shadow-md);

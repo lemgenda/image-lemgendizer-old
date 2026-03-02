@@ -53,7 +53,7 @@ describe('Restoration Flow', () => {
 
         // 3. Select a Model (e.g., Deraining)
         // Note: Toggle is removed, selecting a model implicitly enables restoration
-        const derainingOption = screen.getByText(/Deraining/i);
+        const derainingOption = screen.getByTestId('restoration-option-MPRNet-Deraining');
         fireEvent.click(derainingOption);
 
         // 5. Trigger Processing
@@ -94,7 +94,7 @@ describe('Restoration Flow', () => {
         // Select Dehazing Indoor
         // Note: Toggle is removed, selecting a model implicitly enables restoration
         // Label is 'Dehazing (Indoor)' in i18n
-        const dehazingOption = screen.getByText(/Dehazing.*Indoor/i);
+        const dehazingOption = screen.getByTestId('restoration-option-FFANet-Dehazing(Indoor)');
         fireEvent.click(dehazingOption);
 
         // Process

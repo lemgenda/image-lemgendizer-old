@@ -17,8 +17,16 @@ import {
     calculateSafeDimensions
 } from '../utils';
 import { safeCleanupGPUMemory, registerUpscaler, unregisterUpscaler } from '../utils/memoryUtils';
+import SharpenWorker from '../workers/sharpen.worker?worker&inline';
 
-// ... (existing code)
+// Persistent sharpen worker singleton
+let sharpenWorker: Worker | null = null;
+const getSharpenWorker = (): Worker => {
+    if (!sharpenWorker) {
+        sharpenWorker = new SharpenWorker();
+    }
+    return sharpenWorker;
+};
 
 
 // Upscaler state management
@@ -51,21 +59,22 @@ const applySmartSharpening = (canvas: HTMLCanvasElement, ctx: CanvasRenderingCon
 
             const imageData = ctx.getImageData(0, 0, width, height);
 
-            // Create worker
-            const worker = new Worker(new URL('../workers/sharpen.worker.js', import.meta.url));
+            // Use persistent worker
+            const worker = getSharpenWorker();
 
-            worker.onmessage = (e) => {
+            const handleMessage = (e: MessageEvent) => {
+                worker.removeEventListener('message', handleMessage);
                 if (e.data.processed && e.data.imageData) {
                     ctx.putImageData(e.data.imageData, 0, 0);
                 }
-                worker.terminate();
                 resolve();
             };
+            worker.addEventListener('message', handleMessage);
 
-            worker.onerror = () => {
-                worker.terminate();
+            worker.addEventListener('error', () => {
+                worker.removeEventListener('message', handleMessage);
                 resolve(); // Fail silently to continue processing
-            };
+            }, { once: true });
 
             worker.postMessage({
                 imageData: imageData,

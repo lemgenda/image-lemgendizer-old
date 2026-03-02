@@ -8,15 +8,27 @@
     gap: var(--space-md);
 }
 
+.format-selection-card--compact .card-body {
+    gap: var(--space-sm);
+}
+
+.format-selection-card--compact .form-group {
+    margin-bottom: 0;
+}
+
 .format-selection-card .checkbox-group {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-sm);
+    gap: var(--space-xs);
 }
 
 .format-actions {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: var(--space-xs);
     margin-top: var(--space-sm);
+}
+
+.format-actions .btn {
+    flex: 1;
 }

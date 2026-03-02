@@ -1,5 +1,5 @@
 import TemplateSelectionCard from './TemplateSelectionCard';
-import type { ProcessingOptions, ImageFile } from '../types';
+import type { ProcessingOptions } from '../types';
 
 /**
  * @file TemplateProcessingTab.tsx
@@ -9,10 +9,6 @@ import type { ProcessingOptions, ImageFile } from '../types';
 interface TemplateProcessingTabProps {
     processingOptions: ProcessingOptions;
     templateCategories: any[];
-    onSelectAllTemplates: () => void;
-    onClearAllTemplates: () => void;
-    onSelectAllInCategory: (category: string) => void;
-    onDeselectAllInCategory: (category: string) => void;
     onTemplateToggle: (templateId: string) => void;
     getTranslatedTemplateName: (name: string, tFunc: any) => string;
     isScreenshotSelected: boolean;
@@ -25,16 +21,11 @@ interface TemplateProcessingTabProps {
     onCaptureScreenshots: (url: string, templates: string[]) => void;
     selectedScreenshotTemplates: string[];
     onScreenshotTemplateToggle: (templateId: string) => void;
-    onSelectAllScreenshotTemplates: () => void;
-    onDeselectAllScreenshotTemplates: () => void;
     isFaviconSelected: boolean;
     onFaviconToggle: (selected: boolean) => void;
-    onOptionChange: (category: keyof ProcessingOptions, key: string, value: any) => void;
     onSingleOptionChange: (key: keyof ProcessingOptions, value: any) => void;
-    templateSelectedImageObj?: ImageFile;
+    templateSelectedImageObj?: any;
     isLoading: boolean;
-    onProcessTemplates: () => void;
-    formatFileSize: (size: number) => string;
     t: (key: string, params?: any) => string;
 }
 
@@ -44,9 +35,51 @@ interface TemplateProcessingTabProps {
  * @param {TemplateProcessingTabProps} props - Component props.
  * @returns {JSX.Element} The rendered template processing tab.
  */
-const TemplateProcessingTab = (props: TemplateProcessingTabProps) => {
+const TemplateProcessingTab = ({
+    processingOptions,
+    templateCategories,
+    onTemplateToggle,
+    getTranslatedTemplateName,
+    isScreenshotSelected,
+    onScreenshotToggle,
+    screenshotUrl,
+    onScreenshotUrlChange,
+    screenshotValidation,
+    isCapturingScreenshots,
+    captureProgress,
+    onCaptureScreenshots,
+    selectedScreenshotTemplates,
+    onScreenshotTemplateToggle,
+    isFaviconSelected,
+    onFaviconToggle,
+    onSingleOptionChange,
+    templateSelectedImageObj,
+    isLoading,
+    t
+}: TemplateProcessingTabProps) => {
     return (
-        <TemplateSelectionCard {...props} />
+        <TemplateSelectionCard
+            processingOptions={processingOptions}
+            templateCategories={templateCategories}
+            onTemplateToggle={onTemplateToggle}
+            getTranslatedTemplateName={getTranslatedTemplateName}
+            isScreenshotSelected={isScreenshotSelected}
+            onScreenshotToggle={onScreenshotToggle}
+            screenshotUrl={screenshotUrl}
+            onScreenshotUrlChange={onScreenshotUrlChange}
+            screenshotValidation={screenshotValidation}
+            isCapturingScreenshots={isCapturingScreenshots}
+            captureProgress={captureProgress}
+            onCaptureScreenshots={onCaptureScreenshots}
+            selectedScreenshotTemplates={selectedScreenshotTemplates}
+            onScreenshotTemplateToggle={onScreenshotTemplateToggle}
+            isFaviconSelected={isFaviconSelected}
+            onFaviconToggle={onFaviconToggle}
+            onSingleOptionChange={onSingleOptionChange}
+            templateSelectedImageObj={templateSelectedImageObj}
+            isLoading={isLoading}
+            t={t}
+        />
     );
 };
 

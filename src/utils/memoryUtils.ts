@@ -141,43 +141,48 @@ export const cleanupGPUMemory = (): void => {
  * Loads AI model for object detection
  * @returns {Promise<Object>} AI model instance
  */
+let aiModelPromise: Promise<any> | null = null;
+
 /**
  * Loads AI model (initializes worker)
  * @returns {Promise<Object>} Proxy object for AI model compatible with existing code
  */
 export const loadAIModel = async (): Promise<any> => {
     if (aiModel) return aiModel;
-    if (aiModelLoading) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        return loadAIModel();
-    }
 
-    aiModelLoading = true;
-    try {
-        // Initialize the worker
-        await initAIWorker();
+    if (aiModelPromise) return aiModelPromise;
 
-        // Create a proxy object that mimics the coco-ssd model interface
-        // This allows existing code in cropProcessor to work without major changes
-        aiModel = {
-            detect: async (imageElement: HTMLImageElement | HTMLCanvasElement | ImageData) => {
-                return await detectObjectsInWorker(imageElement);
-            },
-            modelType: AI_SETTINGS.MODEL_TYPE,
-            dispose: () => {
-                terminateAIWorker();
-                aiModel = null;
-            }
-        };
+    aiModelPromise = (async () => {
+        aiModelLoading = true;
+        try {
+            // Initialize the worker
+            await initAIWorker();
 
-        aiModelLoading = false;
-        return aiModel;
-    } catch (error) {
-        console.error('[MemoryUtils] Failed to load AI model, falling back to simple model:', error);
-        aiModel = createSimpleAIModel();
-        aiModelLoading = false;
-        return aiModel;
-    }
+            // Create a proxy object that mimics the coco-ssd model interface
+            aiModel = {
+                detect: async (imageElement: HTMLImageElement | HTMLCanvasElement | ImageData) => {
+                    return await detectObjectsInWorker(imageElement);
+                },
+                modelType: AI_SETTINGS.MODEL_TYPE,
+                dispose: () => {
+                    terminateAIWorker();
+                    aiModel = null;
+                    aiModelPromise = null;
+                }
+            };
+
+            return aiModel;
+        } catch (error) {
+            console.error('[MemoryUtils] Failed to load AI model, falling back to simple model:', error);
+            aiModel = createSimpleAIModel();
+            return aiModel;
+        } finally {
+            aiModelLoading = false;
+            // Note: We keep aiModelPromise so subsequent calls get the same result (model or fallback)
+        }
+    })();
+
+    return aiModelPromise;
 };
 
 
@@ -229,6 +234,14 @@ export const cleanupAllResources = (): void => {
  */
 export const getCurrentMemoryUsage = (): number => {
     return currentMemoryUsage;
+};
+
+/**
+ * Checks if the AI model is currently loading
+ * @returns {boolean} True if loading
+ */
+export const isAIModelLoading = (): boolean => {
+    return aiModelLoading;
 };
 
 /**

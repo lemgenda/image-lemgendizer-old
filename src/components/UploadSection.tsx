@@ -58,6 +58,7 @@ function UploadSection({ onImagesSelected, fileInputRef, isScreenshotMode }: Upl
                     <p className="text-muted">
                         <i className="fas fa-shield-alt icon-sm icon-left"></i> {t('upload.dropZone.processing')}
                     </p>
+
                 </div>
             </div>
 
@@ -69,15 +70,6 @@ function UploadSection({ onImagesSelected, fileInputRef, isScreenshotMode }: Upl
                 onChange={handleFileChange}
                 className="hidden"
             />
-
-            <div className="text-center mt-md">
-                <button
-                    className="btn btn-primary"
-                    onClick={() => fileInputRef.current?.click()}
-                >
-                    <i className="fas fa-folder-open"></i> {t('upload.selectImages')}
-                </button>
-            </div>
         </div>
     )
 }

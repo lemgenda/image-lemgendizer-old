@@ -480,17 +480,40 @@ export const processLengendaryOptimize = async (
                 const mimeStr = MIME_TYPE_MAP[format as keyof typeof MIME_TYPE_MAP] || MIME_TYPE_MAP.webp;
                 const extension = format === IMAGE_FORMATS.ORIGINAL ? 'webp' : format.toLowerCase();
 
-                canvas.toBlob(blob => {
-                    URL.revokeObjectURL(objectUrl);
-                    if (blob) {
-                        const originalName = imageFile.name || 'image';
-                        const baseName = originalName.replace(/\.[^/.]+$/, '');
-                        const newName = `${baseName}.${extension}`;
-                        resolve(new File([blob], newName, { type: mimeStr }));
-                    } else {
-                        reject(new Error('Image encoding failed'));
-                    }
-                }, mimeStr, quality);
+                if (format === IMAGE_FORMATS.JXL) {
+                    import('../utils/jxlUtils').then(async ({ encodeJXL }) => {
+                        try {
+                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                            // Quality is typically 0-1 in native HTML Canvas, mapped to 0-100 for JXL encode
+                            const jxlBytes = await encodeJXL(imageData, Math.round(quality * 100));
+                            URL.revokeObjectURL(objectUrl);
+
+                            const originalName = imageFile.name || 'image';
+                            const baseName = originalName.replace(/\.[^/.]+$/, '');
+                            const newName = `${baseName}.${extension}`;
+
+                            resolve(new File([jxlBytes as unknown as BlobPart], newName, { type: mimeStr }));
+                        } catch (e: any) {
+                            URL.revokeObjectURL(objectUrl);
+                            reject(new Error(`JXL encoding failed: ${e.message}`));
+                        }
+                    }).catch(err => {
+                        URL.revokeObjectURL(objectUrl);
+                        reject(new Error(`Failed to load JXL adapter: ${err.message}`));
+                    });
+                } else {
+                    canvas.toBlob(blob => {
+                        URL.revokeObjectURL(objectUrl);
+                        if (blob) {
+                            const originalName = imageFile.name || 'image';
+                            const baseName = originalName.replace(/\.[^/.]+$/, '');
+                            const newName = `${baseName}.${extension}`;
+                            resolve(new File([blob], newName, { type: mimeStr }));
+                        } else {
+                            reject(new Error('Image encoding failed'));
+                        }
+                    }, mimeStr, quality);
+                }
 
             } catch (error: any) {
                 URL.revokeObjectURL(objectUrl);
@@ -575,6 +598,10 @@ export const getProcessingConfiguration = (processingOptions: any): any => {
             modelName: processingOptions.restoration.modelName || 'mprnet-deraining-restoration-fp16',
             selectedModels: processingOptions.restoration.selectedModels || [],
             fidelity: parseFloat(processingOptions.restoration.fidelity) || 0.9
+        } : undefined,
+        enhance: processingOptions.enhance ? {
+            enabled: !!processingOptions.enhance.enabled,
+            autoMode: !!processingOptions.enhance.autoMode
         } : undefined,
         processingMode: processingOptions.processingMode
     };

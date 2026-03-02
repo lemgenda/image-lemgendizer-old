@@ -439,8 +439,8 @@ export const AI_SETTINGS = {
     TENSORFLOW_VERSION: '4.22.0',
     COCO_SSD_VERSION: '2.2.3',
     WEBGPU_BACKEND_VERSION: '4.22.0',
-    LOCAL_MODEL_PATH: '/models/',
-    LOCAL_LIB_PATH: '/lib/'
+    LOCAL_MODEL_PATH: 'models/',
+    LOCAL_LIB_PATH: 'ort/'
 } as const;
 
 export const SMART_CROP_CONFIG = {

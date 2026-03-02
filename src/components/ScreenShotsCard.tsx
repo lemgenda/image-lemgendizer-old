@@ -34,8 +34,6 @@ interface ScreenshotsCardProps {
     onCaptureClick: (url: string, templates: string[]) => void;
     selectedTemplates: string[];
     onTemplateToggle: (templateId: string) => void;
-    onSelectAllTemplates: () => void;
-    onDeselectAllTemplates: () => void;
 }
 
 /**
@@ -101,9 +99,7 @@ const ScreenShotsCard = ({
     captureProgress,
     onCaptureClick,
     selectedTemplates,
-    onTemplateToggle,
-    onSelectAllTemplates,
-    onDeselectAllTemplates
+    onTemplateToggle
 }: ScreenshotsCardProps) => {
     const { t } = useTranslation();
     const [url, setUrl] = useState<string>(screenshotUrl || '');
@@ -218,24 +214,7 @@ const ScreenShotsCard = ({
                         <h4 className="template-title">
                             {t('screenshots.selectDevices')}
                         </h4>
-                        <div className="action-buttons">
-                            <button
-                                className="action-button"
-                                onClick={onSelectAllTemplates}
-                                disabled={isCapturing}
-                            >
-                                <i className="fa-solid fa-check-square"></i>
-                                {t('screenshots.selectAll')}
-                            </button>
-                            <button
-                                className="action-button"
-                                onClick={onDeselectAllTemplates}
-                                disabled={isCapturing}
-                            >
-                                <i className="fa-solid fa-square"></i>
-                                {t('screenshots.deselectAll')}
-                            </button>
-                        </div>
+
                     </div>
 
                     <div className="templates-grid">
@@ -258,10 +237,7 @@ const ScreenShotsCard = ({
                                 <div className="template-icon-container">
                                     {getTemplateIcon(template.id)}
                                 </div>
-                                <i
-                                    className="fa-solid fa-circle-info info-icon"
-                                    title={`${t(template.name)} - ${getTemplateDimensions(template)} - ${getDeviceName(template.id)}`}
-                                ></i>
+
                                 <span className="sr-only">{t(template.name)}</span>
                             </label>
                         ))}

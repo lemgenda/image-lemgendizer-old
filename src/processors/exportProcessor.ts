@@ -826,6 +826,36 @@ function createExportSummary(
         operations.push(t ? t('operations.renamed', { pattern }) : `Renamed to ${pattern}`);
     }
 
+    // AI Restoration Prescription
+    const enhancedImagesWithDosages = validProcessedImages.filter((img: any) => img.enhanceMetadata?.policyDosages);
+    if (enhancedImagesWithDosages.length > 0) {
+        operations.push('\nAI RESTORATION PRESCRIPTION:');
+        const aggregatedDosages: Record<string, number> = {};
+        let count = 0;
+
+        enhancedImagesWithDosages.forEach((img: any) => {
+            if (img.enhanceMetadata.policyDosages) {
+                count++;
+                Object.entries(img.enhanceMetadata.policyDosages).forEach(([key, val]) => {
+                    aggregatedDosages[key] = (aggregatedDosages[key] || 0) + (val as number);
+                });
+            }
+        });
+
+        if (count > 0) {
+            Object.entries(aggregatedDosages).forEach(([key, totalVal]) => {
+                const avgVal = Math.round((totalVal / count) * 100);
+                if (avgVal > 0) {
+                    operations.push(`  - ${key.charAt(0).toUpperCase() + key.slice(1)}: ${avgVal}%`);
+                }
+            });
+        }
+    }
+
+    if (settings.elapsedTime) {
+        operations.push(`✓ Total Processing Time: ${settings.elapsedTime.toFixed(1)}s`);
+    }
+
     // Templates special case
     if (mode === PROCESSING_MODES.TEMPLATES && templateCount > 0) {
         operations.push(t ? t('operations.templatesApplied', { count: templateCount }) : `${templateCount} templates applied`);

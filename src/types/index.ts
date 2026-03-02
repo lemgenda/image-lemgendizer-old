@@ -19,6 +19,7 @@ export interface ImageFile {
     url?: string;
     isTIFF?: boolean;
     isSVG?: boolean;
+    isJXL?: boolean;
     format?: string;
     originalFormat?: string;
     processedWidth?: number;
@@ -28,6 +29,11 @@ export interface ImageFile {
     aiCropped?: boolean;
     aiUpscaleScale?: number;
     isLogo?: boolean;
+    enhanceMetadata?: {
+        nimaScore: number;
+        opsApplied: string[];
+        policyDosages?: Record<string, number>; // e.g., { lowlight: 0.45, deblur: 0.12 }
+    };
     subjectProtected?: boolean;
     processed?: boolean;
     error?: string;
@@ -122,6 +128,12 @@ export interface RestorationOptions {
     fidelity?: number;
 }
 
+export interface EnhanceOptions {
+    enabled: boolean;
+    autoMode: boolean; // Fully automatic optimization
+    optimizationTarget: 'quality' | 'latency' | 'balance';
+}
+
 export interface ProcessingOptions {
     processingMode: ProcessingMode;
     output: OutputOptions;
@@ -138,7 +150,7 @@ export interface ProcessingOptions {
     showTemplates: boolean;
     selectedTemplates: string[]; // IDs of selected templates
     templateSelectedImage?: string | null;
-    faviconMode?: 'basic' | 'complete';
+    faviconMode?: 'basic' | 'standard' | 'full';
     faviconSiteName?: string;
     faviconThemeColor?: string;
     faviconBackgroundColor?: string;
@@ -148,6 +160,7 @@ export interface ProcessingOptions {
     colorCorrection?: ColorCorrectionOptions;
     watermark?: WatermarkOptions;
     restoration?: RestorationOptions;
+    enhance?: EnhanceOptions;
 }
 
 // Template System
@@ -209,4 +222,7 @@ export interface ProcessingSummary {
     watermarkApplied: boolean;
     upscaleScale?: number;
     upscaleModel?: string;
+    enhancedImages?: ImageFile[];
+    elapsedTime?: number;
+    policyDosages?: string[];
 }

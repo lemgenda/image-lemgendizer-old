@@ -1,10 +1,6 @@
-import type { ProcessingOptions, ImageFile } from '../types';
+import type { ProcessingOptions } from '../types';
 import ScreenShotsCard from './ScreenShotsCard';
-import TemplateImageSection from './TemplateImageSection';
-import FilterSelectionCard from './FilterSelectionCard';
-import RestorationCard from './RestorationCard';
 import { SOCIAL_MEDIA_TEMPLATES } from '../configs/templateConfigs';
-import { IMAGE_FILTERS } from '../constants';
 import '../styles/TemplateSelectionCard.css';
 
 /**
@@ -20,10 +16,8 @@ interface TemplateCategory {
 interface TemplateSelectionCardProps {
     processingOptions: ProcessingOptions;
     templateCategories: TemplateCategory[];
-    onSelectAllTemplates: () => void;
-    onClearAllTemplates: () => void;
-    onSelectAllInCategory: (categoryId: string) => void;
-    onDeselectAllInCategory: (categoryId: string) => void;
+
+
     onTemplateToggle: (templateId: string) => void;
     getTranslatedTemplateName: (name: string, t: any) => string;
     isScreenshotSelected: boolean;
@@ -36,16 +30,12 @@ interface TemplateSelectionCardProps {
     onCaptureScreenshots: (url: string, templates: string[]) => void;
     selectedScreenshotTemplates: string[];
     onScreenshotTemplateToggle: (templateId: string) => void;
-    onSelectAllScreenshotTemplates: () => void;
-    onDeselectAllScreenshotTemplates: () => void;
+
     isFaviconSelected: boolean;
     onFaviconToggle: (selected: boolean) => void;
-    onOptionChange: (category: keyof ProcessingOptions, key: string, value: any) => void;
     onSingleOptionChange: (key: keyof ProcessingOptions, value: any) => void;
-    templateSelectedImageObj?: ImageFile;
+    templateSelectedImageObj?: any;
     isLoading: boolean;
-    onProcessTemplates: () => void;
-    formatFileSize: (size: number) => string;
     t: (key: string, params?: any) => string;
 }
 
@@ -58,10 +48,8 @@ interface TemplateSelectionCardProps {
 const TemplateSelectionCard = ({
     processingOptions,
     templateCategories,
-    onSelectAllTemplates,
-    onClearAllTemplates,
-    onSelectAllInCategory,
-    onDeselectAllInCategory,
+
+
     onTemplateToggle,
     getTranslatedTemplateName,
     isScreenshotSelected,
@@ -74,48 +62,14 @@ const TemplateSelectionCard = ({
     onCaptureScreenshots,
     selectedScreenshotTemplates,
     onScreenshotTemplateToggle,
-    onSelectAllScreenshotTemplates,
-    onDeselectAllScreenshotTemplates,
+
     isFaviconSelected,
     onFaviconToggle,
-    onOptionChange,
     onSingleOptionChange,
-    templateSelectedImageObj,
-    isLoading,
-    onProcessTemplates,
-    formatFileSize,
     t
 }: TemplateSelectionCardProps) => {
     return (
-        <div className="card">
-            <div className="card-header">
-                <div>
-                    <h3 className="card-title">
-                        <i className="fas fa-th-large"></i> {t('templates.title')}
-                    </h3>
-                    <p className="text-muted mt-xs">
-                        <i className="fas fa-info-circle"></i>
-                        {t('templates.note')}
-                    </p>
-                </div>
-                <div className="card-actions">
-                    <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={onSelectAllTemplates}
-                        disabled={!processingOptions.templateSelectedImage}
-                    >
-                        <i className="fas fa-check-square"></i> {t('templates.selectAll')}
-                    </button>
-                    <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={onClearAllTemplates}
-                        disabled={processingOptions.selectedTemplates.length === 0}
-                    >
-                        <i className="fas fa-times-circle"></i> {t('templates.clearAll')}
-                    </button>
-                </div>
-            </div>
-
+        <div className="flex flex-col mb-lg">
             <div className="templates-grid mb-lg">
                 {templateCategories.map((category) => {
                     const categoryTemplates = SOCIAL_MEDIA_TEMPLATES.filter(template =>
@@ -123,31 +77,15 @@ const TemplateSelectionCard = ({
                     );
 
                     return (
-                        <div key={category.id} className="card">
-                            <div className="card-header">
-                                <h4 className="card-title">
-                                    <i className={`${category.icon} mr-sm`}></i> {t(`category.${category.id}`)}
-                                </h4>
-                                {category.id !== 'screenshots' && (
-                                    <div className="card-actions">
-                                        <button
-                                            className="btn btn-secondary btn-sm"
-                                            onClick={() => onSelectAllInCategory(category.id)}
-                                            disabled={!processingOptions.templateSelectedImage}
-                                        >
-                                            <i className="fas fa-check"></i> {t('templates.selectCategory')}
-                                        </button>
-                                        <button
-                                            className="btn btn-secondary btn-sm"
-                                            onClick={() => onDeselectAllInCategory(category.id)}
-                                            disabled={!processingOptions.templateSelectedImage}
-                                        >
-                                            <i className="fas fa-times"></i> {t('templates.deselectCategory')}
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="space-y-sm">
+                        <details key={category.id} className="settings-accordion" name="template-categories">
+                            <summary style={{ outline: 'none' }}>
+                                <div className="flex items-center gap-sm">
+                                    <i className={`${category.icon} text-primary flex-shrink-0`}></i>
+                                    <span>{t(`category.${category.id}`)}</span>
+                                </div>
+                                <i className="fas fa-chevron-down text-sm"></i>
+                            </summary>
+                            <div className="card-body space-y-sm">
                                 {categoryTemplates.map(template => (
                                     <label key={template.id} className="checkbox-wrapper" htmlFor={`template-${template.id}`} aria-label={template.name}>
                                         <input
@@ -183,8 +121,7 @@ const TemplateSelectionCard = ({
                                             onCaptureClick={onCaptureScreenshots}
                                             selectedTemplates={selectedScreenshotTemplates}
                                             onTemplateToggle={onScreenshotTemplateToggle}
-                                            onSelectAllTemplates={onSelectAllScreenshotTemplates}
-                                            onDeselectAllTemplates={onDeselectAllScreenshotTemplates}
+
                                         />
                                     </div>
                                 )}
@@ -231,60 +168,35 @@ const TemplateSelectionCard = ({
                                                     <span className="flex-1 text-sm">{t('templates.basicSet')}</span>
                                                 </label>
 
+
+
                                                 <label
                                                     className="checkbox-wrapper"
-                                                    htmlFor="favicon-complete"
+                                                    htmlFor="favicon-full"
                                                 >
                                                     <input
-                                                        id="favicon-complete"
+                                                        id="favicon-full"
                                                         type="radio"
                                                         name="faviconMode"
                                                         className="checkbox-input"
-                                                        checked={processingOptions.faviconMode !== 'basic'}
-                                                        onChange={() => onSingleOptionChange('faviconMode', 'complete')}
+                                                        checked={processingOptions.faviconMode === 'full'}
+                                                        onChange={() => onSingleOptionChange('faviconMode', 'full')}
                                                     />
                                                     <span className="checkbox-custom"></span>
-                                                    <span className="flex-1 text-sm">{t('templates.completeSet')}</span>
+                                                    <span className="flex-1 text-sm">{t('templates.fullSet')}</span>
                                                 </label>
                                             </div>
                                         )}
                                     </div>
                                 )}
                             </div>
-                        </div>
+                        </details>
                     );
                 })}
             </div>
-
-            <div className="mb-lg">
-                <RestorationCard
-                    selectedModels={processingOptions.restoration?.selectedModels || []}
-                    onOptionChange={onOptionChange as (category: string, key: string, value: any) => void}
-                    t={t}
-                />
-            </div>
-
-            <div className="mb-lg">
-                <FilterSelectionCard
-                    selectedFilter={processingOptions.filters?.selectedFilter || IMAGE_FILTERS.NONE}
-                    onFilterChange={(filter) => onOptionChange('filters', 'selectedFilter', filter)}
-                    t={t}
-                />
-            </div>
-
-            <TemplateImageSection
-                templateSelectedImageObj={templateSelectedImageObj}
-                processingOptions={processingOptions}
-                isFaviconSelected={isFaviconSelected}
-                isScreenshotSelected={isScreenshotSelected}
-                selectedScreenshotTemplates={selectedScreenshotTemplates}
-                isLoading={isLoading}
-                onProcessTemplates={onProcessTemplates}
-                formatFileSize={formatFileSize}
-                t={t}
-            />
         </div>
     );
+
 };
 
 export default TemplateSelectionCard;

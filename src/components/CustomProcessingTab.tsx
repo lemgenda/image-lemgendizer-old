@@ -1,23 +1,17 @@
 import QualityControlsCard from './QualityControlsCard';
 import ResizeCropCard from './ResizeCropCard';
 import FormatSelectionCard from './FormatSelectionCard';
-import FilterSelectionCard from './FilterSelectionCard';
-import ColorCorrectionCard from './ColorCorrectionCard';
 import WatermarkCard from './WatermarkCard';
-import RestorationCard from './RestorationCard';
-import { CROP_MODES, IMAGE_FILTERS } from '../constants';
-import type { ProcessingOptions, ImageFile } from '../types';
+import type { ProcessingOptions } from '../types';
 
 /**
  * @file CustomProcessingTab.tsx
- * @description Container component for custom image processing controls (quality, resize, crop, filters).
+ * @description Container component for custom image processing controls (quality, resize, crop).
  */
 
 interface CustomProcessingTabProps {
     processingOptions: ProcessingOptions;
-    isLoading: boolean;
     aiLoading: boolean;
-    selectedImagesForProcessing: ImageFile[];
     onOptionChange: (category: keyof ProcessingOptions, key: string, value: any) => void;
     onSingleOptionChange: (key: keyof ProcessingOptions, value: any) => void;
     onFormatToggle: (format: string) => void;
@@ -25,7 +19,9 @@ interface CustomProcessingTabProps {
     onClearAllFormats: () => void;
     onToggleResizeCrop: (type: 'resize' | 'crop') => void;
     onToggleCropMode: (mode: string) => void;
-    onProcess: () => void;
+    processCustomImages: () => Promise<void>;
+    isLoading: boolean;
+    selectedImagesCount: number;
     t: (key: string, params?: any) => string;
 }
 
@@ -37,9 +33,7 @@ interface CustomProcessingTabProps {
  */
 const CustomProcessingTab = ({
     processingOptions,
-    isLoading,
     aiLoading,
-    selectedImagesForProcessing,
     onOptionChange,
     onSingleOptionChange,
     onFormatToggle,
@@ -47,37 +41,21 @@ const CustomProcessingTab = ({
     onClearAllFormats,
     onToggleResizeCrop,
     onToggleCropMode,
-    onProcess,
+    processCustomImages,
+    isLoading,
+    selectedImagesCount,
     t
 }: CustomProcessingTabProps) => {
-    const isProcessDisabled =
-        selectedImagesForProcessing.length === 0 ||
-        isLoading ||
-        (processingOptions.cropMode === CROP_MODES.SMART && aiLoading) ||
-        !processingOptions.output.formats ||
-        processingOptions.output.formats.length === 0;
-
     return (
-        <>
-            <div className="grid grid-cols-auto gap-lg mb-lg">
-                <QualityControlsCard
-                    quality={processingOptions.compression.quality}
-                    fileSize={processingOptions.compression.fileSize}
-                    onQualityChange={onOptionChange}
-                    t={t}
-                />
-
-                <FormatSelectionCard
-                    selectedFormats={processingOptions.output.formats}
-                    rename={processingOptions.output.rename}
-                    newFileName={processingOptions.output.newFileName}
-                    onFormatToggle={onFormatToggle}
-                    onSelectAll={onSelectAllFormats}
-                    onClearAll={onClearAllFormats}
-                    onOptionChange={onOptionChange}
-                    t={t}
-                />
-
+        <div className="flex flex-col mb-lg">
+            <details className="settings-accordion" name="custom-options">
+                <summary>
+                    <div className="flex items-center gap-sm">
+                        <i className="fas fa-expand-arrows-alt text-primary flex-shrink-0"></i>
+                        <span>{t('resize.title')} & {t('crop.title')}</span>
+                    </div>
+                    <i className="fas fa-chevron-down text-sm"></i>
+                </summary>
                 <ResizeCropCard
                     cropWidth={processingOptions.cropWidth}
                     cropHeight={processingOptions.cropHeight}
@@ -91,58 +69,72 @@ const CustomProcessingTab = ({
                     onOptionChange={(key: string, value: any) => onSingleOptionChange(key as keyof ProcessingOptions, value)}
                     t={t}
                 />
+            </details>
 
-                <RestorationCard
-                    selectedModels={processingOptions.restoration?.selectedModels || []}
-                    onOptionChange={onOptionChange as (category: string, key: string, value: any) => void}
+            <details className="settings-accordion" name="custom-options">
+                <summary>
+                    <div className="flex items-center gap-sm">
+                        <i className="fas fa-file-export text-primary flex-shrink-0"></i>
+                        <span>{t('output.title') || 'Output Settings'}</span>
+                    </div>
+                    <i className="fas fa-chevron-down text-sm"></i>
+                </summary>
+                <FormatSelectionCard
+                    selectedFormats={processingOptions.output.formats}
+                    rename={processingOptions.output.rename}
+                    newFileName={processingOptions.output.newFileName}
+                    onFormatToggle={onFormatToggle}
+                    onSelectAll={onSelectAllFormats}
+                    onClearAll={onClearAllFormats}
+                    onOptionChange={onOptionChange}
+                    enhanceEnabled={processingOptions.enhance?.enabled || false}
                     t={t}
                 />
+            </details>
 
+            <details className="settings-accordion" name="custom-options">
+                <summary>
+                    <div className="flex items-center gap-sm">
+                        <i className="fas fa-water text-primary flex-shrink-0"></i>
+                        <span>{t('watermark.title') || 'Watermark'}</span>
+                    </div>
+                    <i className="fas fa-chevron-down text-sm"></i>
+                </summary>
                 <WatermarkCard
                     watermark={processingOptions.watermark}
                     onOptionChange={onOptionChange as (category: string, key: string, value: any) => void}
                 />
+            </details>
 
-                <div className="col-span-2">
-                    <ColorCorrectionCard />
-                </div>
-            </div>
-
-            <div className="mb-lg">
-                <FilterSelectionCard
-                    selectedFilter={processingOptions.filters?.selectedFilter || IMAGE_FILTERS.NONE}
-                    onFilterChange={(filter: string) => onOptionChange('filters', 'selectedFilter', filter)}
+            <details className="settings-accordion" name="custom-options">
+                <summary>
+                    <div className="flex items-center gap-sm">
+                        <i className="fas fa-compress-alt text-primary flex-shrink-0"></i>
+                        <span>{t('compression.title') || 'Compression'}</span>
+                    </div>
+                    <i className="fas fa-chevron-down text-sm"></i>
+                </summary>
+                <QualityControlsCard
+                    quality={processingOptions.compression.quality}
+                    fileSize={processingOptions.compression.fileSize}
+                    onQualityChange={onOptionChange}
                     t={t}
-                    disabled={!!processingOptions.colorCorrection?.enabled}
                 />
-            </div>
+            </details>
 
-            <div className="text-center mb-lg">
+            <div className="mt-lg" style={{ paddingTop: 'var(--space-md)', borderTop: '1px solid var(--border-color)' }}>
                 <button
-                    className="btn btn-primary btn-lg"
-                    disabled={isProcessDisabled}
-                    onClick={onProcess}
+                    className="btn btn-primary w-full"
+                    onClick={processCustomImages}
+                    disabled={isLoading || selectedImagesCount === 0}
                 >
-                    {isLoading ? (
-                        <>
-                            <i className="fas fa-spinner fa-spin"></i> {t('button.processing')}
-                        </>
-                    ) : processingOptions.cropMode === CROP_MODES.SMART && aiLoading ? (
-                        <>
-                            <i className="fas fa-spinner fa-spin"></i> {t('button.loadingAI')}
-                        </>
-                    ) : (
-                        <>
-                            <i className="fas fa-download"></i> {t('button.process')}
-                            <span className="ml-1">
-                                ({t('button.imageCount', { count: selectedImagesForProcessing.length })} × {t('button.formatCount', { count: processingOptions.output.formats.length })})
-                            </span>
-                        </>
-                    )}
+                    <i className="fas fa-cog"></i>
+                    {isLoading ? t('button.processing') : `${t('button.process')} (${selectedImagesCount})`}
                 </button>
             </div>
-        </>
+        </div>
     );
+
 };
 
 export default CustomProcessingTab;

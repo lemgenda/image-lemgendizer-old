@@ -4,6 +4,8 @@
  */
 import { AI_SETTINGS, IMAGE_LOAD_TIMEOUT, ERROR_MESSAGES } from '../constants';
 
+import AIWorker from '../workers/ai.worker?worker&inline';
+
 // Singleton worker instance
 let aiWorker: Worker | null = null;
 let workerLoadPromise: Promise<void> | null = null;
@@ -30,28 +32,45 @@ export const initAIWorker = (): Promise<void> => {
 
         try {
             // Instantiate the worker
-            aiWorker = new Worker(new URL('../workers/ai.worker.ts', import.meta.url), {
-                type: 'classic' // Use classic to allow importScripts
-            });
+            aiWorker = new AIWorker();
+
+            const timeout = setTimeout(() => {
+                aiWorker?.terminate();
+                aiWorker = null;
+                workerLoadPromise = null; // Clear promise on timeout
+                reject(new Error('AI Worker initialization timed out (30s)'));
+            }, 30000);
 
             // Set up one-time listener for the load event
             const handleLoadMessage = (e: MessageEvent) => {
                 const { type, error } = e.data;
                 if (type === 'loaded') {
+                    clearTimeout(timeout);
                     aiWorker?.removeEventListener('message', handleLoadMessage);
                     resolve();
                 } else if (type === 'error') {
+                    clearTimeout(timeout);
                     aiWorker?.removeEventListener('message', handleLoadMessage);
+                    aiWorker?.terminate();
+                    aiWorker = null;
+                    workerLoadPromise = null; // Clear promise on error
                     reject(new Error(error));
                 }
             };
 
             aiWorker.addEventListener('message', handleLoadMessage);
 
+            // Resolve paths relative to Vite's root base to prevent Worker 404s
+            const base = import.meta.env.BASE_URL || '/';
+            const resolvePath = (p: string) => {
+                const clean = p.startsWith('/') ? p.slice(1) : p;
+                return base.endsWith('/') ? base + clean : base + '/' + clean;
+            };
+
             // Send configuration to start loading
             const config: AIWorkerConfig = {
-                localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
-                localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
+                localLibPath: resolvePath(AI_SETTINGS.LOCAL_LIB_PATH),
+                localModelPath: resolvePath(AI_SETTINGS.LOCAL_MODEL_PATH),
                 modelType: AI_SETTINGS.MODEL_TYPE,
                 useWebGPU: true // Default to true, worker handles fallback
             };
@@ -59,6 +78,8 @@ export const initAIWorker = (): Promise<void> => {
             aiWorker.postMessage({ type: 'load', config });
 
         } catch (err) {
+            aiWorker?.terminate();
+            aiWorker = null;
             workerLoadPromise = null;
             reject(err);
         }
@@ -352,6 +373,92 @@ export const restoreInWorker = async (
             };
 
             aiWorker.postMessage({ type: 'restore', imageData, config }, [imageData.data.buffer]);
+        } catch (err) {
+            reject(err);
+        }
+    });
+};
+/**
+ * Enhances an image using the LemGendary Enhance system in the AI Worker
+ */
+export const enhanceInWorker = async (
+    imageSource: HTMLImageElement | HTMLCanvasElement | ImageData | Blob | File | ImageBitmap,
+    onProgress?: (progress: any) => void,
+    options: any = {}
+): Promise<{ data: ImageData, nimaScore: number, opsApplied: string[] }> => {
+    await initAIWorker();
+
+    // Prepare image data before creating the promise
+    let imageData: ImageData;
+
+    if (imageSource instanceof ImageData) {
+        imageData = imageSource;
+    } else if (imageSource instanceof File || imageSource instanceof Blob) {
+        // Load File/Blob into an Image element first
+        const img = new Image();
+        const url = URL.createObjectURL(imageSource);
+
+        await new Promise<void>((imgResolve, imgReject) => {
+            img.onload = () => imgResolve();
+            img.onerror = () => imgReject(new Error('Failed to load image'));
+            img.src = url;
+        });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Failed to get canvas context');
+        ctx.drawImage(img, 0, 0);
+        imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        URL.revokeObjectURL(url);
+    } else if (imageSource instanceof HTMLImageElement ||
+        imageSource instanceof HTMLCanvasElement ||
+        imageSource instanceof ImageBitmap) {
+        // Handle valid drawable types
+        const canvas = document.createElement('canvas');
+        canvas.width = (imageSource as any).width || (imageSource as any).naturalWidth;
+        canvas.height = (imageSource as any).height || (imageSource as any).naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Failed to get canvas context');
+        ctx.drawImage(imageSource as any, 0, 0);
+        imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    } else {
+        throw new Error('Invalid image source type');
+    }
+
+    return new Promise((resolve, reject) => {
+        if (!aiWorker) {
+            reject(new Error('AI Worker not initialized'));
+            return;
+        }
+
+        try {
+            const handleEnhanceMessage = (e: MessageEvent) => {
+                const { type, data, nimaScore, opsApplied, error } = e.data;
+                if (type === 'enhance_result') {
+                    aiWorker?.removeEventListener('message', handleEnhanceMessage);
+                    resolve({ data, nimaScore, opsApplied });
+                } else if (type === 'progress') {
+                    if (onProgress && data) {
+                        onProgress(data);
+                    }
+                } else if (type === 'error') {
+                    aiWorker?.removeEventListener('message', handleEnhanceMessage);
+                    reject(new Error(error));
+                }
+            };
+
+            aiWorker.addEventListener('message', handleEnhanceMessage);
+
+            const config = {
+                localLibPath: AI_SETTINGS.LOCAL_LIB_PATH,
+                localModelPath: AI_SETTINGS.LOCAL_MODEL_PATH,
+                ...options
+            };
+
+            aiWorker.postMessage({ type: 'enhance', imageData, config }, [imageData.data.buffer]);
         } catch (err) {
             reject(err);
         }

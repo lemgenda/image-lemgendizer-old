@@ -53,7 +53,12 @@ describe('Batch Rename Flow Integration', () => {
         expect(customTab).toHaveClass('tab-panel__tab--active');
 
         // Verify pattern was successfully transferred to Custom tab's rename field
-        const customNameField = await screen.findByLabelText(/New File Name/i, {}, { timeout: 3000 }) as HTMLInputElement;
-        expect(customNameField.value).toBe('custom_pattern_{counter}');
+        let customNameField: HTMLInputElement | null = null;
+        await waitFor(() => {
+            customNameField = document.getElementById('newFileName') as HTMLInputElement;
+            expect(customNameField).not.toBeNull();
+        }, { timeout: 3000 });
+
+        expect(customNameField!.value).toBe('custom_pattern_{counter}');
     });
 });

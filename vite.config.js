@@ -10,7 +10,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', '**/*.wasm'],
       manifest: {
         name: 'Image LemGendizer',
         short_name: 'LemGendizer',
@@ -36,7 +36,9 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        maximumFileSizeToCacheInBytes: 50000000,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,wasm}'],
+        navigateFallbackDenylist: [/^\/.*\/hmr/], // Exclude HMR
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/@tensorflow\/tfjs-backend-webgpu.*/i,
@@ -94,14 +96,25 @@ export default defineConfig({
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-utils': ['jszip', 'file-saver', 'html2canvas']
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('onnxruntime-web')) return 'vendor-onnx';
+            if (id.includes('@fortawesome')) return 'vendor-icons';
+            if (id.includes('react') || id.includes('react-dom')) return 'vendor-react';
+            return 'vendor';
+          }
         }
       }
     },
     // Reduce chunk size warning
-    chunkSizeWarningLimit: 1000
+    chunkSizeWarningLimit: 2000
+  },
+
+  // Treat WASM as static assets
+  assetsInclude: ['**/*.wasm'],
+
+  optimizeDeps: {
+    exclude: ['onnxruntime-web']
   },
 
   // Development server configuration
@@ -110,6 +123,11 @@ export default defineConfig({
     host: true,
     open: true,
     strictPort: true,
+    // Note: COOP/COEP headers removed from dev server.
+    // They cause browsing context recreation which breaks Vite HMR websockets.
+    // SharedArrayBuffer (needed for threaded WASM) won't be available in dev,
+    // but onnxruntime-web falls back to non-threaded WASM automatically.
+    // For production, set these headers in your hosting config (Netlify, Vercel, etc).
     // Proxy for browserless API (development only)
     proxy: {
       '/api/browserless': {
@@ -126,6 +144,9 @@ export default defineConfig({
           })
         }
       }
+    },
+    watch: {
+      ignored: ['**/models/**', '**/*.onnx', '**/*.wasm', '**/.venv/**', '**/.venv_training/**', '**/training/**']
     }
   },
 

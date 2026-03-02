@@ -3,7 +3,7 @@
  * @description Central state management for image processing, UI state, and AI model coordination.
  */
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProcessingOptions, ImageFile, ProcessingMode, ProcessingSummary } from '../types';
 import {
@@ -44,7 +44,8 @@ import {
     DEFAULT_FAVICON_SITE_NAME,
     DEFAULT_FAVICON_THEME_COLOR,
     FAVICON_SIZES,
-    FAVICON_SIZES_BASIC
+    FAVICON_SIZES_BASIC,
+    FAVICON_TEMPLATE_ID
 } from '../configs/templateConfigs';
 import {
     PROCESSING_MODES,
@@ -138,7 +139,7 @@ interface ProcessingContextValue {
     templateCategories: TemplateCategory[];
     templateSelectedImageObj: ImageFile | null;
     showModal: (title: string, message: string, type?: any, showProgress?: boolean) => void;
-    showSummaryModal: (summary: ProcessingSummary) => void;
+    showSummaryModal: (summary: ProcessingSummary, processedImages?: ImageFile[]) => void;
     setProcessingOptions: React.Dispatch<React.SetStateAction<ProcessingOptions>>;
 }
 
@@ -172,8 +173,6 @@ export const useProcessingContext = (): ProcessingContextValue => {
 export const ProcessingProvider = ({ children }: ProcessingProviderProps): React.ReactElement => {
     const { t } = useTranslation();
     const [isScreenshotMode, setIsScreenshotMode] = useState(false);
-    const [isFaviconSelected, setIsFaviconSelected] = useState(false);
-    const [isScreenshotSelected, setIsScreenshotSelected] = useState(false);
     const [screenshotUrl, setScreenshotUrl] = useState('');
     const [screenshotResults] = useState(null);
     const [isCapturingScreenshots, setIsCapturingScreenshots] = useState(false);
@@ -198,6 +197,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         progress: 0,
         progressStep: ''
     });
+
     const [isLoading, setIsLoading] = useState(false);
     const [aiModelLoaded, setAiModelLoaded] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
@@ -228,11 +228,20 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             zerosPadding: 3,
             dateFormat: 'YYYY-MM-DD'
         },
-        faviconMode: 'basic' as 'basic' | 'complete',
+        faviconMode: 'standard' as 'basic' | 'standard' | 'full',
+
         watermark: {
             ...DEFAULT_PROCESSING_CONFIG.watermark
         } as any
     });
+
+    const isFaviconSelected = useMemo(() =>
+        processingOptions.selectedTemplates.includes(FAVICON_TEMPLATE_ID),
+        [processingOptions.selectedTemplates]);
+
+    const isScreenshotSelected = useMemo(() =>
+        processingOptions.selectedTemplates.some(id => id.startsWith('screenshot')),
+        [processingOptions.selectedTemplates]);
     // userInteractedWithModal state removed
 
 
@@ -314,7 +323,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             const needsAI = (processingOptions.cropMode === CROP_MODES.SMART && hasSmartCropDimensions && !aiModelLoaded) ||
                 (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES && !aiModelLoaded);
 
-            if (!needsAI) return;
+            // Added check for aiLoading to prevent parallel redundant calls
+            if (!needsAI || aiLoading) return;
 
             try {
                 setAiLoading(true);
@@ -329,8 +339,8 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 } else {
                     throw new Error('AI model failed to load');
                 }
-            } catch {
-
+            } catch (error) {
+                console.error('[ProcessingContext] AI model load error:', error);
                 setAiLoading(false);
                 setAiModelLoaded(false);
 
@@ -350,7 +360,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         };
 
         loadAIModelIfNeeded();
-    }, [processingOptions.cropMode, processingOptions.cropWidth, processingOptions.cropHeight, processingOptions.processingMode, t, aiModelLoaded, showModal]);
+    }, [processingOptions.cropMode, processingOptions.cropWidth, processingOptions.cropHeight, processingOptions.processingMode, t, aiModelLoaded, aiLoading, showModal]);
 
     // Track current images for cleanup on unmount
     const imagesRef = useRef(images);
@@ -374,12 +384,22 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         }
     }, []);
 
-    const showSummaryModal = useCallback((summary: ProcessingSummary) => {
+    const showSummaryModal = useCallback((summary: ProcessingSummary, processedImages?: ImageFile[]) => {
         if (autoCloseTimeoutRef.current) {
             clearTimeout(autoCloseTimeoutRef.current);
             autoCloseTimeoutRef.current = null;
         }
-        setProcessingSummary(summary);
+
+        // V18: Use passed images directly to avoid async state stale-ness
+        const sourceImages = processedImages || images;
+        const enhancedImagesForSummary = sourceImages.filter(img => img.enhanceMetadata);
+
+        const finalSummary = {
+            ...summary,
+            enhancedImages: enhancedImagesForSummary.length > 0 ? enhancedImagesForSummary : undefined
+        };
+
+        setProcessingSummary(finalSummary);
         setModal({
             isOpen: true,
             title: t('summary.title'),
@@ -389,12 +409,10 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             progress: 0,
             progressStep: ''
         });
-
-        // Summary modal should not auto-close to allow user to review results
-    }, [t]);
+    }, [t, images]);
 
 
-    const updateProcessingModal = (progress: number, step: string, title = t('message.processing')) => {
+    const updateProcessingModal = useCallback((progress: number, step: string, title = t('message.processing')) => {
         setModal({
             isOpen: true,
             title,
@@ -404,9 +422,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             progress,
             progressStep: step
         });
-    };
+    }, [t]);
 
-    const startProcessingModal = (message: string) => {
+    const startProcessingModal = useCallback((message: string) => {
         setModal({
             isOpen: true,
             title: t('message.processing'),
@@ -416,15 +434,15 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             progress: 0,
             progressStep: t('processing.initializing')
         });
-    };
+    }, [t]);
 
-    const handleScreenshotUrlChange = (url: string) => {
+    const handleScreenshotUrlChange = useCallback((url: string) => {
         setScreenshotUrl(url);
         const validation = validateScreenshotUrlInput(url || '');
         setScreenshotValidation({ isValid: validation.isValid, message: validation.message || '' });
-    };
+    }, []);
 
-    const handleImageUpload = async (files: FileList | File[]) => {
+    const handleImageUpload = useCallback(async (files: FileList | File[]) => {
         setIsLoading(true);
         try {
             const fileArray = Array.from(files);
@@ -552,9 +570,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 fileInputRef.current.value = '';
             }
         }
-    };
+    }, [t, showModal, processingOptions, selectedImages]);
 
-    const handleImageSelect = (imageId: string) => {
+    const handleImageSelect = useCallback((imageId: string) => {
         if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) {
             setProcessingOptions(prev => ({
                 ...prev,
@@ -568,9 +586,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                     : [...prev, imageId]
             );
         }
-    };
+    }, [processingOptions]);
 
-    const handleScreenshotTemplateToggle = (templateId: string) => {
+    const handleScreenshotTemplateToggle = useCallback((templateId: string) => {
         setSelectedScreenshotTemplates(prev => {
             if (prev.includes(templateId)) {
                 return prev.filter(id => id !== templateId);
@@ -578,27 +596,27 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 return [...prev, templateId];
             }
         });
-    };
+    }, []);
 
-    const handleSelectAllScreenshotTemplates = () => {
+    const handleSelectAllScreenshotTemplates = useCallback(() => {
         const allTemplateIds = Object.keys(SCREENSHOT_TEMPLATES || {});
         setSelectedScreenshotTemplates(allTemplateIds);
-    };
+    }, []);
 
-    const handleDeselectAllScreenshotTemplates = () => {
+    const handleDeselectAllScreenshotTemplates = useCallback(() => {
         setSelectedScreenshotTemplates([]);
-    };
+    }, []);
 
-    const handleSelectAll = () => {
+    const handleSelectAll = useCallback(() => {
         if (processingOptions.processingMode === PROCESSING_MODES.TEMPLATES) return;
         if (selectedImages.length === images.length) {
             setSelectedImages([]);
         } else {
             setSelectedImages(images.map(img => img.id));
         }
-    };
+    }, [images, selectedImages, processingOptions]);
 
-    const handleRemoveSelected = () => {
+    const handleRemoveSelected = useCallback(() => {
         const imagesToRemove = processingOptions.processingMode === PROCESSING_MODES.TEMPLATES
             ? [processingOptions.templateSelectedImage].filter(Boolean)
             : selectedImages;
@@ -616,28 +634,44 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             }));
         }
         showModal(t('message.success'), t('message.removeSuccess'), MODAL_TYPES.SUCCESS as any);
-    };
+    }, [images, selectedImages, processingOptions, t, showModal]);
 
-    const handleFaviconToggle = (selected: boolean) => {
-        setIsFaviconSelected(selected);
-    };
+    const handleFaviconToggle = useCallback((selected: boolean) => {
+        setProcessingOptions(prev => {
+            const newTemplates = selected
+                ? [...new Set([...prev.selectedTemplates, FAVICON_TEMPLATE_ID])]
+                : prev.selectedTemplates.filter(id => id !== FAVICON_TEMPLATE_ID);
+            return { ...prev, selectedTemplates: newTemplates };
+        });
+    }, []);
 
-    const handleScreenshotToggle = (selected: boolean) => {
-        setIsScreenshotSelected(selected);
-        if (selected) {
-            setProcessingOptions(prev => ({
+    const handleScreenshotToggle = useCallback((selected: boolean) => {
+        setProcessingOptions(prev => {
+            let newTemplates = [...prev.selectedTemplates];
+            if (selected) {
+                // Add default screenshot templates if none selected
+                const screenshotIds = ['screenshots-mobile', 'screenshots-desktop'];
+                newTemplates = [...new Set([...newTemplates, ...screenshotIds])];
+            } else {
+                // Remove all screenshot templates
+                newTemplates = newTemplates.filter(id => !id.startsWith('screenshot'));
+            }
+            return {
                 ...prev,
-                processingMode: PROCESSING_MODES.TEMPLATES,
-                selectedTemplates: []
-            }));
+                processingMode: selected ? PROCESSING_MODES.TEMPLATES : prev.processingMode,
+                selectedTemplates: newTemplates
+            };
+        });
+
+        if (selected) {
             const validation = validateScreenshotUrlInput(screenshotUrl);
             setScreenshotValidation({ isValid: validation.isValid, message: validation.message || '' });
         } else {
             setScreenshotValidation({ isValid: false, message: '' });
         }
-    };
+    }, [screenshotUrl]);
 
-    const handleFormatToggle = (format: string) => {
+    const handleFormatToggle = useCallback((format: string) => {
         setProcessingOptions(prev => {
             const currentFormats = prev.output.formats || [];
             const newFormats = currentFormats.includes(format)
@@ -654,9 +688,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 }
             };
         });
-    };
+    }, []);
 
-    const handleSelectAllFormats = () => {
+    const handleSelectAllFormats = useCallback(() => {
         setProcessingOptions(prev => ({
             ...prev,
             output: {
@@ -664,9 +698,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 formats: ALL_OUTPUT_FORMATS.filter(format => format !== IMAGE_FORMATS.ORIGINAL)
             }
         }));
-    };
+    }, []);
 
-    const handleClearAllFormats = () => {
+    const handleClearAllFormats = useCallback(() => {
         setProcessingOptions(prev => ({
             ...prev,
             output: {
@@ -674,9 +708,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 formats: [IMAGE_FORMATS.ORIGINAL]
             }
         }));
-    };
+    }, []);
 
-    const toggleProcessingMode = (mode: ProcessingMode) => {
+    const toggleProcessingMode = useCallback((mode: ProcessingMode) => {
         const newMode = mode;
 
         if (newMode === PROCESSING_MODES.TEMPLATES) {
@@ -712,15 +746,15 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             // For Custom or Rename, checking if we need to restore multiple selection
             // Logic currently assumes we keep selection as is if not Templates
         }
-    };
+    }, [images, selectedImages]);
 
-    const getTranslatedTemplateName = (name: string, tFunc: any) => {
+    const getTranslatedTemplateName = useCallback((name: string, tFunc: any) => {
         if (!name) return '';
         // Logic omitted for brevity, but type fixed
         return tFunc(name);
-    };
+    }, []);
 
-    const handleTemplateToggle = (templateId: string) => {
+    const handleTemplateToggle = useCallback((templateId: string) => {
         setProcessingOptions(prev => {
             const newSelected = prev.selectedTemplates.includes(templateId)
                 ? prev.selectedTemplates.filter(id => id !== templateId)
@@ -728,17 +762,17 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
 
             return { ...prev, selectedTemplates: newSelected };
         });
-    };
+    }, []);
 
-    const handleSelectAllTemplates = () => {
+    const handleSelectAllTemplates = useCallback(() => {
         const allTemplateIds = SOCIAL_MEDIA_TEMPLATES.map(template => template.id);
         setProcessingOptions(prev => ({
             ...prev,
             selectedTemplates: allTemplateIds
         }));
-    };
+    }, []);
 
-    const handleSelectAllInCategory = (category: string) => {
+    const handleSelectAllInCategory = useCallback((category: string) => {
         const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
             .filter(template => template.category === category)
             .map(template => template.id);
@@ -747,9 +781,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             ...prev,
             selectedTemplates: [...new Set([...prev.selectedTemplates, ...categoryTemplates])]
         }));
-    };
+    }, []);
 
-    const handleDeselectAllInCategory = (category: string) => {
+    const handleDeselectAllInCategory = useCallback((category: string) => {
         const categoryTemplates = SOCIAL_MEDIA_TEMPLATES
             .filter(template => template.category === category)
             .map(template => template.id);
@@ -758,7 +792,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             ...prev,
             selectedTemplates: prev.selectedTemplates.filter(id => !categoryTemplates.includes(id))
         }));
-    };
+    }, []);
 
     const handleColorCorrectionChange = useCallback((key: string, value: any) => {
         setProcessingOptions(prev => ({
@@ -822,14 +856,14 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         });
     }, []);
 
-    const handleSingleOptionChange = (key: keyof ProcessingOptions, value: any) => {
+    const handleSingleOptionChange = useCallback((key: keyof ProcessingOptions, value: any) => {
         setProcessingOptions(prev => ({
             ...prev,
             [key]: value
         }));
-    };
+    }, []);
 
-    const processCustomImages = async () => {
+    const processCustomImages = useCallback(async () => {
         const selectedImagesForProcessing = getSelectedImagesForProcessing(
             images,
             selectedImages,
@@ -842,9 +876,27 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             return;
         }
 
+        // V29 Large Batch Warning
+        if (selectedImagesForProcessing.length > 3) {
+            showModal(
+                t('message.warning'),
+                t('message.largeBatchWarning', { count: selectedImagesForProcessing.length }),
+                MODAL_TYPES.WARNING
+            );
+            // Auto-close after 5 seconds as per plan
+            setTimeout(() => {
+                closeModal();
+            }, 5000);
+
+            // Brief pause to allow user to read the warning before transition
+            await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+
         setIsLoading(true);
         startProcessingModal(t('message.processingImages', { count: selectedImagesForProcessing.length }));
         setIsLoading(false); // Disable spinner specific overlay, let modal handle it
+
+        const startTime = performance.now();
 
         try {
             updateProcessingModal(10, t('processing.preparing'));
@@ -944,20 +996,22 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 throw new Error('No images were successfully processed');
             }
 
-            updateProcessingModal(70, t('processing.creatingZip'));
 
-            const settings = generateExportSettings(EXPORT_SETTINGS.CUSTOM, {
-                includeOptimized: true,
-                includeOriginal: true,
-                ...processingConfig // Derived config has correct 'enabled' flags
-            });
+            updateProcessingModal(70, t('processing.creatingZip'));
 
             let zipBlob;
             try {
+                const exportSettings = generateExportSettings(EXPORT_SETTINGS.CUSTOM, {
+                    includeOptimized: true,
+                    includeOriginal: true,
+                    ...processingConfig, // Derived config has correct 'enabled' flags
+                    elapsedTime: (performance.now() - startTime) / 1000
+                });
+
                 zipBlob = await createExportZip(
                     selectedImagesForProcessing,
                     successfulImages,
-                    settings,
+                    exportSettings,
                     processingOptions.processingMode,
                     t
                 );
@@ -965,7 +1019,6 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 if (!zipBlob) {
                     throw new Error('Failed to create zip file');
                 }
-
             } catch (zipError) {
                 // Failed to create zip
                 throw new Error(`Failed to create zip file: ${(zipError as Error).message}`);
@@ -988,6 +1041,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
 
             updateProcessingModal(100, t('processing.complete'));
 
+            const finalEndTime = performance.now();
+            const finalElapsedTime = (finalEndTime - startTime) / 1000;
+
             const summary = createProcessingSummary({
                 imagesProcessed: selectedImagesForProcessing.length,
                 totalFiles: successfulImages.length,
@@ -996,6 +1052,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 categoriesApplied: calculateCategoriesApplied(processingOptions.selectedTemplates, SOCIAL_MEDIA_TEMPLATES, false, false),
                 processedImagesList: successfulImages,
                 formatsExported: processingConfig.output.formats,
+                elapsedTime: finalElapsedTime,
                 errors: processedImages.filter(img => img.error).map(img => ({
                     name: img.name,
                     error: img.error,
@@ -1006,7 +1063,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
 
             setTimeout(() => {
                 closeModal();
-                showSummaryModal(summary);
+                showSummaryModal(summary, successfulImages);
             }, 1000);
 
         } catch (error) {
@@ -1035,9 +1092,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 safeCleanupGPUMemory();
             }, 500);
         }
-    };
+    }, [images, selectedImages, processingOptions, showModal, t, closeModal, showSummaryModal, startProcessingModal, updateProcessingModal]);
 
-    const processTemplates = async () => {
+    const processTemplates = useCallback(async () => {
         const selectedImagesForProcessing = getSelectedImagesForProcessing(
             images,
             selectedImages,
@@ -1134,7 +1191,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
                 includeFavicon: isFaviconSelected,
                 includeScreenshots: isScreenshotSelected,
                 selectedScreenshotTemplates: screenshotTemplateIds,
-                includeOriginal: false,
+                includeOriginal: true,
                 includeOptimized: false,
                 includeWebImages: true,
                 includeLogoImages: true,
@@ -1219,9 +1276,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [images, selectedImages, processingOptions, isFaviconSelected, isScreenshotSelected, screenshotUrl, selectedScreenshotTemplates, screenshotResults, showModal, t, closeModal, showSummaryModal, startProcessingModal, updateProcessingModal]);
 
-    const toggleResizeCrop = (type: 'resize' | 'crop') => {
+    const toggleResizeCrop = useCallback((type: 'resize' | 'crop') => {
         if (type === 'crop') {
             prewarmCropModels().catch(err => console.warn('[ProcessingContext] Prewarm failed:', err));
         }
@@ -1232,28 +1289,28 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             showCrop: type === 'crop',
             cropMode: type === 'crop' ? CROP_MODES.SMART : prev.cropMode
         }));
-    };
+    }, []);
 
-    const toggleCropMode = (mode: string) => {
+    const toggleCropMode = useCallback((mode: string) => {
         setProcessingOptions(prev => ({
             ...prev,
             cropMode: mode
         }));
-    };
+    }, []);
 
-    const incrementValue = (key: keyof ProcessingOptions, increment = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
+    const incrementValue = useCallback((key: keyof ProcessingOptions, increment = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
         const currentValue = parseInt((processingOptions[key] as string) || '0');
         const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue + increment);
         handleSingleOptionChange(key, String(newValue));
-    };
+    }, [processingOptions, handleSingleOptionChange]);
 
-    const decrementValue = (key: keyof ProcessingOptions, decrement = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
+    const decrementValue = useCallback((key: keyof ProcessingOptions, decrement = NUMBER_INPUT_CONSTANTS.DEFAULT_INCREMENT) => {
         const currentValue = parseInt((processingOptions[key] as string) || '1');
         const newValue = Math.max(NUMBER_INPUT_CONSTANTS.MIN_VALUE, currentValue - decrement);
         handleSingleOptionChange(key, String(newValue));
-    };
+    }, [processingOptions, handleSingleOptionChange]);
 
-    const downloadScreenshotZip = async (screenshotImages: ImageFile[], url: string) => {
+    const downloadScreenshotZip = useCallback(async (screenshotImages: ImageFile[], url: string) => {
         try {
             if (!screenshotImages || screenshotImages.length === 0) {
                 return;
@@ -1273,9 +1330,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
         } catch {
             showModal(t('message.error'), t('message.errorDownloadScreenshot'), MODAL_TYPES.ERROR);
         }
-    };
+    }, [showModal, t]);
 
-    const handleCaptureScreenshots = async (url: string, selectedTemplateIds: string[]) => {
+    const handleCaptureScreenshots = useCallback(async (url: string, selectedTemplateIds: string[]) => {
         try {
             if (!url || url.trim() === '') {
                 throw new Error(t('message.errorScreenshotUrl'));
@@ -1313,9 +1370,9 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             setIsCapturingScreenshots(false);
             setTimeout(() => setCaptureProgress(0), PROCESSING_DELAYS.MEMORY_CLEANUP);
         }
-    };
+    }, [t, downloadScreenshotZip]);
 
-    const applyRenamePatternToCustom = () => {
+    const applyRenamePatternToCustom = useCallback(() => {
         setProcessingOptions(prev => ({
             ...prev,
             processingMode: PROCESSING_MODES.CUSTOM,
@@ -1327,7 +1384,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
             showTemplates: false
         }));
         setSelectedImages(images.map(img => img.id));
-    };
+    }, [images]);
 
 
     const selectedImagesForProcessing = getSelectedImagesForProcessing(
@@ -1340,7 +1397,7 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
     // derived state fix
     const templateSelectedImageObj = images.find(img => img.id === processingOptions.templateSelectedImage) || null;
 
-    const value = {
+    const value = useMemo(() => ({
         isScreenshotMode,
         isFaviconSelected,
         isScreenshotSelected,
@@ -1413,7 +1470,23 @@ export const ProcessingProvider = ({ children }: ProcessingProviderProps): React
 
         // Expose Setters for edge cases
         setProcessingOptions
-    };
+    }), [
+        isScreenshotMode, isFaviconSelected, isScreenshotSelected, screenshotUrl, screenshotResults,
+        isCapturingScreenshots, captureProgress, screenshotValidation, selectedScreenshotTemplates,
+        processedImages, images, selectedImages, modal, isLoading, aiModelLoaded, aiLoading,
+        processingOptions, fileInputRef, showModal, closeModal, handleModalInteraction, showSummaryModal,
+        setIsScreenshotMode, setScreenshotUrl, updateProcessingModal, startProcessingModal,
+        handleScreenshotUrlChange, handleImageUpload, handleImageSelect, handleScreenshotTemplateToggle,
+        handleSelectAllScreenshotTemplates, handleDeselectAllScreenshotTemplates, handleSelectAll,
+        handleRemoveSelected, handleFaviconToggle, handleScreenshotToggle, toggleResizeCrop, toggleCropMode,
+        handleFormatToggle, handleSelectAllFormats, handleClearAllFormats, toggleProcessingMode,
+        getTranslatedTemplateName, handleTemplateToggle, handleSelectAllTemplates, handleSelectAllInCategory,
+        handleDeselectAllInCategory, handleOptionChange, handleColorCorrectionChange, toggleColorCorrection,
+        handleSingleOptionChange, applyRenamePatternToCustom, processCustomImages, processTemplates,
+        incrementValue, decrementValue, downloadScreenshotZip, handleCaptureScreenshots,
+        selectedImagesForProcessing, templateCategories, templateSelectedImageObj, processingSummary,
+        setProcessingOptions
+    ]);
 
     return (
         <ProcessingContext.Provider value={value}>
